@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phase 3C — Houzzat agent email signature preview</title>
+  <style>
+    :root {
+      --ink: #14201c;
+      --muted: #475569;
+      --line: #d1d5db;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --accent: #0F6B4C;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
+    }
+    header {
+      padding: 28px 24px 8px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; letter-spacing: -0.02em; }
+    .meta { color: var(--muted); font-size: 0.92rem; max-width: 70ch; }
+    .meta code { font-size: 0.85em; background: #e2e8f0; padding: 1px 5px; border-radius: 4px; }
+    .banner {
+      margin: 16px 0 0;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      background: #ecfdf5;
+      color: #064e3b;
+      font-size: 0.9rem;
+    }
+    .checks {
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 6px;
+      font-size: 0.9rem;
+    }
+    .ok::before { content: "✓ "; color: #047857; font-weight: 700; }
+    .bad::before { content: "✗ "; color: #b91c1c; font-weight: 700; }
+    section {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 16px 24px 40px;
+    }
+    h2 { margin: 28px 0 10px; font-size: 1.1rem; }
+    .note { color: var(--muted); font-size: 0.88rem; margin: 0 0 12px; }
+    .frames { display: grid; grid-template-columns: 1fr; gap: 20px; }
+    @media (min-width: 960px) {
+      .frames.pair { grid-template-columns: 1.35fr 0.75fr; align-items: start; }
+    }
+    .frame {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    }
+    .frame-label {
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+    }
+    .frame-body { background: #e8f5f0; padding: 16px 12px; overflow: auto; }
+    .frame.desktop .viewport { width: 680px; max-width: 100%; margin: 0 auto; }
+    .frame.mobile { max-width: 390px; }
+    .frame.mobile .viewport { width: 360px; max-width: 100%; margin: 0 auto; }
+    .viewport iframe {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      display: block;
+      min-height: 540px;
+    }
+    .sig-isolate {
+      background: #fff;
+      border: 1px dashed #94a3b8;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 12px;
+    }
+    .plain {
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.85rem;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px 16px;
+      border-radius: 8px;
+      overflow: auto;
+    }
+    footer.page {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 24px 48px;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Phase 3C — Premium agent email signature preview</h1>
+    <p class="meta">
+      Rendered via <code>buildAgentEmailSignature</code> (Phase 3B shared renderer).
+      Workspace <code>cmt7kfcth0000gvu0bqsycsvz</code> · Agent <code>cmunkzqsd000209gm08d0wu13</code> · Houzzat.
+      Brokerage/phone from local legacy brand fixtures in
+      <code>src/lib/tenancy/legacy-houzzat-brand.ts</code> (not a live production query).
+    </p>
+    <div class="banner">
+      Preview only — no emails sent. Agent email
+      <code>alisyedrealtor@gmail.com</code> is identity reference and must not appear in the signature.
+      Legal footer below the message body is separate (<code>footerNote</code> in email layout).
+    </div>
+    <ul class="checks">
+      <li class="ok">Agent email absent from personal signature HTML</li>
+      <li class="ok">Agent email absent from company signature HTML</li>
+      <li class="ok">Personal signature includes headshot img</li>
+      <li class="ok">Clickable tel: link present</li>
+      <li class="ok">Fixed 80×80 image dimensions</li>
+      <li class="ok">Brokerage present</li>
+      <li class="ok">Agent name present</li>
+      <li class="ok">Company fallback has no img</li>
+      <li class="ok">Legal footer fixture referenced (separate from signature)</li>
+    </ul>
+  </header>
+
+  <section>
+    <h2>1. Personal signature — realistic email (desktop + mobile)</h2>
+    <p class="note">Same rendered email HTML in two viewport frames. Designation omitted (no per-agent field in Phase 3B).</p>
+    <div class="frames pair">
+      <div class="frame desktop">
+        <div class="frame-label">Desktop ~680px email column</div>
+        <div class="frame-body"><div class="viewport">
+          <iframe title="Personal signature desktop" srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot; />
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot; />
+  <title>A note from your agent</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style=&quot;margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important&quot;>
+  <div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0&quot;>Checking in on your home search</div>
+  <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;background:#e8f5f0;padding:20px 12px&quot;>
+    <tr>
+      <td align=&quot;center&quot; style=&quot;padding:0&quot;>
+        <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);border:1px solid #a7f3d0&quot;>
+          <tr>
+            <td style=&quot;width:100%;background:#d1fae5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0&quot;>
+              
+              <p style=&quot;margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#0F6B4C&quot;>Houzzat</p>
+              <h1 style=&quot;margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em&quot;>A note from your agent</h1>
+              <p style=&quot;margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59&quot;>A message from Ali Syed</p>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:rgba(236,253,245,0.92);padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#115e59&quot;>
+              
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>Hi there,</p>
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>I wanted to share a quick update on homes that match what we discussed. Let me know a time that works for a short call this week.</p>
+      <p style=&quot;margin:0;color:#115e59&quot;>Looking forward to helping you find the right place.</p>
+    
+      <div style=&quot;margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59&quot;>
+        <table data-houzzat-agent-signature=&quot;1&quot; role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt&quot;>
+      <tr>
+        <td width=&quot;92&quot; valign=&quot;top&quot; style=&quot;width:92px;padding:0 12px 0 0;vertical-align:top&quot;>
+            <img src=&quot;https://branding-assets.houzzatpro.com/workspaces/cmt7kfcth0000gvu0bqsycsvz/branding/agent-profile/9eb6ecd755c37a0c3bb0ad65.jpg&quot; width=&quot;80&quot; height=&quot;80&quot; alt=&quot;Photo of Ali Syed&quot; style=&quot;display:block;width:80px;height:80px;border-radius:50%;border:0;object-fit:cover;object-position:center 30%&quot; />
+          </td>
+        <td valign=&quot;top&quot; style=&quot;padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif&quot;>
+          <div style=&quot;margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C&quot;>Ali Syed</div>
+          
+          <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4&quot;><a href=&quot;tel:6472214949&quot; style=&quot;color:#0F6B4C;text-decoration:none;font-weight:600&quot;>647-221-4949</a></div>
+          <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569&quot;>Royal LePage Credit Valley Real Estate</div>
+        </td>
+      </tr>
+    </table>
+      </div>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif&quot;>
+              <p style=&quot;margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b&quot;>
+                Ali Syed · Royal LePage Credit Valley Real Estate
+              </p>
+              <p style=&quot;margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59&quot;>
+                <a href=&quot;https://houzzat.com&quot; style=&quot;color:#064e3b;text-decoration:none;font-weight:600&quot;>houzzat.com</a>
+              </p>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"></iframe>
+        </div></div>
+      </div>
+      <div class="frame mobile">
+        <div class="frame-label">Mobile ~360px</div>
+        <div class="frame-body"><div class="viewport">
+          <iframe title="Personal signature mobile" srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot; />
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot; />
+  <title>A note from your agent</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style=&quot;margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important&quot;>
+  <div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0&quot;>Checking in on your home search</div>
+  <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;background:#e8f5f0;padding:20px 12px&quot;>
+    <tr>
+      <td align=&quot;center&quot; style=&quot;padding:0&quot;>
+        <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);border:1px solid #a7f3d0&quot;>
+          <tr>
+            <td style=&quot;width:100%;background:#d1fae5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0&quot;>
+              
+              <p style=&quot;margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#0F6B4C&quot;>Houzzat</p>
+              <h1 style=&quot;margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em&quot;>A note from your agent</h1>
+              <p style=&quot;margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59&quot;>A message from Ali Syed</p>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:rgba(236,253,245,0.92);padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#115e59&quot;>
+              
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>Hi there,</p>
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>I wanted to share a quick update on homes that match what we discussed. Let me know a time that works for a short call this week.</p>
+      <p style=&quot;margin:0;color:#115e59&quot;>Looking forward to helping you find the right place.</p>
+    
+      <div style=&quot;margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59&quot;>
+        <table data-houzzat-agent-signature=&quot;1&quot; role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt&quot;>
+      <tr>
+        <td width=&quot;92&quot; valign=&quot;top&quot; style=&quot;width:92px;padding:0 12px 0 0;vertical-align:top&quot;>
+            <img src=&quot;https://branding-assets.houzzatpro.com/workspaces/cmt7kfcth0000gvu0bqsycsvz/branding/agent-profile/9eb6ecd755c37a0c3bb0ad65.jpg&quot; width=&quot;80&quot; height=&quot;80&quot; alt=&quot;Photo of Ali Syed&quot; style=&quot;display:block;width:80px;height:80px;border-radius:50%;border:0;object-fit:cover;object-position:center 30%&quot; />
+          </td>
+        <td valign=&quot;top&quot; style=&quot;padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif&quot;>
+          <div style=&quot;margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C&quot;>Ali Syed</div>
+          
+          <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4&quot;><a href=&quot;tel:6472214949&quot; style=&quot;color:#0F6B4C;text-decoration:none;font-weight:600&quot;>647-221-4949</a></div>
+          <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569&quot;>Royal LePage Credit Valley Real Estate</div>
+        </td>
+      </tr>
+    </table>
+      </div>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif&quot;>
+              <p style=&quot;margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b&quot;>
+                Ali Syed · Royal LePage Credit Valley Real Estate
+              </p>
+              <p style=&quot;margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59&quot;>
+                <a href=&quot;https://houzzat.com&quot; style=&quot;color:#064e3b;text-decoration:none;font-weight:600&quot;>houzzat.com</a>
+              </p>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"></iframe>
+        </div></div>
+      </div>
+    </div>
+
+    <h2>2. Personal signature — isolated component</h2>
+    <p class="note">Raw output of <code>buildAgentEmailSignature</code> (no email chrome).</p>
+    <div class="sig-isolate"><table data-houzzat-agent-signature="1" role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt">
+      <tr>
+        <td width="92" valign="top" style="width:92px;padding:0 12px 0 0;vertical-align:top">
+            <img src="https://branding-assets.houzzatpro.com/workspaces/cmt7kfcth0000gvu0bqsycsvz/branding/agent-profile/9eb6ecd755c37a0c3bb0ad65.jpg" width="80" height="80" alt="Photo of Ali Syed" style="display:block;width:80px;height:80px;border-radius:50%;border:0;object-fit:cover;object-position:center 30%" />
+          </td>
+        <td valign="top" style="padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
+          <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C">Ali Syed</div>
+          
+          <div style="margin:6px 0 0;font-size:13px;line-height:1.4"><a href="tel:6472214949" style="color:#0F6B4C;text-decoration:none;font-weight:600">647-221-4949</a></div>
+          <div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569">Royal LePage Credit Valley Real Estate</div>
+        </td>
+      </tr>
+    </table></div>
+    <p class="note" style="margin-top:12px">Plain-text fallback</p>
+    <pre class="plain">Ali Syed
+647-221-4949
+Royal LePage Credit Valley Real Estate</pre>
+
+    <h2>3. Company-only fallback — realistic email</h2>
+    <p class="note">No agent → company signature, no headshot. Legal footer still separate in layout footer.</p>
+    <div class="frames pair">
+      <div class="frame desktop">
+        <div class="frame-label">Desktop — company signature</div>
+        <div class="frame-body"><div class="viewport">
+          <iframe title="Company signature desktop" srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot; />
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot; />
+  <title>A note from your agent</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style=&quot;margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important&quot;>
+  <div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0&quot;>Checking in on your home search</div>
+  <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;background:#e8f5f0;padding:20px 12px&quot;>
+    <tr>
+      <td align=&quot;center&quot; style=&quot;padding:0&quot;>
+        <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);border:1px solid #a7f3d0&quot;>
+          <tr>
+            <td style=&quot;width:100%;background:#d1fae5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0&quot;>
+              
+              <p style=&quot;margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#0F6B4C&quot;>Houzzat</p>
+              <h1 style=&quot;margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em&quot;>A note from your agent</h1>
+              <p style=&quot;margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59&quot;>A message from Ali Syed</p>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:rgba(236,253,245,0.92);padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#115e59&quot;>
+              
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>Hi there,</p>
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>I wanted to share a quick update on homes that match what we discussed. Let me know a time that works for a short call this week.</p>
+      <p style=&quot;margin:0;color:#115e59&quot;>Looking forward to helping you find the right place.</p>
+    
+      <div style=&quot;margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59&quot;>
+        <table data-houzzat-agent-signature=&quot;1&quot; role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt&quot;>
+    <tr>
+      <td valign=&quot;top&quot; style=&quot;padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif&quot;>
+        <div style=&quot;margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C&quot;>Houzzat</div>
+        <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4&quot;><a href=&quot;tel:6472214949&quot; style=&quot;color:#0F6B4C;text-decoration:none;font-weight:600&quot;>647-221-4949</a></div>
+        <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569&quot;>Royal LePage Credit Valley Real Estate</div>
+      </td>
+    </tr>
+  </table>
+      </div>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif&quot;>
+              <p style=&quot;margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b&quot;>
+                Ali Syed · Royal LePage Credit Valley Real Estate
+              </p>
+              <p style=&quot;margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59&quot;>
+                <a href=&quot;https://houzzat.com&quot; style=&quot;color:#064e3b;text-decoration:none;font-weight:600&quot;>houzzat.com</a>
+              </p>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"></iframe>
+        </div></div>
+      </div>
+      <div class="frame mobile">
+        <div class="frame-label">Mobile — company signature</div>
+        <div class="frame-body"><div class="viewport">
+          <iframe title="Company signature mobile" srcdoc="<!DOCTYPE html>
+<html lang=&quot;en&quot;>
+<head>
+  <meta charset=&quot;utf-8&quot; />
+  <meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot; />
+  <title>A note from your agent</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body style=&quot;margin:0;padding:0;background:#e8f5f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;width:100% !important&quot;>
+  <div style=&quot;display:none;max-height:0;overflow:hidden;opacity:0&quot;>Checking in on your home search</div>
+  <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;background:#e8f5f0;padding:20px 12px&quot;>
+    <tr>
+      <td align=&quot;center&quot; style=&quot;padding:0&quot;>
+        <table role=&quot;presentation&quot; width=&quot;100%&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);border:1px solid #a7f3d0&quot;>
+          <tr>
+            <td style=&quot;width:100%;background:#d1fae5;background-image:linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%);padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0&quot;>
+              
+              <p style=&quot;margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#0F6B4C&quot;>Houzzat</p>
+              <h1 style=&quot;margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em&quot;>A note from your agent</h1>
+              <p style=&quot;margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59&quot;>A message from Ali Syed</p>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:rgba(236,253,245,0.92);padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.55;color:#115e59&quot;>
+              
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>Hi there,</p>
+      <p style=&quot;margin:0 0 12px;color:#115e59&quot;>I wanted to share a quick update on homes that match what we discussed. Let me know a time that works for a short call this week.</p>
+      <p style=&quot;margin:0;color:#115e59&quot;>Looking forward to helping you find the right place.</p>
+    
+      <div style=&quot;margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59&quot;>
+        <table data-houzzat-agent-signature=&quot;1&quot; role=&quot;presentation&quot; cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; border=&quot;0&quot; style=&quot;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt&quot;>
+    <tr>
+      <td valign=&quot;top&quot; style=&quot;padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif&quot;>
+        <div style=&quot;margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C&quot;>Houzzat</div>
+        <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4&quot;><a href=&quot;tel:6472214949&quot; style=&quot;color:#0F6B4C;text-decoration:none;font-weight:600&quot;>647-221-4949</a></div>
+        <div style=&quot;margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569&quot;>Royal LePage Credit Valley Real Estate</div>
+      </td>
+    </tr>
+  </table>
+      </div>
+            </td>
+          </tr>
+          <tr>
+            <td style=&quot;width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif&quot;>
+              <p style=&quot;margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b&quot;>
+                Ali Syed · Royal LePage Credit Valley Real Estate
+              </p>
+              <p style=&quot;margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59&quot;>
+                <a href=&quot;https://houzzat.com&quot; style=&quot;color:#064e3b;text-decoration:none;font-weight:600&quot;>houzzat.com</a>
+              </p>
+              
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"></iframe>
+        </div></div>
+      </div>
+    </div>
+    <div class="sig-isolate"><table data-houzzat-agent-signature="1" role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt">
+    <tr>
+      <td valign="top" style="padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
+        <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:#0F6B4C">Houzzat</div>
+        <div style="margin:6px 0 0;font-size:13px;line-height:1.4"><a href="tel:6472214949" style="color:#0F6B4C;text-decoration:none;font-weight:600">647-221-4949</a></div>
+        <div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569">Royal LePage Credit Valley Real Estate</div>
+      </td>
+    </tr>
+  </table></div>
+    <pre class="plain">Houzzat
+647-221-4949
+Royal LePage Credit Valley Real Estate</pre>
+  </section>
+
+  <footer class="page">
+    Generated locally for Phase 3C visual review. Not for production send.
+    Plain-text append sample:
+    <code>Ali Syed
+647-221-4949
+Royal LePage Credit Valley Real Estate</code>
+  </footer>
+</body>
+</html>
