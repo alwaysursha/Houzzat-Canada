@@ -8,7 +8,21 @@ export {
 export {
   buildBrandingObjectKey,
   extractBrandingObjectKeyFromUrl,
+  buildAgentUserProfileObjectKey,
+  extractAgentUserProfileObjectKeyFromUrl,
+  extractManagedProfileObjectKeyFromUrl,
 } from "./keys";
+export {
+  uploadAgentUserProfilePhoto,
+  removeAgentUserProfilePhoto,
+  canMutateAgentUserProfilePhoto,
+  type AgentUserProfilePhotoResult,
+} from "./agent-user-profile-photo";
+export {
+  isManagedAgentProfileUrlReferenced,
+  deleteManagedAgentProfileUrlIfUnreferenced,
+  type ManagedProfileCdnDeleteResult,
+} from "./managed-profile-cdn";
 export {
   validateBrandingImageBytes,
   BRANDING_ASSET_MAX_BYTES,

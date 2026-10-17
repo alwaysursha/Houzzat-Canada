@@ -1,5 +1,6 @@
 /**
  * Stage 6.11C.1 — tenant-isolated branding object keys.
+ * Phase 1 — per-agent User.image keys under workspaces/{ws}/agents/{userId}/profile/.
  */
 
 import {
@@ -9,6 +10,28 @@ import {
 
 const KEY_RE =
   /^workspaces\/([a-zA-Z0-9_-]+)\/branding\/(agent-profile|logo|brokerage-logo|favicon)\/([a-zA-Z0-9_-]+)\.(jpg|png|webp)$/;
+
+const AGENT_USER_KEY_RE =
+  /^workspaces\/([a-zA-Z0-9_-]+)\/agents\/([a-zA-Z0-9_-]+)\/profile\/([a-zA-Z0-9_-]+)\.(jpg|png|webp)$/;
+
+function pathFromPersistedUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  try {
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      return new URL(trimmed).pathname.replace(/^\/+/, "");
+    }
+    if (trimmed.startsWith("/uploads/branding/")) {
+      return trimmed.slice("/uploads/branding/".length);
+    }
+    if (trimmed.startsWith("/")) {
+      return trimmed.replace(/^\/+/, "");
+    }
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
 
 export function buildBrandingObjectKey(input: {
   workspaceId: string;
@@ -29,24 +52,54 @@ export function extractBrandingObjectKeyFromUrl(
   workspaceId: string,
 ): string | null {
   if (!url?.trim()) return null;
-  const trimmed = url.trim();
-  let path: string;
-  try {
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      path = new URL(trimmed).pathname.replace(/^\/+/, "");
-    } else if (trimmed.startsWith("/uploads/branding/")) {
-      path = trimmed.slice("/uploads/branding/".length);
-    } else if (trimmed.startsWith("/")) {
-      path = trimmed.replace(/^\/+/, "");
-    } else {
-      path = trimmed;
-    }
-  } catch {
-    return null;
-  }
+  const path = pathFromPersistedUrl(url);
+  if (!path) return null;
 
   const match = KEY_RE.exec(path);
   if (!match) return null;
   if (match[1] !== workspaceId) return null;
   return match[0];
+}
+
+/** Per-agent profile photo object key (User.image). */
+export function buildAgentUserProfileObjectKey(input: {
+  workspaceId: string;
+  userId: string;
+  uniqueId: string;
+  ext: string;
+}): string {
+  return `workspaces/${input.workspaceId}/agents/${input.userId}/profile/${input.uniqueId}.${input.ext}`;
+}
+
+/**
+ * Extract per-agent profile object key when URL matches layout and workspace.
+ * Optionally require the path userId segment to match.
+ */
+export function extractAgentUserProfileObjectKeyFromUrl(
+  url: string | null | undefined,
+  workspaceId: string,
+  userId?: string | null,
+): string | null {
+  if (!url?.trim()) return null;
+  const path = pathFromPersistedUrl(url);
+  if (!path) return null;
+
+  const match = AGENT_USER_KEY_RE.exec(path);
+  if (!match) return null;
+  if (match[1] !== workspaceId) return null;
+  if (userId?.trim() && match[2] !== userId.trim()) return null;
+  return match[0];
+}
+
+/**
+ * Resolve a deletable object key for a persisted profile/branding URL in this workspace.
+ */
+export function extractManagedProfileObjectKeyFromUrl(
+  url: string | null | undefined,
+  workspaceId: string,
+): string | null {
+  return (
+    extractBrandingObjectKeyFromUrl(url, workspaceId) ??
+    extractAgentUserProfileObjectKeyFromUrl(url, workspaceId)
+  );
 }

@@ -83,10 +83,13 @@ function loadImage(url: string) {
  */
 export function AgentPortraitFocusUploader({
   photoUrl,
+  userId,
   disabled = false,
   onUploaded,
 }: {
   photoUrl: string | null;
+  /** Target agent userId when a manager edits another member; omit for self. */
+  userId?: string;
   /** @deprecated Kept for call-site compatibility; CRM auth uses session workspace. */
   workspaceId?: string;
   disabled?: boolean;
@@ -152,6 +155,7 @@ export function AgentPortraitFocusUploader({
       const file = await exportCroppedJpeg(draft, rect.width, rect.height);
       const body = new FormData();
       body.set("file", file);
+      if (userId?.trim()) body.set("userId", userId.trim());
       const res = await fetch("/api/agent/profile/photo", {
         method: "POST",
         body,
@@ -161,12 +165,13 @@ export function AgentPortraitFocusUploader({
         error?: string;
         message?: string;
         agentProfilePhotoUrl?: string | null;
+        image?: string | null;
       };
       if (!res.ok || !json.ok) {
         setError(json.error || json.message || "Upload failed.");
         return;
       }
-      onUploaded(json.agentProfilePhotoUrl ?? null);
+      onUploaded(json.image ?? json.agentProfilePhotoUrl ?? null);
       closeDraft();
     } catch {
       setError("Could not save this photo.");
@@ -182,18 +187,25 @@ export function AgentPortraitFocusUploader({
     try {
       const res = await fetch("/api/agent/profile/photo", {
         method: "DELETE",
+        headers: userId?.trim()
+          ? { "Content-Type": "application/json" }
+          : undefined,
+        body: userId?.trim()
+          ? JSON.stringify({ userId: userId.trim() })
+          : undefined,
       });
       const json = (await res.json()) as {
         ok?: boolean;
         error?: string;
         message?: string;
         agentProfilePhotoUrl?: string | null;
+        image?: string | null;
       };
       if (!res.ok || !json.ok) {
         setError(json.error || json.message || "Could not remove photo.");
         return;
       }
-      onUploaded(json.agentProfilePhotoUrl ?? null);
+      onUploaded(json.image ?? json.agentProfilePhotoUrl ?? null);
     } catch {
       setError("Could not remove photo.");
     } finally {
@@ -214,8 +226,8 @@ export function AgentPortraitFocusUploader({
         Profile photo
       </p>
       <p className="mt-1 text-sm text-ink/55">
-        Used on listings and your public site. Drag to set focus, then zoom in
-        on the face before saving.
+        Your profile photo. Drag to set focus, then zoom in on the face before
+        saving. The primary agent&apos;s photo also stays on the public website.
       </p>
 
       <div className="mt-4 flex flex-wrap items-end gap-4">

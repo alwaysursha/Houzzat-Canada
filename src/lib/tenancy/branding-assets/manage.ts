@@ -12,6 +12,7 @@ import {
   type BrandingAssetKind,
 } from "@/lib/tenancy/branding-assets/kinds";
 import { buildBrandingObjectKey } from "@/lib/tenancy/branding-assets/keys";
+import { deleteManagedAgentProfileUrlIfUnreferenced } from "@/lib/tenancy/branding-assets/managed-profile-cdn";
 import { evaluateBrandingStatus } from "@/lib/tenancy/branding-assets/requirements";
 import {
   deleteBrandingAssetByPersistedUrl,
@@ -29,6 +30,33 @@ import { ensureWorkspaceOnboardingState } from "@/lib/platform/activation/onboar
 import { syncProfessionalIdentityStatus } from "@/lib/tenancy/professional-identity/manage";
 import type { PrismaClient } from "@prisma/client";
 import { randomBytes } from "node:crypto";
+
+/**
+ * Best-effort CDN cleanup after branding column change.
+ * Agent-profile URLs are never deleted while any User.image or branding
+ * portrait still references them (cross-workspace).
+ */
+async function deletePreviousBrandingAssetSafely(input: {
+  kind: BrandingAssetKind;
+  url: string | null | undefined;
+  workspaceId: string;
+  prisma: PrismaClient;
+}): Promise<void> {
+  if (input.kind === "agent-profile") {
+    // Retains the object when any User.image (any workspace) or any other
+    // workspace branding portrait still references the URL.
+    await deleteManagedAgentProfileUrlIfUnreferenced({
+      url: input.url,
+      workspaceId: input.workspaceId,
+      prisma: input.prisma,
+    });
+    return;
+  }
+  await deleteBrandingAssetByPersistedUrl({
+    url: input.url,
+    workspaceId: input.workspaceId,
+  });
+}
 
 export type BrandingAssetsView = {
   agentProfilePhotoUrl: string | null;
@@ -196,9 +224,11 @@ export async function uploadWorkspaceBrandingAsset(input: {
   });
 
   // Best-effort delete previous object after successful persist.
-  await deleteBrandingAssetByPersistedUrl({
+  await deletePreviousBrandingAssetSafely({
+    kind,
     url: previousUrl,
     workspaceId: ctx.workspaceId,
+    prisma: db,
   });
 
   const next = {
@@ -275,9 +305,11 @@ export async function removeWorkspaceBrandingAsset(input: {
     },
   });
 
-  await deleteBrandingAssetByPersistedUrl({
+  await deletePreviousBrandingAssetSafely({
+    kind,
     url: previousUrl,
     workspaceId: ctx.workspaceId,
+    prisma: db,
   });
 
   const next = {
@@ -316,8 +348,11 @@ export async function refreshWorkspaceBrandingStatus(input: {
 }
 
 /**
- * CRM profile photo — caller already authorized workspace manager.
- * Does not use onboarding OWNER-only host gate (ADMIN managers can save too).
+ * Legacy branding-only agent portrait write (onboarding-era CRM path).
+ * Prefer uploadAgentUserProfilePhoto — User.image is canonical; branding
+ * dual-writes only for Workspace.primaryAgentId.
+ *
+ * @deprecated Phase 1 — kept for compatibility; CRM API no longer calls this.
  */
 export async function uploadWorkspaceAgentProfilePhoto(input: {
   workspaceId: string;
@@ -390,9 +425,11 @@ export async function uploadWorkspaceAgentProfilePhoto(input: {
     },
   });
 
-  await deleteBrandingAssetByPersistedUrl({
+  await deletePreviousBrandingAssetSafely({
+    kind,
     url: previousUrl,
     workspaceId,
+    prisma: db,
   });
 
   await syncBrandingStatus(db, workspaceId, {
@@ -405,6 +442,12 @@ export async function uploadWorkspaceAgentProfilePhoto(input: {
   return { agentProfilePhotoUrl: put.publicUrl };
 }
 
+/**
+ * Legacy branding-only agent portrait clear.
+ * Prefer removeAgentUserProfilePhoto.
+ *
+ * @deprecated Phase 1 — kept for compatibility; CRM API no longer calls this.
+ */
 export async function removeWorkspaceAgentProfilePhoto(input: {
   workspaceId: string;
   prisma?: PrismaClient;
@@ -441,9 +484,11 @@ export async function removeWorkspaceAgentProfilePhoto(input: {
     },
   });
 
-  await deleteBrandingAssetByPersistedUrl({
+  await deletePreviousBrandingAssetSafely({
+    kind: "agent-profile",
     url: previousUrl,
     workspaceId,
+    prisma: db,
   });
 
   await syncBrandingStatus(db, workspaceId, {

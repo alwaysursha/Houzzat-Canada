@@ -54,10 +54,10 @@ export type AdminManagedAgentProfileView = {
   recoLicenseExpiresAt: string;
   /** Public website designation (OWNER / workspace professional identity). */
   designation: string;
-  /** Workspace branding portrait when this agent is the public site agent. */
+  /** Canonical per-agent headshot from User.image (never another agent's branding portrait). */
   photoUrl: string | null;
   canEdit: boolean;
-  /** OWNER branding upload — website headshot with focus crop. */
+  /** Self or workspace manager may upload/replace this agent's User.image. */
   canEditPhoto: boolean;
 };
 
@@ -273,6 +273,7 @@ export async function loadWorkspaceAgentProfile(
           email: true,
           phone: true,
           phoneE164: true,
+          image: true,
           agentProfile: {
             select: {
               firstName: true,
@@ -297,29 +298,28 @@ export async function loadWorkspaceAgentProfile(
     membership.user.agentProfile?.lastName?.trim() ||
     splitStaffDisplayName(membership.user.name).lastName;
 
-  const isPublicSiteAgent =
-    membership.role === "OWNER" ||
-    (await db.workspace.findUnique({
+  const primaryAgentId = (
+    await db.workspace.findUnique({
       where: { id: ctx.workspaceId },
       select: { primaryAgentId: true },
-    }))?.primaryAgentId === membership.user.id;
+    })
+  )?.primaryAgentId;
+  // Designation remains workspace professional identity for OWNER or primary only.
+  // Photo is always this user's User.image — never branding portrait inheritance.
+  const isPublicSiteAgent =
+    membership.role === "OWNER" || primaryAgentId === membership.user.id;
 
   let designation = "";
-  let photoUrl: string | null = null;
   if (isPublicSiteAgent) {
-    const [professional, branding] = await Promise.all([
-      db.workspaceProfessionalIdentity.findUnique({
-        where: { workspaceId: ctx.workspaceId },
-        select: { agentDesignation: true },
-      }),
-      db.workspaceBranding.findUnique({
-        where: { workspaceId: ctx.workspaceId },
-        select: { agentProfilePhotoUrl: true },
-      }),
-    ]);
+    const professional = await db.workspaceProfessionalIdentity.findUnique({
+      where: { workspaceId: ctx.workspaceId },
+      select: { agentDesignation: true },
+    });
     designation = professional?.agentDesignation?.trim() ?? "";
-    photoUrl = branding?.agentProfilePhotoUrl?.trim() || null;
   }
+
+  const photoUrl = membership.user.image?.trim() || null;
+  const canEdit = canEditAgentProfile(ctx, userId);
 
   return {
     ok: true,
@@ -338,10 +338,8 @@ export async function loadWorkspaceAgentProfile(
       ),
       designation,
       photoUrl,
-      canEdit: canEditAgentProfile(ctx, userId),
-      // CRM managers (OWNER/ADMIN) for the public-site agent — upload uses
-      // /api/agent/profile/photo, not onboarding OWNER-only branding.
-      canEditPhoto: Boolean(isPublicSiteAgent && ctx.canManageWorkspace),
+      canEdit,
+      canEditPhoto: canEdit,
     },
   };
 }

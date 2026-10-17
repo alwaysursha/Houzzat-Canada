@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AgentPortraitFocusUploader } from "@/components/agent/AgentPortraitFocusUploader";
 import {
   AgentProfessionalFields,
   type AgentProfessionalFormValue,
@@ -24,6 +25,7 @@ export function AgentProfileAdminClient({
     recoLicenseNumber: profile.recoLicenseNumber,
     recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
   });
+  const [photoUrl, setPhotoUrl] = useState(profile.photoUrl);
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +72,18 @@ export function AgentProfileAdminClient({
             : "You can view this Agent profile. Owners, admins, or the agent themselves can edit it."}
         </p>
       </div>
+
+      {profile.canEditPhoto ? (
+        <AgentPortraitFocusUploader
+          photoUrl={photoUrl}
+          userId={profile.userId}
+          onUploaded={(next) => {
+            setPhotoUrl(next);
+            setMsg("Profile photo saved.");
+            router.refresh();
+          }}
+        />
+      ) : null}
 
       <form
         className="rounded-2xl border border-line bg-surface p-5 sm:p-6"

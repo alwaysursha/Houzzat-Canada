@@ -71,6 +71,7 @@ export function AgentSelfProfileClient({
       {profile.canEditPhoto ? (
         <AgentPortraitFocusUploader
           photoUrl={photoUrl}
+          userId={profile.userId}
           workspaceId={workspaceId}
           onUploaded={(next) => {
             setPhotoUrl(next);
@@ -100,7 +101,7 @@ export function AgentSelfProfileClient({
           />
         </div>
 
-        {profile.canEditPhoto || profile.designation || profile.role === "OWNER" ? (
+        {profile.role === "OWNER" || Boolean(profile.designation) ? (
           <div className="mt-4">
             <label
               htmlFor="self-profile-title"

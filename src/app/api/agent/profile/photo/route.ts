@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireAgentContextFromRequest } from "@/lib/agent";
+import {
+  requireAgentContextFromRequest,
+  type AgentOrgContext,
+} from "@/lib/agent";
 import { loadWorkspaceAgentProfile } from "@/lib/agent/admin-managed-profile";
 import { OwnerActivationError } from "@/lib/platform/activation/errors";
 import {
-  removeWorkspaceAgentProfilePhoto,
-  uploadWorkspaceAgentProfilePhoto,
-} from "@/lib/tenancy/branding-assets/manage";
+  canMutateAgentUserProfilePhoto,
+  removeAgentUserProfilePhoto,
+  uploadAgentUserProfilePhoto,
+} from "@/lib/tenancy/branding-assets/agent-user-profile-photo";
 import {
   BrandingStorageNotConfiguredError,
   BRANDING_STORAGE_NOT_CONFIGURED,
@@ -13,33 +17,50 @@ import {
 
 export const runtime = "nodejs";
 
-async function authorizeProfilePhoto(request: Request) {
-  const ctx = await requireAgentContextFromRequest(request);
-  if (!ctx?.workspaceId) {
+async function authorizeProfilePhoto(
+  ctx: AgentOrgContext,
+  targetUserId: string,
+) {
+  if (!ctx.workspaceId) {
     return {
       error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-  if (!ctx.canManageWorkspace) {
+
+  if (
+    !canMutateAgentUserProfilePhoto({
+      actorUserId: ctx.user.id,
+      targetUserId,
+      canManageWorkspace: ctx.canManageWorkspace,
+    })
+  ) {
     return {
       error: NextResponse.json(
-        { error: "Workspace manager access required." },
+        { error: "You cannot update this agent photo." },
         { status: 403 },
       ),
     };
   }
 
-  const profile = await loadWorkspaceAgentProfile(ctx, ctx.user.id);
-  if (!profile.ok || !profile.profile.canEditPhoto) {
+  const profile = await loadWorkspaceAgentProfile(ctx, targetUserId);
+  if (!profile.ok) {
     return {
       error: NextResponse.json(
-        { error: "You cannot update the public agent photo." },
+        { error: profile.error },
+        { status: profile.status },
+      ),
+    };
+  }
+  if (!profile.profile.canEditPhoto) {
+    return {
+      error: NextResponse.json(
+        { error: "You cannot update this agent photo." },
         { status: 403 },
       ),
     };
   }
 
-  return { ctx, workspaceId: ctx.workspaceId };
+  return { workspaceId: ctx.workspaceId, targetUserId };
 }
 
 function mapAssetError(error: unknown) {
@@ -58,24 +79,45 @@ function mapAssetError(error: unknown) {
   return null;
 }
 
+function resolveTargetUserId(
+  ctxUserId: string,
+  candidate: unknown,
+): string {
+  if (typeof candidate === "string" && candidate.trim()) {
+    return candidate.trim();
+  }
+  return ctxUserId;
+}
+
 export async function POST(request: Request) {
-  const authz = await authorizeProfilePhoto(request);
-  if ("error" in authz && authz.error) return authz.error;
+  const ctx = await requireAgentContextFromRequest(request);
+  if (!ctx?.workspaceId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const form = await request.formData();
+    const targetUserId = resolveTargetUserId(ctx.user.id, form.get("userId"));
+    const authz = await authorizeProfilePhoto(ctx, targetUserId);
+    if ("error" in authz && authz.error) return authz.error;
+
     const file = form.get("file");
     if (!(file instanceof File)) {
       return NextResponse.json({ error: "File required." }, { status: 400 });
     }
 
-    const result = await uploadWorkspaceAgentProfilePhoto({
+    const result = await uploadAgentUserProfilePhoto({
       workspaceId: authz.workspaceId,
+      userId: authz.targetUserId,
       file,
     });
     return NextResponse.json({
       ok: true,
+      // Compat: existing uploader reads agentProfilePhotoUrl.
       agentProfilePhotoUrl: result.agentProfilePhotoUrl,
+      image: result.image,
+      syncedBrandingPortrait: result.syncedBrandingPortrait,
+      primaryAgentUnset: result.primaryAgentUnset,
     });
   } catch (error) {
     const mapped = mapAssetError(error);
@@ -89,16 +131,40 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const authz = await authorizeProfilePhoto(request);
-  if ("error" in authz && authz.error) return authz.error;
+  const ctx = await requireAgentContextFromRequest(request);
+  if (!ctx?.workspaceId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
-    const result = await removeWorkspaceAgentProfilePhoto({
+    const url = new URL(request.url);
+    let targetUserId = resolveTargetUserId(
+      ctx.user.id,
+      url.searchParams.get("userId"),
+    );
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      try {
+        const body = (await request.json()) as { userId?: unknown };
+        targetUserId = resolveTargetUserId(targetUserId, body?.userId);
+      } catch {
+        /* ignore empty/invalid JSON */
+      }
+    }
+
+    const authz = await authorizeProfilePhoto(ctx, targetUserId);
+    if ("error" in authz && authz.error) return authz.error;
+
+    const result = await removeAgentUserProfilePhoto({
       workspaceId: authz.workspaceId,
+      userId: authz.targetUserId,
     });
     return NextResponse.json({
       ok: true,
       agentProfilePhotoUrl: result.agentProfilePhotoUrl,
+      image: result.image,
+      syncedBrandingPortrait: result.syncedBrandingPortrait,
+      primaryAgentUnset: result.primaryAgentUnset,
     });
   } catch (error) {
     const mapped = mapAssetError(error);
