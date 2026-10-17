@@ -699,6 +699,235 @@ function testAgentMessageGreetingDedup() {
   assert.match(escaped.text, /Hi Heather, see A&B <listing>/);
 }
 
+function assertAgentIntroSubtitle(input: {
+  label: string;
+  expectSubtitle: string;
+  name?: string | null;
+  body?: string;
+  agentFromLabel?: string | null;
+  brandLabel?: string | null;
+  agentSignatureHtml?: string | null;
+  agentSignatureText?: string | null;
+  published: EmailTemplateContentFields | null;
+}) {
+  const body = input.body ?? "I wanted to follow up on your search.";
+  const mail = renderAgentMessageEmail({
+    name: input.name ?? "Heather",
+    subject: "Agent subject stays authoritative",
+    body,
+    agentFromLabel: input.agentFromLabel,
+    brandLabel: input.brandLabel,
+    agentSignatureHtml: input.agentSignatureHtml ?? "<strong>Sig</strong>",
+    agentSignatureText: input.agentSignatureText ?? "Sig",
+    publishedAgentEmailTemplate: input.published,
+  });
+
+  assert.equal(mail.subject, "Agent subject stays authoritative", input.label);
+  assert.match(mail.html, new RegExp(escapeRegExp(input.expectSubtitle)));
+  assert.doesNotMatch(mail.html, /A personal note from\s+at\s+\./);
+  assert.doesNotMatch(mail.text, /A personal note from\s+at\s+\./);
+  // Agent body unchanged in text + html
+  assert.ok(mail.text.includes(body), `${input.label}: body in text`);
+  assert.match(mail.html, /I wanted to follow up|Hi,/);
+  assert.match(mail.html, /Sig/);
+  assert.match(mail.text, /Sig/);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function testAgentEmailIntroFallbackSafety() {
+  const personalNoteIntro =
+    "A personal note from {{agentName}} at {{tenantName}}.";
+
+  // A — both names available → full published introduction
+  assertAgentIntroSubtitle({
+    label: "A-both-available",
+    published: {
+      subject: null,
+      introText: personalNoteIntro,
+      bodySections: {},
+      ctaText: null,
+      style: { primaryColor: "#0F766E" },
+    },
+    agentFromLabel: "Ali Syed",
+    brandLabel: "Houzzat",
+    expectSubtitle: "A personal note from Ali Syed at Houzzat.",
+  });
+
+  // B — agent name missing → legacy subtitle
+  assertAgentIntroSubtitle({
+    label: "B-agent-missing",
+    published: {
+      subject: null,
+      introText: personalNoteIntro,
+      bodySections: {},
+      ctaText: null,
+      style: {},
+    },
+    agentFromLabel: null,
+    brandLabel: "Houzzat",
+    expectSubtitle: "A message from your Houzzat agent.",
+  });
+
+  // C — tenant name missing → legacy (with agent from-label)
+  assertAgentIntroSubtitle({
+    label: "C-tenant-missing",
+    published: {
+      subject: null,
+      introText: personalNoteIntro,
+      bodySections: {},
+      ctaText: null,
+      style: {},
+    },
+    agentFromLabel: "Ali Syed",
+    brandLabel: null,
+    expectSubtitle: "A message from Ali Syed.",
+  });
+
+  // D — both missing → legacy
+  assertAgentIntroSubtitle({
+    label: "D-both-missing",
+    published: {
+      subject: null,
+      introText: personalNoteIntro,
+      bodySections: {},
+      ctaText: null,
+      style: {},
+    },
+    agentFromLabel: null,
+    brandLabel: null,
+    expectSubtitle: "A message from your Houzzat agent.",
+  });
+
+  // E — static published intro without variables → preserved
+  assertAgentIntroSubtitle({
+    label: "E-static-intro",
+    published: {
+      subject: null,
+      introText: "A personal note from your local team.",
+      bodySections: {},
+      ctaText: null,
+      style: {},
+    },
+    agentFromLabel: null,
+    brandLabel: null,
+    expectSubtitle: "A personal note from your local team.",
+  });
+
+  // F — empty published intro → existing fallback
+  assertAgentIntroSubtitle({
+    label: "F-empty-intro",
+    published: {
+      subject: null,
+      introText: null,
+      bodySections: {},
+      ctaText: null,
+      style: {},
+    },
+    agentFromLabel: "Jordan",
+    brandLabel: "Houzzat",
+    expectSubtitle: "A message from Jordan.",
+  });
+
+  // G — greeting already in body → no duplicate + intro fallback still safe
+  {
+    const mail = renderAgentMessageEmail({
+      name: "Heather",
+      subject: "Sub",
+      body: "Hi,\n\nJust checking in...",
+      agentFromLabel: null,
+      brandLabel: null,
+      agentSignatureHtml: "<strong>Sig</strong>",
+      agentSignatureText: "Sig",
+      publishedAgentEmailTemplate: {
+        subject: null,
+        introText: personalNoteIntro,
+        bodySections: {},
+        ctaText: null,
+        style: {},
+      },
+    });
+    assert.equal(mail.subject, "Sub");
+    assert.match(mail.html, /A message from your Houzzat agent\./);
+    assert.doesNotMatch(mail.html, /A personal note from\s+at\s+\./);
+    assert.ok(!mail.html.includes(autoGreetHtml("Heather")));
+    assert.ok(mail.text.includes("Hi,\n\nJust checking in..."));
+    assert.ok(!mail.text.startsWith("Hi Heather,\n\n"));
+  }
+
+  // H — body without greeting → automatic greeting remains + safe intro
+  {
+    const mail = renderAgentMessageEmail({
+      name: "Heather",
+      subject: "Sub",
+      body: "I wanted to follow up...",
+      agentFromLabel: "Ali Syed",
+      brandLabel: "Houzzat",
+      publishedAgentEmailTemplate: {
+        subject: null,
+        introText: personalNoteIntro,
+        bodySections: {},
+        ctaText: null,
+        style: {},
+      },
+    });
+    assert.ok(mail.html.includes(autoGreetHtml("Heather")));
+    assert.ok(mail.text.startsWith("Hi Heather,\n\n"));
+    assert.match(mail.html, /A personal note from Ali Syed at Houzzat\./);
+  }
+
+  // I — HTML/text: neither surface the hole-filled intro when vars missing
+  {
+    const mail = renderAgentMessageEmail({
+      name: "Heather",
+      subject: "Sub",
+      body: "Hello there — follow up.",
+      publishedAgentEmailTemplate: {
+        subject: null,
+        introText: personalNoteIntro,
+        bodySections: {},
+        ctaText: null,
+        style: {},
+      },
+    });
+    assert.doesNotMatch(mail.html, /A personal note from\s+at\s+\./);
+    assert.doesNotMatch(mail.text, /A personal note from\s+at\s+\./);
+    assert.match(mail.html, /A message from your Houzzat agent\./);
+  }
+
+  // J — no regression: subject/body/signature/escaping
+  {
+    const mail = renderAgentMessageEmail({
+      name: "Heather",
+      subject: "Agent wrote subject",
+      body: "Hi Heather, see A&B <listing>",
+      agentFromLabel: "Ali Syed",
+      brandLabel: "Houzzat",
+      agentSignatureHtml: "<strong>Ali & Co</strong>",
+      agentSignatureText: "Ali & Co",
+      publishedAgentEmailTemplate: {
+        subject: "TEMPLATE LOSES",
+        introText: personalNoteIntro,
+        bodySections: {},
+        ctaText: null,
+        style: { primaryColor: "#0F766E" },
+      },
+    });
+    assert.equal(mail.subject, "Agent wrote subject");
+    assert.doesNotMatch(mail.subject, /TEMPLATE LOSES/);
+    assert.match(mail.html, /A&amp;B/);
+    assert.match(mail.html, /&lt;listing&gt;/);
+    assert.match(mail.text, /Hi Heather, see A&B <listing>/);
+    assert.match(mail.html, /Ali &amp; Co|Ali & Co/);
+    assert.match(mail.text, /Ali & Co/);
+    assert.match(mail.html, /#0F766E|#0f766e/);
+    assert.match(mail.html, /A personal note from Ali Syed at Houzzat\./);
+    assert.ok(!mail.html.includes(autoGreetHtml("Heather")));
+  }
+}
+
 function testLegacyPreservedAndWiring() {
   const agent = renderAgentMessageEmail({
     name: "Alex",
@@ -797,6 +1026,7 @@ async function main() {
   await testPartialOverrideAndTypeIsolation();
   testHtmlEscapingAndProtectedContent();
   testAgentMessageGreetingDedup();
+  testAgentEmailIntroFallbackSafety();
   testLegacyPreservedAndWiring();
   await testShortlistAgentSubjectPrecedence();
   console.log("agent-share-email-templates-selftest: ok");

@@ -34,7 +34,12 @@ import {
   fillPublishedPropertyWatchTemplate,
   type PropertyWatchTemplateVars,
 } from "@/lib/email/workspace-templates/property-watch";
+import { getMasterEmailTemplate } from "@/lib/email/workspace-templates/registry";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
+
+/** Same token shape as workspace template validation — Agent Email intro only. */
+const AGENT_EMAIL_INTRO_VAR_RE =
+  /\{\{\s*([a-zA-Z][a-zA-Z0-9_]*)\s*\}\}/g;
 
 export type RenderedEmail = {
   subject: string;
@@ -1070,6 +1075,33 @@ function agentBodyStartsWithSalutation(body: string): boolean {
   return /^\s*(hi|hello|hey|dear)\b/i.test(body);
 }
 
+/**
+ * True when a published AGENT_EMAIL intro references allowed variables that
+ * have no usable value. Callers must fall back to the legacy subtitle rather
+ * than rendering hole-filled copy like "A personal note from  at .".
+ * Does not invent identity values. Scoped to Agent Email intros only.
+ */
+function agentEmailPublishedIntroVarsUnavailable(
+  introTemplate: string,
+  values: AgentEmailTemplateVars,
+): boolean {
+  const allowed = new Set(
+    getMasterEmailTemplate("AGENT_EMAIL")?.allowedVariables ?? [],
+  );
+  const valueMap: Record<string, string | number | null | undefined> = {
+    recipientName: values.recipientName,
+    tenantName: values.tenantName,
+    agentName: values.agentName,
+  };
+  for (const match of introTemplate.matchAll(AGENT_EMAIL_INTRO_VAR_RE)) {
+    const name = match[1];
+    if (!name || !allowed.has(name)) continue;
+    const raw = valueMap[name];
+    if (raw == null || !String(raw).trim()) return true;
+  }
+  return false;
+}
+
 export function renderAgentMessageEmail(
   input: {
     name?: string | null;
@@ -1095,16 +1127,16 @@ export function renderAgentMessageEmail(
   const legacySubtitle = fromLabel
     ? `A message from ${fromLabel}.`
     : "A message from your Houzzat agent.";
-  const hasCustomIntro = Boolean(
-    input.publishedAgentEmailTemplate?.introText?.trim(),
-  );
+  const templateVars: AgentEmailTemplateVars = {
+    recipientName: input.name,
+    tenantName: input.brandLabel,
+    agentName: fromLabel || input.agentFromLabel,
+  };
+  const publishedIntroTemplate =
+    input.publishedAgentEmailTemplate?.introText?.trim() ?? "";
   const override = agentEmailOverrideCopy(
     input.publishedAgentEmailTemplate,
-    {
-      recipientName: input.name,
-      tenantName: input.brandLabel,
-      agentName: fromLabel || input.agentFromLabel,
-    },
+    templateVars,
     {
       // Fallback subject unused — agent subject always applied below.
       subject: agentSubject,
@@ -1114,6 +1146,15 @@ export function renderAgentMessageEmail(
     },
     input,
   );
+  // Prefer published intro only when every referenced allowed variable resolves.
+  // Same decision for HTML subtitle and any plain-text use of override.introText.
+  const usePublishedIntro =
+    Boolean(publishedIntroTemplate) &&
+    !agentEmailPublishedIntroVarsUnavailable(
+      publishedIntroTemplate,
+      templateVars,
+    );
+  const subtitle = usePublishedIntro ? override.introText : legacySubtitle;
   const wrapperParagraphsText = override.paragraphsText.trim();
   const textParts: string[] = [];
   if (injectGreeting) textParts.push(greet);
@@ -1128,7 +1169,7 @@ export function renderAgentMessageEmail(
     : "";
   const html = emailLayout({
     title: agentSubject,
-    subtitle: hasCustomIntro ? override.introText : legacySubtitle,
+    subtitle,
     preheader: agentSubject,
     ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
