@@ -34,6 +34,7 @@
     "mls:history": "node --import tsx scripts/mls-history-backfill.ts",
     "mls:address-history": "node --import tsx scripts/mls-address-history-enrich.ts",
     "digests:run": "node --import tsx scripts/run-digests.ts",
+    "digests:cli:selftest": "node --import tsx scripts/run-digests-cli-selftest.ts",
     "monitors:run": "node --import tsx scripts/run-monitors.ts",
     "verify-email-nudge:run": "node --import tsx scripts/run-verify-email-nudge.ts",
     "monitors:selftest": "node --import tsx scripts/monitors-reliability-selftest.ts",

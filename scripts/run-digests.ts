@@ -4,25 +4,33 @@
  *   pnpm digests:run -- --dry-run
  *   pnpm digests:run -- --userId=<id> --force-seller
  *   pnpm digests:run -- --dry-run --userId=<id>
+ *   pnpm digests:run -- --buyer-only --userId=<id>
+ *   pnpm digests:run -- --buyer-only --dry-run --userId=<id>
  */
 import { config } from "dotenv";
+import {
+  executeDigestCliPlan,
+  parseDigestRunArgs,
+} from "./run-digests-cli";
 
 config({ path: ".env.local" });
 config();
 
 async function main() {
-  const args = process.argv.slice(2);
-  const dryRun = args.includes("--dry-run") || args.includes("--dryRun");
-  const forceSeller =
-    args.includes("--force-seller") || args.includes("--forceSeller");
-  const userIdArg = args.find((a) => a.startsWith("--userId="));
-  const userId = userIdArg?.slice("--userId=".length) || undefined;
+  const plan = parseDigestRunArgs(process.argv.slice(2));
+  if (!plan.ok) {
+    console.error(plan.error);
+    process.exit(1);
+  }
 
-  const { runDigestJobs } = await import("../src/lib/email/digests");
-  const result = await runDigestJobs({
-    userId,
-    dryRun,
-    forceSeller: forceSeller || Boolean(userId),
+  const {
+    runDigestJobs,
+    runBuyerSavedSearchDigests,
+  } = await import("../src/lib/email/digests");
+
+  const result = await executeDigestCliPlan(plan, {
+    runDigestJobs,
+    runBuyerSavedSearchDigests,
   });
   console.log(JSON.stringify(result, null, 2));
 }
