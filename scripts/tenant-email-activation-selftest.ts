@@ -219,6 +219,10 @@ async function testBrandingDeniedSkipsDeps() {
       loads += 1;
       return null;
     },
+    loadProfessionalIdentity: async () => {
+      loads += 1;
+      return null;
+    },
     loadAgentInWorkspace: async () => null,
     loadAssignedAgentForLead: async () => null,
     loadAssignedAgentForCustomer: async () => null,
@@ -273,6 +277,7 @@ async function testCrossTenantIsolationAllowlist() {
         throw new Error("must not load Houzzat branding when denied");
       },
       loadEmailIdentity: async () => null,
+      loadProfessionalIdentity: async () => null,
       loadAgentInWorkspace: async () => null,
       loadAssignedAgentForLead: async () => null,
       loadAssignedAgentForCustomer: async () => null,

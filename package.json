@@ -41,6 +41,7 @@
     "signup:selftest": "node --import tsx scripts/signup-reliability-selftest.ts",
     "email-open-verify:selftest": "node --import tsx scripts/email-open-verify-selftest.ts",
     "tenant-email-branding:selftest": "node --import tsx scripts/tenant-email-branding-selftest.ts",
+    "tenant-email-signature:selftest": "node --import tsx scripts/tenant-email-signature-selftest.ts",
     "tenant-email-activation:selftest": "node --import tsx scripts/tenant-email-activation-selftest.ts",
     "workspace-email-templates:selftest": "node --import tsx scripts/workspace-email-templates-selftest.ts",
     "workspace-email-templates-ui:selftest": "node --import tsx scripts/workspace-email-templates-ui-selftest.ts",

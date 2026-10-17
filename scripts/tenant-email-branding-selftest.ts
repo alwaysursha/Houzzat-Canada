@@ -98,6 +98,7 @@ function makeDeps(input: {
   identityByWs: Map<string, WorkspaceEmailIdentity | null>;
   agentsByWs: Map<string, TenantEmailAgentIdentity>;
   membership: Set<string>;
+  brokerageByWs?: Map<string, string | null>;
 }): TenantEmailBrandDeps {
   return {
     loadBranding: async (workspaceId) =>
@@ -106,6 +107,9 @@ function makeDeps(input: {
         : null,
     loadEmailIdentity: async (workspaceId) =>
       input.identityByWs.get(workspaceId) ?? null,
+    loadProfessionalIdentity: async (workspaceId) => ({
+      brokerageRegisteredName: input.brokerageByWs?.get(workspaceId) ?? null,
+    }),
     loadAgentInWorkspace: async (workspaceId, userId) => {
       if (!input.membership.has(`${workspaceId}:${userId}`)) return null;
       const agent = input.agentsByWs.get(`${workspaceId}:${userId}`);

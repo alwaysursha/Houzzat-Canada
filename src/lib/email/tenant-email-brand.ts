@@ -1,5 +1,5 @@
 /**
- * Phase 1 — tenant-aware chrome for existing customer-facing emails.
+ * Phase 1 / 3B — tenant-aware chrome for existing customer-facing emails.
  *
  * Global: TENANT_EMAIL_BRANDING=on (default off).
  * Allowlist: TENANT_EMAIL_BRANDING_WORKSPACE_IDS (comma/whitespace-separated).
@@ -9,6 +9,10 @@
  * Brand is always loaded for the recipient workspace only — never another tenant.
  *
  * From addresses are never overridden here (custom domains stay VERIFIED-gated later).
+ *
+ * Phase 3B — premium personal agent signature (User.image + ACTIVE membership)
+ * via Phase 3A photo resolver. Designation omitted until a verified per-agent
+ * field exists (workspace WPI designation is not per-agent).
  *
  * Future tenant-branding task (explicitly out of Phase 1):
  * - Customer verification email (`renderVerifyEmail`)
@@ -23,20 +27,36 @@ import type {
   WorkspaceEmailIdentity,
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
-import { escapeHtml } from "@/lib/email/layout";
+import { escapeAttr, escapeHtml } from "@/lib/email/layout";
 import { isWorkspaceIdAllowlisted } from "@/lib/email/workspace-id-allowlist";
 import { prisma } from "@/lib/prisma";
+import {
+  resolvePersonalAgentPhoto,
+  verifiedActiveMembership,
+} from "@/lib/tenancy/agent-photo";
+import { validateOptionalBrandColor } from "@/lib/tenancy/brand-colors";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { buildNeutralTenantBrand } from "@/lib/tenancy/neutral-tenant-brand";
 import { workspaceBrandingRowToBrand } from "@/lib/tenancy/resolve-workspace-brand";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIGNATURE_MARKER = 'data-houzzat-agent-signature="1"';
+const SIGNATURE_PHOTO_PX = 80;
+const SAFE_SIGNATURE_ACCENT = "#0F6B4C";
 
 export type TenantEmailAgentIdentity = {
   userId: string;
   name: string;
+  /** Used for Reply-To only — never rendered in the visible signature. */
   email: string | null;
   phone: string | null;
+  /** Canonical User.image; sanitized via Phase 3A PERSONAL resolver. */
+  image?: string | null;
+  /**
+   * Per-agent designation only. Null in Phase 3B — do not use workspace-level
+   * WorkspaceProfessionalIdentity.agentDesignation (not per-agent).
+   */
+  designation?: string | null;
 };
 
 export type TenantEmailBrand = {
@@ -79,11 +99,18 @@ export type TenantEmailBrandResolveInput = {
   customerId?: string | null;
 };
 
+export type TenantEmailProfessionalIdentity = {
+  brokerageRegisteredName: string | null;
+};
+
 export type TenantEmailBrandDeps = {
   loadBranding: (workspaceId: string) => Promise<WorkspaceBranding | null>;
   loadEmailIdentity: (
     workspaceId: string,
   ) => Promise<WorkspaceEmailIdentity | null>;
+  loadProfessionalIdentity: (
+    workspaceId: string,
+  ) => Promise<TenantEmailProfessionalIdentity | null>;
   loadAgentInWorkspace: (
     workspaceId: string,
     userId: string,
@@ -168,47 +195,182 @@ function pickReplyTo(options: {
   return null;
 }
 
-function buildSignature(input: {
+function resolveSignatureAccent(primaryColor: string): string {
+  const validated = validateOptionalBrandColor(primaryColor);
+  if (validated.ok && validated.value) return validated.value;
+  return SAFE_SIGNATURE_ACCENT;
+}
+
+/** Build a safe tel: href; returns null when the phone is not dialable. */
+export function buildTelHref(phone: string | null | undefined): string | null {
+  const raw = phone?.trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/[^\d+]/g, "");
+  const digits = normalized.replace(/\D/g, "");
+  if (digits.length < 7 || digits.length > 15) return null;
+  if (normalized.includes("+") && !normalized.startsWith("+")) return null;
+  return `tel:${normalized.startsWith("+") ? `+${digits}` : digits}`;
+}
+
+type AgentUserRowForEmail = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  image: string | null;
+  agentProfile: { phone: string | null; active: boolean } | null;
+};
+
+/** ACTIVE membership alone is insufficient — AgentProfile must be active. */
+function isEligibleAgentProfile(
+  agentProfile: { active: boolean } | null | undefined,
+): boolean {
+  return agentProfile?.active === true;
+}
+
+function mapUserToAgentIdentity(
+  user: AgentUserRowForEmail,
+): TenantEmailAgentIdentity {
+  return {
+    userId: user.id,
+    name: user.name?.trim() || user.email || "Your agent",
+    email: user.email,
+    phone: user.phone?.trim() || user.agentProfile?.phone?.trim() || null,
+    image: user.image ?? null,
+    // No verified per-agent designation field in Phase 3B.
+    designation: null,
+  };
+}
+
+const agentUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  phone: true,
+  image: true,
+  agentProfile: { select: { phone: true, active: true } },
+} as const;
+
+/**
+ * Premium personal signature (two-column table) or company-level fallback.
+ * Never includes agent email. Never uses OWNER as implicit primary.
+ */
+export function buildAgentEmailSignature(input: {
+  workspaceId: string;
   agent: TenantEmailAgentIdentity | null;
   displayName: string;
-  contactEmail: string | null;
   contactPhone: string | null;
   senderDisplayName: string | null;
+  brokerageRegisteredName: string | null;
+  primaryColor: string;
 }): { html: string; text: string } {
+  const accent = resolveSignatureAccent(input.primaryColor);
+  const brokerage =
+    input.brokerageRegisteredName?.trim() ||
+    input.displayName.trim() ||
+    null;
+
   if (input.agent) {
-    const lines = [
-      input.agent.name,
-      input.displayName,
-      input.agent.phone,
-      input.agent.email,
-    ].filter((line): line is string => Boolean(line?.trim()));
-    const text = lines.join("\n");
-    const html = lines
-      .map((line, i) =>
-        i === 0
-          ? `<strong style="color:#064e3b">${escapeHtml(line)}</strong>`
-          : escapeHtml(line),
-      )
-      .join("<br/>");
-    return { html, text };
+    const membership = verifiedActiveMembership(
+      {
+        workspaceId: input.workspaceId,
+        userId: input.agent.userId,
+        status: "ACTIVE",
+      },
+      {
+        workspaceId: input.workspaceId,
+        userId: input.agent.userId,
+      },
+    );
+    const photoUrl = resolvePersonalAgentPhoto({
+      workspaceId: input.workspaceId,
+      userId: input.agent.userId,
+      userImage: input.agent.image ?? null,
+      membership,
+    });
+
+    const name = input.agent.name.trim() || "Your agent";
+    const designation = input.agent.designation?.trim() || null;
+    const phoneDisplay = input.agent.phone?.trim() || null;
+    const tel = buildTelHref(phoneDisplay);
+
+    const textLines = [name, designation, phoneDisplay, brokerage].filter(
+      (line): line is string => Boolean(line),
+    );
+
+    const photoCell = photoUrl
+      ? `<td width="${SIGNATURE_PHOTO_PX + 12}" valign="top" style="width:${SIGNATURE_PHOTO_PX + 12}px;padding:0 12px 0 0;vertical-align:top">
+            <img src="${escapeAttr(photoUrl)}" width="${SIGNATURE_PHOTO_PX}" height="${SIGNATURE_PHOTO_PX}" alt="${escapeAttr(`Photo of ${name}`)}" style="display:block;width:${SIGNATURE_PHOTO_PX}px;height:${SIGNATURE_PHOTO_PX}px;border-radius:50%;border:0;object-fit:cover" />
+          </td>`
+      : "";
+
+    const designationHtml = designation
+      ? `<div style="margin:2px 0 0;font-size:13px;line-height:1.35;color:#334155">${escapeHtml(designation)}</div>`
+      : "";
+
+    const phoneHtml = phoneDisplay
+      ? tel
+        ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4"><a href="${escapeAttr(tel)}" style="color:${escapeAttr(accent)};text-decoration:none;font-weight:600">${escapeHtml(phoneDisplay)}</a></div>`
+        : `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#334155">${escapeHtml(phoneDisplay)}</div>`
+      : "";
+
+    const brokerageHtml = brokerage
+      ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569">${escapeHtml(brokerage)}</div>`
+      : "";
+
+    const html = `<table ${SIGNATURE_MARKER} role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt">
+      <tr>
+        ${photoCell}
+        <td valign="top" style="padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
+          <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:${escapeAttr(accent)}">${escapeHtml(name)}</div>
+          ${designationHtml}
+          ${phoneHtml}
+          ${brokerageHtml}
+        </td>
+      </tr>
+    </table>`;
+
+    return { html, text: textLines.join("\n") };
   }
 
-  const fallbackName =
-    input.senderDisplayName?.trim() || input.displayName.trim() || "Your team";
-  const lines = [
-    fallbackName,
-    input.contactPhone,
-    input.contactEmail,
-  ].filter((line): line is string => Boolean(line?.trim()));
-  const text = lines.join("\n");
-  const html = lines
-    .map((line, i) =>
-      i === 0
-        ? `<strong style="color:#064e3b">${escapeHtml(line)}</strong>`
-        : escapeHtml(line),
-    )
-    .join("<br/>");
-  return { html, text };
+  // Company-level signature — no personal headshot, no agent email.
+  const companyName =
+    input.senderDisplayName?.trim() ||
+    brokerage ||
+    input.displayName.trim() ||
+    "Your team";
+  const phoneDisplay = input.contactPhone?.trim() || null;
+  const tel = buildTelHref(phoneDisplay);
+  const showBrokerage =
+    brokerage &&
+    brokerage.toLowerCase() !== companyName.toLowerCase()
+      ? brokerage
+      : null;
+
+  const textLines = [companyName, phoneDisplay, showBrokerage].filter(
+    (line): line is string => Boolean(line),
+  );
+
+  const phoneHtml = phoneDisplay
+    ? tel
+      ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4"><a href="${escapeAttr(tel)}" style="color:${escapeAttr(accent)};text-decoration:none;font-weight:600">${escapeHtml(phoneDisplay)}</a></div>`
+      : `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#334155">${escapeHtml(phoneDisplay)}</div>`
+    : "";
+  const brokerageHtml = showBrokerage
+    ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569">${escapeHtml(showBrokerage)}</div>`
+    : "";
+
+  const html = `<table ${SIGNATURE_MARKER} role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt">
+    <tr>
+      <td valign="top" style="padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
+        <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:${escapeAttr(accent)}">${escapeHtml(companyName)}</div>
+        ${phoneHtml}
+        ${brokerageHtml}
+      </td>
+    </tr>
+  </table>`;
+
+  return { html, text: textLines.join("\n") };
 }
 
 export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
@@ -230,6 +392,13 @@ export function appendAgentSignatureHtml(
 ): string {
   const sig = signatureHtml?.trim();
   if (!sig) return bodyHtml;
+  // Idempotent — composition paths may already have appended a signature.
+  if (
+    bodyHtml.includes(SIGNATURE_MARKER) ||
+    (sig.includes(SIGNATURE_MARKER) && bodyHtml.includes(sig))
+  ) {
+    return bodyHtml;
+  }
   return `${bodyHtml}
       <div style="margin:24px 0 0;padding-top:16px;border-top:1px solid #a7f3d0;font-size:13px;line-height:1.5;color:#115e59">
         ${sig}
@@ -242,7 +411,11 @@ export function appendAgentSignatureText(
 ): string {
   const sig = signatureText?.trim();
   if (!sig) return text;
-  return `${text}\n\n--\n${sig}`;
+  const delimiter = "\n\n--\n";
+  if (text.includes(`${delimiter}${sig}`) || text.endsWith(`\n--\n${sig}`)) {
+    return text;
+  }
+  return `${text}${delimiter}${sig}`;
 }
 
 export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
@@ -251,47 +424,38 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
       prisma.workspaceBranding.findUnique({ where: { workspaceId } }),
     loadEmailIdentity: (workspaceId) =>
       prisma.workspaceEmailIdentity.findUnique({ where: { workspaceId } }),
+    loadProfessionalIdentity: async (workspaceId) => {
+      const row = await prisma.workspaceProfessionalIdentity.findUnique({
+        where: { workspaceId },
+        select: { brokerageRegisteredName: true },
+      });
+      if (!row) return null;
+      return { brokerageRegisteredName: row.brokerageRegisteredName };
+    },
     loadAgentInWorkspace: async (workspaceId, userId) => {
       const member = await prisma.workspaceMember.findUnique({
         where: {
           workspaceId_userId: { workspaceId, userId },
         },
         select: {
-          user: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              agentProfile: { select: { phone: true } },
-            },
-          },
+          status: true,
+          user: { select: agentUserSelect },
         },
       });
-      if (!member?.user) return null;
-      return {
-        userId: member.user.id,
-        name: member.user.name?.trim() || member.user.email || "Your agent",
-        email: member.user.email,
-        phone: member.user.agentProfile?.phone ?? null,
-      };
+      if (!member?.user || member.status !== "ACTIVE") return null;
+      if (!isEligibleAgentProfile(member.user.agentProfile)) return null;
+      return mapUserToAgentIdentity(member.user);
     },
     loadAssignedAgentForLead: async (workspaceId, leadId) => {
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, workspaceId },
         select: {
           assignedAgentId: true,
-          assignedAgent: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              agentProfile: { select: { phone: true } },
-            },
-          },
+          assignedAgent: { select: agentUserSelect },
         },
       });
       if (!lead?.assignedAgentId || !lead.assignedAgent) return null;
-      // Confirm membership so we never surface an agent from another tenant.
+      // Confirm ACTIVE membership so we never surface an agent from another tenant.
       const member = await prisma.workspaceMember.findUnique({
         where: {
           workspaceId_userId: {
@@ -299,18 +463,11 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
             userId: lead.assignedAgentId,
           },
         },
-        select: { userId: true },
+        select: { userId: true, status: true },
       });
-      if (!member) return null;
-      return {
-        userId: lead.assignedAgent.id,
-        name:
-          lead.assignedAgent.name?.trim() ||
-          lead.assignedAgent.email ||
-          "Your agent",
-        email: lead.assignedAgent.email,
-        phone: lead.assignedAgent.agentProfile?.phone ?? null,
-      };
+      if (!member || member.status !== "ACTIVE") return null;
+      if (!isEligibleAgentProfile(lead.assignedAgent.agentProfile)) return null;
+      return mapUserToAgentIdentity(lead.assignedAgent);
     },
     loadAssignedAgentForCustomer: async (workspaceId, customerId) => {
       const lead = await prisma.lead.findFirst({
@@ -322,14 +479,7 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
         orderBy: { updatedAt: "desc" },
         select: {
           assignedAgentId: true,
-          assignedAgent: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-              agentProfile: { select: { phone: true } },
-            },
-          },
+          assignedAgent: { select: agentUserSelect },
         },
       });
       if (!lead?.assignedAgentId || !lead.assignedAgent) return null;
@@ -340,18 +490,11 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
             userId: lead.assignedAgentId,
           },
         },
-        select: { userId: true },
+        select: { userId: true, status: true },
       });
-      if (!member) return null;
-      return {
-        userId: lead.assignedAgent.id,
-        name:
-          lead.assignedAgent.name?.trim() ||
-          lead.assignedAgent.email ||
-          "Your agent",
-        email: lead.assignedAgent.email,
-        phone: lead.assignedAgent.agentProfile?.phone ?? null,
-      };
+      if (!member || member.status !== "ACTIVE") return null;
+      if (!isEligibleAgentProfile(lead.assignedAgent.agentProfile)) return null;
+      return mapUserToAgentIdentity(lead.assignedAgent);
     },
     resolveWebsiteUrl: (workspaceId) =>
       resolveCanonicalPublicOrigin(workspaceId, fallbackWebsiteHost()),
@@ -368,6 +511,7 @@ export function assembleTenantEmailBrand(input: {
   identity: WorkspaceEmailIdentity | null;
   agent: TenantEmailAgentIdentity | null;
   websiteUrl: string;
+  brokerageRegisteredName?: string | null;
 }): TenantEmailBrand {
   const mapped = input.branding
     ? workspaceBrandingRowToBrand(input.workspaceId, input.branding)
@@ -386,12 +530,14 @@ export function assembleTenantEmailBrand(input: {
     brandContact: mapped.contact.email ?? null,
   });
 
-  const signature = buildSignature({
+  const signature = buildAgentEmailSignature({
+    workspaceId: input.workspaceId,
     agent: input.agent,
     displayName: mapped.displayName,
-    contactEmail,
     contactPhone,
     senderDisplayName: input.identity?.senderDisplayName ?? null,
+    brokerageRegisteredName: input.brokerageRegisteredName ?? null,
+    primaryColor: mapped.colors.primary,
   });
 
   const footerLegal = mapped.footerLegalText?.trim().split("\n")[0]?.trim();
@@ -429,25 +575,32 @@ export async function resolveTenantEmailBrand(
   }
   if (!workspaceId) return null;
 
-  const [branding, identity, websiteUrl] = await Promise.all([
+  const [branding, identity, professional, websiteUrl] = await Promise.all([
     deps.loadBranding(workspaceId),
     deps.loadEmailIdentity(workspaceId),
+    deps.loadProfessionalIdentity(workspaceId),
     deps.resolveWebsiteUrl(workspaceId),
   ]);
 
   let agent: TenantEmailAgentIdentity | null = null;
   const preferred = input.preferredAgentUserId?.trim();
   if (preferred) {
+    // Explicit preferred authority: validate that agent only.
+    // Never fall through to lead/customer assignees (wrong-person risk).
     agent = await deps.loadAgentInWorkspace(workspaceId, preferred);
-  }
-  if (!agent && input.leadId?.trim()) {
-    agent = await deps.loadAssignedAgentForLead(workspaceId, input.leadId.trim());
-  }
-  if (!agent && input.customerId?.trim()) {
-    agent = await deps.loadAssignedAgentForCustomer(
-      workspaceId,
-      input.customerId.trim(),
-    );
+  } else {
+    if (input.leadId?.trim()) {
+      agent = await deps.loadAssignedAgentForLead(
+        workspaceId,
+        input.leadId.trim(),
+      );
+    }
+    if (!agent && input.customerId?.trim()) {
+      agent = await deps.loadAssignedAgentForCustomer(
+        workspaceId,
+        input.customerId.trim(),
+      );
+    }
   }
 
   return assembleTenantEmailBrand({
@@ -456,5 +609,6 @@ export async function resolveTenantEmailBrand(
     identity,
     agent,
     websiteUrl,
+    brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
   });
 }
