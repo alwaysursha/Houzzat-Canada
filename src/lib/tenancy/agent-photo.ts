@@ -279,6 +279,24 @@ export type ResolvePersonalAgentPhotoInput = {
 };
 
 /**
+ * Whether `membership` is a minted ACTIVE token for this workspace+user.
+ * Used by email-headshot preference (Phase 3D.4.2) without trusting plain objects.
+ */
+export function isVerifiedActiveMembershipFor(
+  membership: VerifiedActiveMembership | null | undefined,
+  expected: { workspaceId: string; userId: string },
+): boolean {
+  const workspaceId = expected.workspaceId.trim();
+  const userId = expected.userId.trim();
+  if (!workspaceId || !userId) return false;
+  return (
+    isMintedActiveMembership(membership) &&
+    membership.workspaceId === workspaceId &&
+    membership.userId === userId
+  );
+}
+
+/**
  * PERSONAL policy — photo for one specific agent in one workspace.
  * Never substitutes another agent's image or workspace branding.
  */
@@ -289,12 +307,7 @@ export function resolvePersonalAgentPhoto(
   const userId = input.userId.trim();
   if (!workspaceId || !userId) return null;
 
-  const membership = input.membership;
-  if (
-    !isMintedActiveMembership(membership) ||
-    membership.workspaceId !== workspaceId ||
-    membership.userId !== userId
-  ) {
+  if (!isVerifiedActiveMembershipFor(input.membership, { workspaceId, userId })) {
     return null;
   }
 

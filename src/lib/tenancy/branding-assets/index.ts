@@ -26,6 +26,12 @@ export {
   persistAgentEmailHeadshotAssociationIfCurrent,
 } from "./agent-email-headshot-association";
 export {
+  tryResolveVerifiedEmailHeadshotUrl,
+  resolveVerifiedAgentEmailSignaturePhoto,
+  type AgentEmailHeadshotAssociationView,
+  type ResolvedAgentEmailSignaturePhoto,
+} from "./email-headshot-resolve";
+export {
   isManagedAgentProfileUrlReferenced,
   deleteManagedAgentProfileUrlIfUnreferenced,
   type ManagedProfileCdnDeleteResult,

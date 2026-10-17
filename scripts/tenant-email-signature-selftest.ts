@@ -133,6 +133,7 @@ function makeDeps(input: {
       if (!profileOk(agent.userId)) return null;
       return agent;
     },
+    loadAgentEmailHeadshotAssociation: async () => null,
     resolveWebsiteUrl: async () => "https://tenant-canary.houzzatpro.com",
   };
 }

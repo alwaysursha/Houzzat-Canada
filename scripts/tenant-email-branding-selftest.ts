@@ -127,6 +127,7 @@ function makeDeps(input: {
       if (!input.membership.has(`${workspaceId}:${agent.userId}`)) return null;
       return agent;
     },
+    loadAgentEmailHeadshotAssociation: async () => null,
     resolveWebsiteUrl: async (workspaceId) => {
       if (workspaceId === CANARY_WS) return "https://tenant-canary.houzzatpro.com";
       if (workspaceId === HOUZZAT_WS) return "https://houzzat.com";

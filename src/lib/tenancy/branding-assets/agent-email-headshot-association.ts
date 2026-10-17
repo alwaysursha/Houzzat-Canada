@@ -1,7 +1,8 @@
 /**
  * Phase 3D.4.1 — durable workspace-scoped email-headshot associations.
  *
- * Write path only for now (resolver/signature wiring is a later phase).
+ * Write path for association persistence. Signature preference uses
+ * `email-headshot-resolve` (Phase 3D.4.2) on the read path.
  * Object keys are always server-derived; never trust client URLs/keys.
  *
  * Concurrency: persist runs in a short DB transaction that locks the User row

@@ -226,6 +226,7 @@ async function testBrandingDeniedSkipsDeps() {
     loadAgentInWorkspace: async () => null,
     loadAssignedAgentForLead: async () => null,
     loadAssignedAgentForCustomer: async () => null,
+    loadAgentEmailHeadshotAssociation: async () => null,
     resolveWebsiteUrl: async () => {
       loads += 1;
       return "https://example.com";
@@ -281,6 +282,7 @@ async function testCrossTenantIsolationAllowlist() {
       loadAgentInWorkspace: async () => null,
       loadAssignedAgentForLead: async () => null,
       loadAssignedAgentForCustomer: async () => null,
+      loadAgentEmailHeadshotAssociation: async () => null,
       resolveWebsiteUrl: async () => "https://houzzat.com",
     },
     {

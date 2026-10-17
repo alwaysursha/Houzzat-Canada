@@ -14,6 +14,9 @@
  * via Phase 3A photo resolver. Designation omitted until a verified per-agent
  * field exists (workspace WPI designation is not per-agent).
  *
+ * Phase 3D.4.2 — prefer verified AgentEmailHeadshot thumbnail when association
+ * matches current User.image; otherwise sanitized canonical User.image.
+ *
  * Future tenant-branding task (explicitly out of Phase 1):
  * - Customer verification email (`renderVerifyEmail`)
  * - Welcome email (`renderWelcomeEmail`)
@@ -30,10 +33,11 @@ import { SITE_URL } from "@/lib/constants";
 import { escapeAttr, escapeHtml } from "@/lib/email/layout";
 import { isWorkspaceIdAllowlisted } from "@/lib/email/workspace-id-allowlist";
 import { prisma } from "@/lib/prisma";
+import { verifiedActiveMembership } from "@/lib/tenancy/agent-photo";
 import {
-  resolvePersonalAgentPhoto,
-  verifiedActiveMembership,
-} from "@/lib/tenancy/agent-photo";
+  resolveVerifiedAgentEmailSignaturePhoto,
+  type AgentEmailHeadshotAssociationView,
+} from "@/lib/tenancy/branding-assets/email-headshot-resolve";
 import { validateOptionalBrandColor } from "@/lib/tenancy/brand-colors";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { buildNeutralTenantBrand } from "@/lib/tenancy/neutral-tenant-brand";
@@ -123,6 +127,14 @@ export type TenantEmailBrandDeps = {
     workspaceId: string,
     customerId: string,
   ) => Promise<TenantEmailAgentIdentity | null>;
+  /**
+   * Phase 3D.4.2 — read-only association lookup (workspaceId + userId).
+   * Never invents a thumbnail URL without a persisted row.
+   */
+  loadAgentEmailHeadshotAssociation: (
+    workspaceId: string,
+    userId: string,
+  ) => Promise<AgentEmailHeadshotAssociationView | null>;
   resolveWebsiteUrl: (workspaceId: string) => Promise<string>;
 };
 
@@ -263,6 +275,8 @@ export function buildAgentEmailSignature(input: {
   senderDisplayName: string | null;
   brokerageRegisteredName: string | null;
   primaryColor: string;
+  /** Optional persisted email-headshot association for this agent (read-only). */
+  emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
 }): { html: string; text: string } {
   const accent = resolveSignatureAccent(input.primaryColor);
   const brokerage =
@@ -282,11 +296,12 @@ export function buildAgentEmailSignature(input: {
         userId: input.agent.userId,
       },
     );
-    const photoUrl = resolvePersonalAgentPhoto({
+    const photo = resolveVerifiedAgentEmailSignaturePhoto({
       workspaceId: input.workspaceId,
       userId: input.agent.userId,
       userImage: input.agent.image ?? null,
       membership,
+      association: input.emailHeadshotAssociation ?? null,
     });
 
     const name = input.agent.name.trim() || "Your agent";
@@ -298,9 +313,16 @@ export function buildAgentEmailSignature(input: {
       (line): line is string => Boolean(line),
     );
 
-    const photoCell = photoUrl
+    // Verified thumbs are pre-cropped circular PNGs. Legacy originals keep the
+    // existing CSS circular crop + object-position framing adjustment.
+    const photoStyle =
+      photo?.kind === "email-headshot"
+        ? `display:block;width:${SIGNATURE_PHOTO_PX}px;height:${SIGNATURE_PHOTO_PX}px;border-radius:50%;border:0`
+        : `display:block;width:${SIGNATURE_PHOTO_PX}px;height:${SIGNATURE_PHOTO_PX}px;border-radius:50%;border:0;object-fit:cover;object-position:center 30%`;
+
+    const photoCell = photo
       ? `<td width="${SIGNATURE_PHOTO_PX + 12}" valign="top" style="width:${SIGNATURE_PHOTO_PX + 12}px;padding:0 12px 0 0;vertical-align:top">
-            <img src="${escapeAttr(photoUrl)}" width="${SIGNATURE_PHOTO_PX}" height="${SIGNATURE_PHOTO_PX}" alt="${escapeAttr(`Photo of ${name}`)}" style="display:block;width:${SIGNATURE_PHOTO_PX}px;height:${SIGNATURE_PHOTO_PX}px;border-radius:50%;border:0;object-fit:cover" />
+            <img src="${escapeAttr(photo.url)}" width="${SIGNATURE_PHOTO_PX}" height="${SIGNATURE_PHOTO_PX}" alt="${escapeAttr(`Photo of ${name}`)}" style="${photoStyle}" />
           </td>`
       : "";
 
@@ -496,6 +518,20 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
       if (!isEligibleAgentProfile(lead.assignedAgent.agentProfile)) return null;
       return mapUserToAgentIdentity(lead.assignedAgent);
     },
+    loadAgentEmailHeadshotAssociation: async (workspaceId, userId) => {
+      const row = await prisma.agentEmailHeadshot.findUnique({
+        where: {
+          workspaceId_userId: { workspaceId, userId },
+        },
+        select: {
+          workspaceId: true,
+          userId: true,
+          sourceUniqueId: true,
+          emailHeadshotObjectKey: true,
+        },
+      });
+      return row;
+    },
     resolveWebsiteUrl: (workspaceId) =>
       resolveCanonicalPublicOrigin(workspaceId, fallbackWebsiteHost()),
   };
@@ -512,6 +548,7 @@ export function assembleTenantEmailBrand(input: {
   agent: TenantEmailAgentIdentity | null;
   websiteUrl: string;
   brokerageRegisteredName?: string | null;
+  emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
 }): TenantEmailBrand {
   const mapped = input.branding
     ? workspaceBrandingRowToBrand(input.workspaceId, input.branding)
@@ -538,6 +575,7 @@ export function assembleTenantEmailBrand(input: {
     senderDisplayName: input.identity?.senderDisplayName ?? null,
     brokerageRegisteredName: input.brokerageRegisteredName ?? null,
     primaryColor: mapped.colors.primary,
+    emailHeadshotAssociation: input.emailHeadshotAssociation ?? null,
   });
 
   const footerLegal = mapped.footerLegalText?.trim().split("\n")[0]?.trim();
@@ -603,6 +641,17 @@ export async function resolveTenantEmailBrand(
     }
   }
 
+  // Optional association only — never abort brand/signature assembly on lookup
+  // failure. Soft-fail does NOT make pre-migration deploy safe for photo upload
+  // clear paths; migration-first remains mandatory for AgentEmailHeadshot.
+  const emailHeadshotAssociation = agent
+    ? await loadAgentEmailHeadshotAssociationBestEffort(
+        deps,
+        workspaceId,
+        agent.userId,
+      )
+    : null;
+
   return assembleTenantEmailBrand({
     workspaceId,
     branding,
@@ -610,5 +659,36 @@ export async function resolveTenantEmailBrand(
     agent,
     websiteUrl,
     brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
+    emailHeadshotAssociation,
   });
+}
+
+/**
+ * Best-effort read of AgentEmailHeadshot. Lookup errors are logged and treated
+ * as "no association" so branding-enabled emails still send with canonical
+ * User.image (or no photo). Does not catch errors from other brand deps.
+ */
+async function loadAgentEmailHeadshotAssociationBestEffort(
+  deps: TenantEmailBrandDeps,
+  workspaceId: string,
+  userId: string,
+): Promise<AgentEmailHeadshotAssociationView | null> {
+  try {
+    return await deps.loadAgentEmailHeadshotAssociation(workspaceId, userId);
+  } catch (error) {
+    const code =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code: unknown }).code)
+        : null;
+    console.warn(
+      "[tenant-email-brand] email headshot association lookup failed",
+      {
+        workspaceId,
+        userId,
+        code,
+        reason: error instanceof Error ? error.name : "unknown",
+      },
+    );
+    return null;
+  }
 }
