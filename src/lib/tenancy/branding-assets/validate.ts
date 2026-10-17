@@ -3,6 +3,11 @@
  * SVG excluded — no safe sanitizer in-repo for this stage.
  */
 
+import {
+  EMAIL_HEADSHOT_MAX_DECODED_BYTES,
+  validateEmailHeadshotPngStructure,
+} from "@/lib/tenancy/branding-assets/email-headshot-png";
+
 export type ValidatedBrandingImage = {
   mime: "image/jpeg" | "image/png" | "image/webp";
   ext: "jpg" | "png" | "webp";
@@ -261,8 +266,10 @@ export type EmailHeadshotValidationError = {
 
 /**
  * Server-side gate for optional email-signature thumbnails.
- * Magic bytes only (never trust filename / client Content-Type).
- * Exact 240×240 PNG; fail-closed on anything else.
+ * Never trust filename / client Content-Type.
+ *
+ * Phase 3D.4.0: full PNG signature, chunk framing, CRCs, IDAT inflate under a
+ * decoded-size cap, exact 240×240 — fail-closed on malformed/truncated data.
  */
 export function validateEmailHeadshotBytes(
   raw: ArrayBuffer | Uint8Array,
@@ -279,6 +286,7 @@ export function validateEmailHeadshotBytes(
     };
   }
 
+  // Fast reject non-PNG before structural walk (JPEG/WebP/SVG/etc.).
   const mime = detectMime(bytes);
   if (mime !== "image/png") {
     return {
@@ -287,21 +295,14 @@ export function validateEmailHeadshotBytes(
     };
   }
 
-  const dims = pngDimensions(bytes);
-  if (!dims) {
-    return {
-      code: "CORRUPT_IMAGE",
-      message: "Could not read email headshot dimensions.",
-    };
-  }
-  if (
-    dims.width !== EMAIL_HEADSHOT_REQUIRED_SIZE ||
-    dims.height !== EMAIL_HEADSHOT_REQUIRED_SIZE
-  ) {
-    return {
-      code: "DIMENSIONS_INVALID",
-      message: `Email headshot must be exactly ${EMAIL_HEADSHOT_REQUIRED_SIZE}×${EMAIL_HEADSHOT_REQUIRED_SIZE}px.`,
-    };
+  const structural = validateEmailHeadshotPngStructure(
+    bytes,
+    EMAIL_HEADSHOT_REQUIRED_SIZE,
+    EMAIL_HEADSHOT_REQUIRED_SIZE,
+    EMAIL_HEADSHOT_MAX_DECODED_BYTES,
+  );
+  if (!structural.ok) {
+    return { code: structural.code, message: structural.message };
   }
 
   return {
@@ -311,3 +312,5 @@ export function validateEmailHeadshotBytes(
     bytes,
   };
 }
+
+export { EMAIL_HEADSHOT_MAX_DECODED_BYTES };

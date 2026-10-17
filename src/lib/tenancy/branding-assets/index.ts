@@ -50,10 +50,17 @@ export {
   validateEmailHeadshotBytes,
   BRANDING_ASSET_MAX_BYTES,
   EMAIL_HEADSHOT_MAX_BYTES,
+  EMAIL_HEADSHOT_MAX_DECODED_BYTES,
   EMAIL_HEADSHOT_REQUIRED_SIZE,
   type ValidatedEmailHeadshot,
   type EmailHeadshotValidationError,
 } from "./validate";
+export {
+  validateEmailHeadshotPngStructure,
+  pngCrc32,
+  PNG_SIGNATURE,
+  type EmailHeadshotPngResult,
+} from "./email-headshot-png";
 export {
   brandingRequirementsForCategory,
   evaluateBrandingStatus,

@@ -8,6 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync } from "node:zlib";
 import { OwnerActivationError } from "@/lib/platform/activation/errors";
 import {
   AGENT_EMAIL_HEADSHOT_FILENAME_SUFFIX,
@@ -16,6 +17,8 @@ import {
   EMAIL_HEADSHOT_MAX_BYTES,
   EMAIL_HEADSHOT_REQUIRED_SIZE,
   extractAgentUserProfileObjectKeyFromUrl,
+  PNG_SIGNATURE,
+  pngCrc32,
   setBrandingStorageTestDeps,
   uploadAgentUserProfilePhoto,
   validateEmailHeadshotBytes,
@@ -48,30 +51,84 @@ function jpegFile(): File {
   return new File([agentProfileJpeg()], "agent.jpg", { type: "image/jpeg" });
 }
 
-/** Minimal PNG with IHDR width/height (validator reads magic + IHDR only). */
-function pngWithDims(width: number, height: number, padBytes = 0): Uint8Array {
+function u32be(n: number): Uint8Array {
+  return Uint8Array.of(
+    (n >>> 24) & 0xff,
+    (n >>> 16) & 0xff,
+    (n >>> 8) & 0xff,
+    n & 0xff,
+  );
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBytes = Uint8Array.from(type.split("").map((c) => c.charCodeAt(0)));
+  const crcBuf = new Uint8Array(typeBytes.length + data.length);
+  crcBuf.set(typeBytes, 0);
+  crcBuf.set(data, typeBytes.length);
+  const crc = pngCrc32(crcBuf);
+  const out = new Uint8Array(8 + data.length + 4);
+  out.set(u32be(data.length), 0);
+  out.set(typeBytes, 4);
+  out.set(data, 8);
+  out.set(u32be(crc), 8 + data.length);
+  return out;
+}
+
+/** Valid non-interlaced 8-bit RGBA PNG for upload success paths. */
+function solidRgbaPng(width: number, height: number): Uint8Array {
+  const row = 1 + width * 4;
+  const raw = new Uint8Array(height * row);
+  for (let y = 0; y < height; y++) {
+    const base = y * row;
+    raw[base] = 0;
+    for (let x = 0; x < width; x++) {
+      const p = base + 1 + x * 4;
+      raw[p] = 40;
+      raw[p + 1] = 90;
+      raw[p + 2] = 140;
+      raw[p + 3] = 255;
+    }
+  }
+  const ihdr = new Uint8Array(13);
+  ihdr.set(u32be(width), 0);
+  ihdr.set(u32be(height), 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  const idat = deflateSync(Buffer.from(raw), { level: 9 });
+  const parts = [
+    PNG_SIGNATURE,
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", new Uint8Array(idat)),
+    pngChunk("IEND", new Uint8Array(0)),
+  ];
+  let total = 0;
+  for (const p of parts) total += p.length;
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of parts) {
+    out.set(p, o);
+    o += p.length;
+  }
+  return out;
+}
+
+/** Legacy forged IHDR-only buffer (must be rejected by 3D.4.0). */
+function forgedIhdrOnly(width: number, height: number, padBytes = 0): Uint8Array {
   const buf = new Uint8Array(33 + padBytes);
-  buf.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
-  buf[11] = 13; // IHDR data length
+  buf.set(PNG_SIGNATURE, 0);
+  buf[11] = 13;
   buf.set([0x49, 0x48, 0x44, 0x52], 12);
-  buf[16] = (width >>> 24) & 0xff;
-  buf[17] = (width >>> 16) & 0xff;
-  buf[18] = (width >>> 8) & 0xff;
-  buf[19] = width & 0xff;
-  buf[20] = (height >>> 24) & 0xff;
-  buf[21] = (height >>> 16) & 0xff;
-  buf[22] = (height >>> 8) & 0xff;
-  buf[23] = height & 0xff;
-  buf[24] = 8; // bit depth
-  buf[25] = 6; // RGBA
+  buf.set(u32be(width), 16);
+  buf.set(u32be(height), 20);
+  buf[24] = 8;
+  buf[25] = 6;
   return buf;
 }
 
 function emailHeadshotFile(
   dims: number = EMAIL_HEADSHOT_REQUIRED_SIZE,
-  padBytes = 0,
 ): File {
-  return new File([pngWithDims(dims, dims, padBytes)], "agent-email-headshot-240.png", {
+  return new File([solidRgbaPng(dims, dims)], "agent-email-headshot-240.png", {
     type: "image/png",
   });
 }
@@ -542,15 +599,18 @@ async function main() {
     const badMime = validateEmailHeadshotBytes(await jpegAsThumb.arrayBuffer());
     assert.ok("code" in badMime && badMime.code === "UNSUPPORTED_MIME");
 
-    const wrongDims = validateEmailHeadshotBytes(pngWithDims(100, 100));
+    const wrongDims = validateEmailHeadshotBytes(solidRgbaPng(100, 100));
     assert.ok(
       "code" in wrongDims && wrongDims.code === "DIMENSIONS_INVALID",
     );
 
     const oversized = validateEmailHeadshotBytes(
-      pngWithDims(240, 240, EMAIL_HEADSHOT_MAX_BYTES),
+      forgedIhdrOnly(240, 240, EMAIL_HEADSHOT_MAX_BYTES),
     );
     assert.ok("code" in oversized && oversized.code === "FILE_TOO_LARGE");
+
+    const forged = validateEmailHeadshotBytes(forgedIhdrOnly(240, 240));
+    assert.ok("code" in forged && forged.code === "CORRUPT_IMAGE");
 
     const state = createState(AGENT);
     const puts: PutRecord[] = [];
