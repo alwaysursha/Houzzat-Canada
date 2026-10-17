@@ -14,6 +14,7 @@
 import { OwnerActivationError } from "@/lib/platform/activation/errors";
 import { ensureWorkspaceOnboardingState } from "@/lib/platform/activation/onboarding-state";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import { buildAgentEmailHeadshotObjectKey } from "@/lib/tenancy/branding-assets/email-headshot-storage";
 import { buildAgentUserProfileObjectKey } from "@/lib/tenancy/branding-assets/keys";
 import { deleteManagedAgentProfileUrlIfUnreferenced } from "@/lib/tenancy/branding-assets/managed-profile-cdn";
 import { evaluateBrandingStatus } from "@/lib/tenancy/branding-assets/requirements";
@@ -22,7 +23,10 @@ import {
   deleteBrandingAssetObject,
   putBrandingAssetObject,
 } from "@/lib/tenancy/branding-assets/storage";
-import { validateBrandingImageBytes } from "@/lib/tenancy/branding-assets/validate";
+import {
+  validateBrandingImageBytes,
+  validateEmailHeadshotBytes,
+} from "@/lib/tenancy/branding-assets/validate";
 import {
   getTemplate,
   resolveTemplateIdFromThemeId,
@@ -38,6 +42,11 @@ export type AgentUserProfilePhotoResult = {
   syncedBrandingPortrait: boolean;
   /** primaryAgentId was null at start — website portrait left untouched. */
   primaryAgentUnset: boolean;
+  /**
+   * True only after the optional email-headshot sibling R2 write succeeded.
+   * Never a signature preference / never a public thumbnail URL.
+   */
+  emailHeadshotStored: boolean;
 };
 
 type PhotoDb = Pick<
@@ -135,6 +144,58 @@ async function syncBrandingPortraitIfStillPrimary(
   return Number(updated) > 0;
 }
 
+/**
+ * Phase 3D.3 — optional sibling email headshot after canonical photo is durable.
+ * Never throws: original upload must succeed even if thumb validation/storage fails.
+ * Object key is derived server-side from authenticated workspace/user + upload uniqueId.
+ */
+async function tryStoreEmailHeadshotSibling(input: {
+  workspaceId: string;
+  userId: string;
+  uniqueId: string;
+  file: File;
+}): Promise<boolean> {
+  try {
+    const buffer = await input.file.arrayBuffer();
+    const validated = validateEmailHeadshotBytes(buffer);
+    if ("code" in validated) {
+      console.warn("[agent-profile-photo] email headshot rejected", {
+        code: validated.code,
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+      });
+      return false;
+    }
+
+    const objectKey = buildAgentEmailHeadshotObjectKey({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      uniqueId: input.uniqueId,
+    });
+    if (!objectKey) {
+      console.warn("[agent-profile-photo] email headshot key rejected", {
+        workspaceId: input.workspaceId,
+        userId: input.userId,
+      });
+      return false;
+    }
+
+    await putBrandingAssetObject({
+      objectKey,
+      bytes: validated.bytes,
+      contentType: "image/png",
+    });
+    return true;
+  } catch (error) {
+    console.error("[agent-profile-photo] email headshot storage failed", {
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      error,
+    });
+    return false;
+  }
+}
+
 async function loadPrimaryAndBranding(
   db: PhotoDb,
   workspaceId: string,
@@ -171,11 +232,17 @@ async function loadPrimaryAndBranding(
 /**
  * Upload / replace an agent's User.image. Dual-writes branding only when
  * the user is still Workspace.primaryAgentId at commit time.
+ *
+ * Optional `emailHeadshot` (Phase 3D.3): validated 240×240 PNG stored as a
+ * derived sibling after the canonical photo DB commit. Thumb failures never
+ * fail the original upload. Previous email thumbs are not deleted on replace.
  */
 export async function uploadAgentUserProfilePhoto(input: {
   workspaceId: string;
   userId: string;
   file: File;
+  /** Optional client-generated 240×240 circular PNG; never trusted for keys/URLs. */
+  emailHeadshot?: File | null;
   prisma?: PrismaClient;
 }): Promise<AgentUserProfilePhotoResult> {
   const db = (input.prisma ?? defaultPrisma) as PhotoDb & PrismaClient;
@@ -264,6 +331,7 @@ export async function uploadAgentUserProfilePhoto(input: {
     });
   } catch (error) {
     // Compensating: drop the orphaned object we just wrote (never in DB).
+    // Email headshot is never written before this point.
     await deleteBrandingAssetObject(objectKey);
     throw error;
   }
@@ -294,11 +362,23 @@ export async function uploadAgentUserProfilePhoto(input: {
     });
   }
 
+  // After canonical photo is durable: optional sibling thumb (best-effort).
+  let emailHeadshotStored = false;
+  if (input.emailHeadshot instanceof File) {
+    emailHeadshotStored = await tryStoreEmailHeadshotSibling({
+      workspaceId,
+      userId,
+      uniqueId,
+      file: input.emailHeadshot,
+    });
+  }
+
   return {
     image: nextUrl,
     agentProfilePhotoUrl: nextUrl,
     syncedBrandingPortrait,
     primaryAgentUnset,
+    emailHeadshotStored,
   };
 }
 
@@ -367,6 +447,7 @@ export async function removeAgentUserProfilePhoto(input: {
     // Phase 1 never mutates the website branding portrait on personal remove.
     syncedBrandingPortrait: false,
     primaryAgentUnset,
+    emailHeadshotStored: false,
   };
 }
 

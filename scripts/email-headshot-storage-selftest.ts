@@ -386,8 +386,17 @@ withTrustedCdn(() => {
   const uploaderSrc = read(
     "src/components/agent/AgentPortraitFocusUploader.tsx",
   );
+  // Phase 3D.3: upload service may build sibling keys via email-headshot-storage,
+  // but must never delete thumbs on upload/replace. API + client stay key-free.
+  assert.ok(
+    uploadSrc.includes("buildAgentEmailHeadshotObjectKey"),
+    "upload service must derive sibling keys server-side",
+  );
+  assert.ok(
+    !uploadSrc.includes("deleteAgentEmailHeadshotSiblingIfUnreferenced"),
+    "upload service must not call thumbnail cleanup",
+  );
   for (const [label, src] of [
-    ["agent-user-profile-photo", uploadSrc],
     ["photo API", apiSrc],
     ["AgentPortraitFocusUploader", uploaderSrc],
   ] as const) {

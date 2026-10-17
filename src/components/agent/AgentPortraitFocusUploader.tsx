@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { createEmailHeadshotFile } from "@/lib/tenancy/branding-assets/email-headshot";
 
 const ASPECT = 3 / 4;
 const OUTPUT_WIDTH = 1200;
@@ -75,6 +76,24 @@ function loadImage(url: string) {
     img.onerror = () => reject(new Error("Could not load image"));
     img.src = url;
   });
+}
+
+/**
+ * Phase 3D.3 — best-effort 240×240 circular PNG from the cropped 1200×1600 JPEG.
+ * Focus/pan/zoom are already baked into the export, so default headshot framing applies.
+ * Failure returns null; the canonical profile upload must still proceed.
+ */
+async function maybeCreateEmailHeadshot(profileFile: File): Promise<File | null> {
+  const url = URL.createObjectURL(profileFile);
+  try {
+    const img = await loadImage(url);
+    return await createEmailHeadshotFile(img);
+  } catch (error) {
+    console.warn("[agent-portrait] email headshot generation failed", error);
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /**
@@ -153,8 +172,11 @@ export function AgentPortraitFocusUploader({
     try {
       const rect = stageRef.current.getBoundingClientRect();
       const file = await exportCroppedJpeg(draft, rect.width, rect.height);
+      // Best-effort sibling thumb; never blocks canonical JPEG upload.
+      const emailHeadshot = await maybeCreateEmailHeadshot(file);
       const body = new FormData();
       body.set("file", file);
+      if (emailHeadshot) body.set("emailHeadshot", emailHeadshot);
       if (userId?.trim()) body.set("userId", userId.trim());
       const res = await fetch("/api/agent/profile/photo", {
         method: "POST",

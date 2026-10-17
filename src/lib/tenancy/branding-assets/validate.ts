@@ -236,3 +236,78 @@ export function validateBrandingImageBytes(
 }
 
 export const BRANDING_ASSET_MAX_BYTES = MAX_BYTES;
+
+/** Phase 3D.3 — email signature thumbnail (exactly 240×240 PNG). */
+export const EMAIL_HEADSHOT_REQUIRED_SIZE = 240;
+/** ~250KB is ample for a 240×240 circular PNG; reject pathological payloads. */
+export const EMAIL_HEADSHOT_MAX_BYTES = 250_000;
+
+export type ValidatedEmailHeadshot = {
+  mime: "image/png";
+  width: typeof EMAIL_HEADSHOT_REQUIRED_SIZE;
+  height: typeof EMAIL_HEADSHOT_REQUIRED_SIZE;
+  bytes: Uint8Array;
+};
+
+export type EmailHeadshotValidationError = {
+  code:
+    | "EMPTY_FILE"
+    | "FILE_TOO_LARGE"
+    | "UNSUPPORTED_MIME"
+    | "CORRUPT_IMAGE"
+    | "DIMENSIONS_INVALID";
+  message: string;
+};
+
+/**
+ * Server-side gate for optional email-signature thumbnails.
+ * Magic bytes only (never trust filename / client Content-Type).
+ * Exact 240×240 PNG; fail-closed on anything else.
+ */
+export function validateEmailHeadshotBytes(
+  raw: ArrayBuffer | Uint8Array,
+): ValidatedEmailHeadshot | EmailHeadshotValidationError {
+  const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+
+  if (bytes.length === 0) {
+    return { code: "EMPTY_FILE", message: "Email headshot is empty." };
+  }
+  if (bytes.length > EMAIL_HEADSHOT_MAX_BYTES) {
+    return {
+      code: "FILE_TOO_LARGE",
+      message: `Email headshot too large (max ${EMAIL_HEADSHOT_MAX_BYTES} bytes).`,
+    };
+  }
+
+  const mime = detectMime(bytes);
+  if (mime !== "image/png") {
+    return {
+      code: "UNSUPPORTED_MIME",
+      message: "Email headshot must be a PNG.",
+    };
+  }
+
+  const dims = pngDimensions(bytes);
+  if (!dims) {
+    return {
+      code: "CORRUPT_IMAGE",
+      message: "Could not read email headshot dimensions.",
+    };
+  }
+  if (
+    dims.width !== EMAIL_HEADSHOT_REQUIRED_SIZE ||
+    dims.height !== EMAIL_HEADSHOT_REQUIRED_SIZE
+  ) {
+    return {
+      code: "DIMENSIONS_INVALID",
+      message: `Email headshot must be exactly ${EMAIL_HEADSHOT_REQUIRED_SIZE}×${EMAIL_HEADSHOT_REQUIRED_SIZE}px.`,
+    };
+  }
+
+  return {
+    mime: "image/png",
+    width: EMAIL_HEADSHOT_REQUIRED_SIZE,
+    height: EMAIL_HEADSHOT_REQUIRED_SIZE,
+    bytes,
+  };
+}

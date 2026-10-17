@@ -47,7 +47,12 @@ export {
 } from "./email-headshot-storage";
 export {
   validateBrandingImageBytes,
+  validateEmailHeadshotBytes,
   BRANDING_ASSET_MAX_BYTES,
+  EMAIL_HEADSHOT_MAX_BYTES,
+  EMAIL_HEADSHOT_REQUIRED_SIZE,
+  type ValidatedEmailHeadshot,
+  type EmailHeadshotValidationError,
 } from "./validate";
 export {
   brandingRequirementsForCategory,

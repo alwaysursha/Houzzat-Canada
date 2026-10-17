@@ -106,10 +106,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File required." }, { status: 400 });
     }
 
+    // Optional email thumb bytes only — never accept client object keys or URLs.
+    const emailHeadshotRaw = form.get("emailHeadshot");
+    const emailHeadshot =
+      emailHeadshotRaw instanceof File ? emailHeadshotRaw : null;
+
     const result = await uploadAgentUserProfilePhoto({
       workspaceId: authz.workspaceId,
       userId: authz.targetUserId,
       file,
+      emailHeadshot,
     });
     return NextResponse.json({
       ok: true,
@@ -118,6 +124,8 @@ export async function POST(request: Request) {
       image: result.image,
       syncedBrandingPortrait: result.syncedBrandingPortrait,
       primaryAgentUnset: result.primaryAgentUnset,
+      // Availability only — never a CDN URL / never a signature preference.
+      emailHeadshotStored: result.emailHeadshotStored,
     });
   } catch (error) {
     const mapped = mapAssetError(error);
