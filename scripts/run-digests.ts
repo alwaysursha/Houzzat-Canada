@@ -6,6 +6,10 @@
  *   pnpm digests:run -- --dry-run --userId=<id>
  *   pnpm digests:run -- --buyer-only --userId=<id>
  *   pnpm digests:run -- --buyer-only --dry-run --userId=<id>
+ *   pnpm digests:run -- --seller-only --userId=<id>
+ *   pnpm digests:run -- --seller-only --dry-run --userId=<id>
+ *   pnpm digests:run -- --seller-only --force-seller --userId=<id>
+ *   pnpm digests:run -- --seller-only --dry-run --force-seller --userId=<id>
  */
 import { config } from "dotenv";
 import {
@@ -26,11 +30,13 @@ async function main() {
   const {
     runDigestJobs,
     runBuyerSavedSearchDigests,
+    runSellerNeighborhoodReports,
   } = await import("../src/lib/email/digests");
 
   const result = await executeDigestCliPlan(plan, {
     runDigestJobs,
     runBuyerSavedSearchDigests,
+    runSellerNeighborhoodReports,
   });
   console.log(JSON.stringify(result, null, 2));
 }

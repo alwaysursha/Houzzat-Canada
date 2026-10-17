@@ -6,7 +6,9 @@ import { runSellerNeighborhoodReports } from "@/lib/email/digests/seller";
 import { notifyOpenTasksDue } from "@/lib/notifications/staff-events";
 
 export type DigestJobResult = {
-  buyer: DigestRunStats;
+  /** Null when a seller-only CLI path skipped Buyer Digest entirely. */
+  buyer: DigestRunStats | null;
+  /** Null when a buyer-only CLI path skipped Seller Digest entirely. */
   seller: DigestRunStats | null;
 };
 
