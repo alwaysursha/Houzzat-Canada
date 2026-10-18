@@ -8,6 +8,35 @@ import { createHash, createHmac } from "node:crypto";
 const R2_S3_REGION = "auto";
 const R2_S3_SERVICE = "s3";
 
+/** Bound how much of a failed response we read for Code extraction (never logged). */
+const MAX_ERROR_BODY_BYTES = 4_096;
+
+/** Allowlisted S3/R2 error codes safe to surface in server logs. */
+const RECOGNIZED_S3_ERROR_CODES = new Set([
+  "AccessDenied",
+  "SignatureDoesNotMatch",
+  "InvalidAccessKeyId",
+  "NoSuchBucket",
+  "InvalidArgument",
+  "InvalidRequest",
+  "EntityTooLarge",
+  "IncompleteBody",
+  "InternalError",
+  "ServiceUnavailable",
+  "SlowDown",
+  "RequestTimeout",
+  "NoSuchKey",
+  "MethodNotAllowed",
+  "AccessDeniedException",
+]);
+
+const SAFE_REQUEST_ID_HEADER_NAMES = [
+  "x-amz-request-id",
+  "x-amz-id-2",
+] as const;
+
+const SAFE_REQUEST_ID_RE = /^[A-Za-z0-9+/=._:-]{1,128}$/;
+
 export type R2S3Config = {
   accessKeyId: string;
   secretAccessKey: string;
@@ -23,6 +52,35 @@ export type R2S3Like = {
   ) => Promise<unknown>;
   delete: (key: string | string[]) => Promise<void>;
 };
+
+export type BrandingAssetStorageOperation = "PUT" | "DELETE";
+
+export type BrandingAssetStorageFailureDiagnostics = {
+  operation: BrandingAssetStorageOperation;
+  httpStatus: number;
+  s3ErrorCode: string;
+  requestId: string | null;
+};
+
+/**
+ * Storage request failed after reaching R2 (non-2xx).
+ * Message stays generic for clients; safe fields are for server logs only.
+ */
+export class BrandingAssetStorageRequestError extends Error {
+  readonly operation: BrandingAssetStorageOperation;
+  readonly httpStatus: number;
+  readonly s3ErrorCode: string;
+  readonly requestId: string | null;
+
+  constructor(diagnostics: BrandingAssetStorageFailureDiagnostics) {
+    super("Brand asset storage request failed.");
+    this.name = "BrandingAssetStorageRequestError";
+    this.operation = diagnostics.operation;
+    this.httpStatus = diagnostics.httpStatus;
+    this.s3ErrorCode = diagnostics.s3ErrorCode;
+    this.requestId = diagnostics.requestId;
+  }
+}
 
 function trimEnv(name: string): string | null {
   const raw = process.env[name]?.trim();
@@ -97,9 +155,112 @@ function amzDate(now: Date): { amz: string; dateStamp: string } {
   return { amz, dateStamp: amz.slice(0, 8) };
 }
 
+/**
+ * Extract allowlisted `<Code>…</Code>` from a bounded S3 error XML snippet.
+ * Never returns unrecognized codes; never throws.
+ */
+export function recognizeS3ErrorCodeFromXml(xmlSnippet: string): string {
+  try {
+    const match = /<Code>([A-Za-z][A-Za-z0-9_]{1,63})<\/Code>/.exec(xmlSnippet);
+    if (!match) return "UNKNOWN";
+    const code = match[1]!;
+    if (!RECOGNIZED_S3_ERROR_CODES.has(code)) return "UNKNOWN";
+    return code;
+  } catch {
+    return "UNKNOWN";
+  }
+}
+
+function safeRequestIdFromHeaders(headers: Headers): string | null {
+  for (const name of SAFE_REQUEST_ID_HEADER_NAMES) {
+    const raw = headers.get(name)?.trim();
+    if (!raw) continue;
+    if (!SAFE_REQUEST_ID_RE.test(raw)) continue;
+    return raw;
+  }
+  return null;
+}
+
+async function buildStorageFailureDiagnostics(
+  operation: BrandingAssetStorageOperation,
+  res: Response,
+): Promise<BrandingAssetStorageFailureDiagnostics> {
+  const httpStatus =
+    typeof res.status === "number" && Number.isFinite(res.status)
+      ? res.status
+      : 0;
+  let s3ErrorCode = "UNKNOWN";
+  let requestId: string | null = null;
+
+  try {
+    requestId = safeRequestIdFromHeaders(res.headers);
+  } catch {
+    requestId = null;
+  }
+
+  try {
+    // Bound read: stop after MAX_ERROR_BODY_BYTES; do not retain/log the body.
+    const reader = res.body?.getReader();
+    if (!reader) {
+      return { operation, httpStatus, s3ErrorCode, requestId };
+    }
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    let oversized = false;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+      if (total + value.byteLength > MAX_ERROR_BODY_BYTES) {
+        oversized = true;
+        const remain = MAX_ERROR_BODY_BYTES - total;
+        if (remain > 0) {
+          chunks.push(value.subarray(0, remain));
+          total += remain;
+        }
+        try {
+          await reader.cancel();
+        } catch {
+          /* ignore */
+        }
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+    if (oversized) {
+      s3ErrorCode = "UNKNOWN";
+    } else if (total === 0) {
+      s3ErrorCode = "UNKNOWN";
+    } else {
+      const joined = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+      // Heuristic: S3 errors are XML; reject obvious non-XML without logging.
+      const head = joined.subarray(0, Math.min(64, joined.length)).toString("utf8");
+      if (!head.includes("<") || !/<Error[\s>]|<Code>/.test(head)) {
+        s3ErrorCode = "UNKNOWN";
+      } else {
+        s3ErrorCode = recognizeS3ErrorCodeFromXml(joined.toString("utf8"));
+      }
+    }
+  } catch {
+    s3ErrorCode = "UNKNOWN";
+  }
+
+  return { operation, httpStatus, s3ErrorCode, requestId };
+}
+
+function logStorageFailure(diagnostics: BrandingAssetStorageFailureDiagnostics): void {
+  console.error("[branding-assets/r2-s3] storage request failed", {
+    operation: diagnostics.operation,
+    httpStatus: diagnostics.httpStatus,
+    s3ErrorCode: diagnostics.s3ErrorCode,
+    requestId: diagnostics.requestId,
+  });
+}
+
 async function signedS3Fetch(
   config: R2S3Config,
-  method: "PUT" | "DELETE",
+  method: BrandingAssetStorageOperation,
   objectKey: string,
   body: Buffer,
   contentType: string | undefined,
@@ -166,7 +327,9 @@ async function signedS3Fetch(
     body: method === "PUT" ? new Uint8Array(body) : undefined,
   });
   if (!res.ok) {
-    throw new Error("Brand asset storage request failed.");
+    const diagnostics = await buildStorageFailureDiagnostics(method, res);
+    logStorageFailure(diagnostics);
+    throw new BrandingAssetStorageRequestError(diagnostics);
   }
 }
 

@@ -1,15 +1,17 @@
 /**
  * Vercel S3-compatible R2 branding storage (Worker binding path unchanged).
- * Run: node --import tsx scripts/vercel-r2-s3-selftest.ts
+ * Run: pnpm vercel-r2-s3:selftest
  */
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BrandingAssetStorageRequestError,
   BrandingStorageNotConfiguredError,
   deleteBrandingAssetObject,
   putBrandingAssetObject,
+  recognizeS3ErrorCodeFromXml,
   setBrandingStorageTestDeps,
 } from "@/lib/tenancy/branding-assets";
 import { readVercelR2S3Config } from "@/lib/tenancy/branding-assets/r2-s3";
@@ -64,6 +66,96 @@ type CapturedRequest = {
   authorization: string | null;
 };
 
+function s3ErrorXml(code: string, message = "denied"): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><Error><Code>${code}</Code><Message>${message}</Message></Error>`;
+}
+
+function mockErrorResponse(input: {
+  status: number;
+  body?: string | null;
+  headers?: Record<string, string>;
+  throwOnRead?: boolean;
+}): Response {
+  if (input.throwOnRead) {
+    const headers = new Headers(input.headers);
+    return new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new Error("diagnostic-parse-boom"));
+        },
+      }),
+      { status: input.status, headers },
+    );
+  }
+  if (input.body == null) {
+    return new Response(null, {
+      status: input.status,
+      headers: input.headers,
+    });
+  }
+  return new Response(input.body, {
+    status: input.status,
+    headers: {
+      "content-type": "application/xml",
+      ...input.headers,
+    },
+  });
+}
+
+async function expectStorageFailure(
+  fetchImpl: typeof fetch,
+  assertDiagnostics: (err: BrandingAssetStorageRequestError) => void,
+) {
+  const originalFetch = globalThis.fetch;
+  const logs: unknown[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    logs.push(args);
+  };
+  globalThis.fetch = fetchImpl;
+  setVercelR2Env();
+  setBrandingStorageTestDeps({
+    isProduction: () => true,
+    getPublicBase: () => "https://branding-assets.example.com",
+  });
+  try {
+    await assert.rejects(
+      () =>
+        putBrandingAssetObject({
+          objectKey: "workspaces/ws_a/agents/user_b/profile/abc123.jpg",
+          bytes: new Uint8Array([1, 2, 3, 4]),
+          contentType: "image/jpeg",
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof BrandingAssetStorageRequestError);
+        assert.equal(err.message, "Brand asset storage request failed.");
+        assertDiagnostics(err);
+        return true;
+      },
+    );
+    const serialized = JSON.stringify(logs);
+    assert.ok(!serialized.includes("Authorization"));
+    assert.ok(!serialized.includes("r2-test-secret"));
+    assert.ok(!serialized.includes("r2-test-access"));
+    assert.ok(!serialized.includes("AWS4-HMAC-SHA256"));
+    assert.ok(!serialized.includes("workspaces/ws_a/agents/user_b/profile/abc123.jpg"));
+    assert.ok(!serialized.includes("<Message>"));
+    assert.ok(!serialized.includes("secret-in-body"));
+    assert.ok(
+      logs.some(
+        (entry) =>
+          Array.isArray(entry) &&
+          String(entry[0]).includes("[branding-assets/r2-s3] storage request failed"),
+      ),
+    );
+  } finally {
+    console.error = originalError;
+    globalThis.fetch = originalFetch;
+    setBrandingStorageTestDeps(null);
+    restoreEnv();
+  }
+}
+
 async function main() {
   console.log("\n=== VERCEL R2 S3 DUAL-RUNTIME ===\n");
   snapshotEnv();
@@ -78,12 +170,15 @@ async function main() {
   assert.ok(storage.includes("tryGetCloudflareEnvAsync"));
   assert.ok(storage.includes("readVercelR2S3Config"));
   assert.ok(storage.includes("createR2S3Bucket"));
-  assert.ok(s3.includes('process.env.VERCEL'));
+  assert.ok(s3.includes("process.env.VERCEL"));
   assert.ok(s3.includes("R2_ACCESS_KEY_ID"));
   assert.ok(s3.includes("R2_SECRET_ACCESS_KEY"));
   assert.ok(s3.includes("R2_S3_ENDPOINT"));
   assert.ok(s3.includes("R2_BUCKET_NAME"));
   assert.ok(s3.includes("AWS4-HMAC-SHA256"));
+  assert.ok(s3.includes("BrandingAssetStorageRequestError"));
+  assert.ok(s3.includes("recognizeS3ErrorCodeFromXml"));
+  assert.ok(!s3.includes("console.error(await res.text"));
   assert.ok(envExample.includes("R2_ACCESS_KEY_ID"));
   assert.ok(envExample.includes("BRANDING_ASSETS_PUBLIC_BASE_URL"));
   console.log("[0] Binding + Vercel env surface... PASS");
@@ -236,6 +331,167 @@ async function main() {
     globalThis.fetch = originalFetch;
     restoreEnv();
     console.log("[7] Vercel S3 PUT + public URL + DELETE... PASS");
+  }
+
+  assert.equal(recognizeS3ErrorCodeFromXml(s3ErrorXml("AccessDenied")), "AccessDenied");
+  assert.equal(
+    recognizeS3ErrorCodeFromXml(s3ErrorXml("SignatureDoesNotMatch")),
+    "SignatureDoesNotMatch",
+  );
+  assert.equal(recognizeS3ErrorCodeFromXml(s3ErrorXml("NotARealCode")), "UNKNOWN");
+  assert.equal(recognizeS3ErrorCodeFromXml("not-xml"), "UNKNOWN");
+  console.log("[8] S3 Code allowlist parser... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 403,
+        body: s3ErrorXml("AccessDenied", "secret-in-body"),
+        headers: { "x-amz-request-id": "req-access-denied-1" },
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.operation, "PUT");
+      assert.equal(err.httpStatus, 403);
+      assert.equal(err.s3ErrorCode, "AccessDenied");
+      assert.equal(err.requestId, "req-access-denied-1");
+    },
+  );
+  console.log("[9] 403 AccessDenied diagnostics... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 403,
+        body: s3ErrorXml("SignatureDoesNotMatch"),
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 403);
+      assert.equal(err.s3ErrorCode, "SignatureDoesNotMatch");
+      assert.equal(err.requestId, null);
+    },
+  );
+  console.log("[10] 403 SignatureDoesNotMatch diagnostics... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 404,
+        body: s3ErrorXml("NoSuchBucket"),
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 404);
+      assert.equal(err.s3ErrorCode, "NoSuchBucket");
+    },
+  );
+  console.log("[11] 404 NoSuchBucket diagnostics... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 400,
+        body: s3ErrorXml("InvalidArgument"),
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 400);
+      assert.equal(err.s3ErrorCode, "InvalidArgument");
+    },
+  );
+  console.log("[12] 400 InvalidArgument diagnostics... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 500,
+        body: s3ErrorXml("InternalError"),
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 500);
+      assert.equal(err.s3ErrorCode, "InternalError");
+    },
+  );
+  console.log("[13] 500 upstream InternalError diagnostics... PASS");
+
+  await expectStorageFailure(
+    (async () => mockErrorResponse({ status: 502, body: null })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 502);
+      assert.equal(err.s3ErrorCode, "UNKNOWN");
+    },
+  );
+  console.log("[14] Empty response body → UNKNOWN... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 400,
+        body: "{not-xml: true, secret-in-body: 1}",
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 400);
+      assert.equal(err.s3ErrorCode, "UNKNOWN");
+    },
+  );
+  console.log("[15] Malformed XML → UNKNOWN... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 403,
+        body: `${"x".repeat(5000)}<Code>AccessDenied</Code>`,
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 403);
+      assert.equal(err.s3ErrorCode, "UNKNOWN");
+    },
+  );
+  console.log("[16] Oversized response body → UNKNOWN... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 403,
+        body: s3ErrorXml("TotallyUnexpectedCode"),
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 403);
+      assert.equal(err.s3ErrorCode, "UNKNOWN");
+    },
+  );
+  console.log("[17] Unexpected error code → UNKNOWN... PASS");
+
+  await expectStorageFailure(
+    (async () =>
+      mockErrorResponse({
+        status: 503,
+        body: s3ErrorXml("ServiceUnavailable"),
+        throwOnRead: true,
+      })) as typeof fetch,
+    (err) => {
+      assert.equal(err.httpStatus, 503);
+      assert.equal(err.s3ErrorCode, "UNKNOWN");
+      assert.equal(err.message, "Brand asset storage request failed.");
+    },
+  );
+  console.log("[18] Diagnostic parsing failure still throws storage error... PASS");
+
+  {
+    // Reject unsafe request-id header shapes.
+    await expectStorageFailure(
+      (async () =>
+        mockErrorResponse({
+          status: 403,
+          body: s3ErrorXml("AccessDenied"),
+          headers: {
+            // Valid HTTP header value, but rejected by SAFE_REQUEST_ID_RE (spaces / !).
+            "x-amz-request-id": "bad id with spaces!!!",
+          },
+        })) as typeof fetch,
+      (err) => {
+        assert.equal(err.requestId, null);
+        assert.equal(err.s3ErrorCode, "AccessDenied");
+      },
+    );
+    console.log("[19] Unsafe request-id discarded... PASS");
   }
 
   console.log("\nVERCEL R2 S3 SELFTEST PASSED\n");

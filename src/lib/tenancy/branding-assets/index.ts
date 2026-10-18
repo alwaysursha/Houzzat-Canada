@@ -87,6 +87,16 @@ export {
   type BrandingAssetPutResult,
 } from "./storage";
 export {
+  readVercelR2S3Config,
+  createR2S3Bucket,
+  BrandingAssetStorageRequestError,
+  recognizeS3ErrorCodeFromXml,
+  type BrandingAssetStorageFailureDiagnostics,
+  type BrandingAssetStorageOperation,
+  type R2S3Config,
+  type R2S3Like,
+} from "./r2-s3";
+export {
   uploadWorkspaceBrandingAsset,
   removeWorkspaceBrandingAsset,
   refreshWorkspaceBrandingStatus,
