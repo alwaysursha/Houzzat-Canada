@@ -44,12 +44,15 @@ import {
   sendConversationVoiceNote,
 } from "../src/lib/chat/voice-notes/send";
 import {
+  ChatMediaStorageNotConfiguredError,
   chatMediaStorageConfiguredSyncHint,
   deleteChatMediaObject,
   getChatMediaObject,
   putChatMediaObject,
+  readChatMediaR2S3Config,
   setChatMediaStorageTestDeps,
 } from "../src/lib/chat/voice-notes/storage";
+import { readVercelR2S3Config } from "../src/lib/tenancy/branding-assets/r2-s3";
 import {
   validateVoiceNoteUpload,
   voiceNoteValidationErrorMessage,
@@ -705,11 +708,18 @@ function testUiWiringAndNoPublicBranding() {
 
   const storage = read("src/lib/chat/voice-notes/storage.ts");
   assert.ok(storage.includes("CHAT_MEDIA"));
+  assert.ok(storage.includes("CHAT_MEDIA_R2_ACCESS_KEY_ID"));
+  assert.ok(storage.includes("CHAT_MEDIA_R2_SECRET_ACCESS_KEY"));
+  assert.ok(storage.includes("chat-dedicated"));
+  assert.ok(storage.includes("legacy-shared"));
   assert.ok(
     storage.includes("Do not use BRANDING_ASSETS or BRANDING_ASSETS_PUBLIC_BASE_URL"),
   );
   assert.ok(storage.includes("private/chat-media"));
   assert.ok(!storage.includes("branding-assets"));
+  // Never log credential secret material.
+  assert.ok(!/console\.(log|info|debug|error|warn)\([^)]*secretAccessKey/i.test(storage));
+  assert.ok(!/console\.(log|info|debug|error|warn)\([^)]*accessKeyId/i.test(storage));
 
   const customerVoice = read(
     "src/lib/conversations/customer-conversation-voice.ts",
@@ -736,6 +746,234 @@ function testUiWiringAndNoPublicBranding() {
 
   const hint = chatMediaStorageConfiguredSyncHint();
   assert.ok(hint.mode === "local-dev" || hint.mode === "r2-s3" || hint.mode === "missing");
+
+  const envExample = read(".env.example");
+  assert.ok(envExample.includes("CHAT_MEDIA_R2_ACCESS_KEY_ID"));
+  assert.ok(envExample.includes("CHAT_MEDIA_R2_SECRET_ACCESS_KEY"));
+  assert.ok(envExample.includes("dedicated chat credentials"));
+}
+
+const CHAT_MEDIA_CREDENTIAL_ENV_KEYS = [
+  "CHAT_MEDIA_R2_BUCKET_NAME",
+  "CHAT_MEDIA_R2_ACCESS_KEY_ID",
+  "CHAT_MEDIA_R2_SECRET_ACCESS_KEY",
+  "CHAT_MEDIA_R2_S3_ENDPOINT",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_S3_ENDPOINT",
+  "R2_BUCKET_NAME",
+  "VERCEL",
+  "NODE_ENV",
+] as const;
+
+type ChatMediaCredentialEnvKey = (typeof CHAT_MEDIA_CREDENTIAL_ENV_KEYS)[number];
+
+function applyEnvOverrides(
+  overrides: Partial<Record<ChatMediaCredentialEnvKey, string | undefined>>,
+): Map<string, string | undefined> {
+  const previous = new Map<string, string | undefined>();
+  for (const key of CHAT_MEDIA_CREDENTIAL_ENV_KEYS) {
+    previous.set(key, process.env[key]);
+    if (Object.prototype.hasOwnProperty.call(overrides, key)) {
+      const next = overrides[key];
+      if (next === undefined) delete process.env[key];
+      else process.env[key] = next;
+    } else {
+      delete process.env[key];
+    }
+  }
+  return previous;
+}
+
+function restoreEnvOverrides(previous: Map<string, string | undefined>): void {
+  for (const key of CHAT_MEDIA_CREDENTIAL_ENV_KEYS) {
+    const value = previous.get(key);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+function withEnv(
+  overrides: Partial<Record<ChatMediaCredentialEnvKey, string | undefined>>,
+  run: () => void,
+): void {
+  const previous = applyEnvOverrides(overrides);
+  try {
+    run();
+  } finally {
+    restoreEnvOverrides(previous);
+  }
+}
+
+async function withEnvAsync(
+  overrides: Partial<Record<ChatMediaCredentialEnvKey, string | undefined>>,
+  run: () => Promise<void>,
+): Promise<void> {
+  const previous = applyEnvOverrides(overrides);
+  try {
+    await run();
+  } finally {
+    restoreEnvOverrides(previous);
+  }
+}
+
+function testChatMediaCredentialSelection() {
+  const sharedEndpoint = "https://acct111.r2.cloudflarestorage.com";
+  const chatEndpoint = "https://acct222.r2.cloudflarestorage.com";
+
+  // Dedicated chat credentials selected (endpoint may stay shared).
+  withEnv(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      CHAT_MEDIA_R2_ACCESS_KEY_ID: "chat-access-key",
+      CHAT_MEDIA_R2_SECRET_ACCESS_KEY: "chat-secret-key",
+      R2_S3_ENDPOINT: sharedEndpoint,
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_BUCKET_NAME: "houzzatpro-branding-assets",
+    },
+    () => {
+      const cfg = readChatMediaR2S3Config();
+      assert.ok(cfg);
+      assert.equal(cfg!.credentialSource, "chat-dedicated");
+      assert.equal(cfg!.accessKeyId, "chat-access-key");
+      assert.equal(cfg!.secretAccessKey, "chat-secret-key");
+      assert.equal(cfg!.bucket, "houzzatpro-chat-media");
+      assert.equal(cfg!.endpointOrigin, "https://acct111.r2.cloudflarestorage.com");
+      // Never substitute branding bucket when chat credentials are active.
+      assert.notEqual(cfg!.bucket, "houzzatpro-branding-assets");
+      assert.notEqual(cfg!.accessKeyId, "branding-access-key");
+    },
+  );
+
+  // Optional dedicated chat endpoint override.
+  withEnv(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media-preview",
+      CHAT_MEDIA_R2_ACCESS_KEY_ID: "chat-access-key",
+      CHAT_MEDIA_R2_SECRET_ACCESS_KEY: "chat-secret-key",
+      CHAT_MEDIA_R2_S3_ENDPOINT: chatEndpoint,
+      R2_S3_ENDPOINT: sharedEndpoint,
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_BUCKET_NAME: "houzzatpro-branding-assets",
+    },
+    () => {
+      const cfg = readChatMediaR2S3Config();
+      assert.ok(cfg);
+      assert.equal(cfg!.credentialSource, "chat-dedicated");
+      assert.equal(cfg!.bucket, "houzzatpro-chat-media-preview");
+      assert.equal(cfg!.endpointOrigin, "https://acct222.r2.cloudflarestorage.com");
+    },
+  );
+
+  // Legacy shared credential fallback when BOTH dedicated vars are absent.
+  withEnv(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_S3_ENDPOINT: sharedEndpoint,
+      R2_BUCKET_NAME: "houzzatpro-branding-assets",
+    },
+    () => {
+      const cfg = readChatMediaR2S3Config();
+      assert.ok(cfg);
+      assert.equal(cfg!.credentialSource, "legacy-shared");
+      assert.equal(cfg!.accessKeyId, "branding-access-key");
+      assert.equal(cfg!.secretAccessKey, "branding-secret-key");
+      assert.equal(cfg!.bucket, "houzzatpro-chat-media");
+      assert.notEqual(cfg!.bucket, process.env.R2_BUCKET_NAME);
+    },
+  );
+
+  // Incomplete dedicated pair → fail closed (no mix with branding secret).
+  withEnv(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      CHAT_MEDIA_R2_ACCESS_KEY_ID: "chat-access-key",
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_S3_ENDPOINT: sharedEndpoint,
+      R2_BUCKET_NAME: "houzzatpro-branding-assets",
+    },
+    () => {
+      assert.equal(readChatMediaR2S3Config(), null);
+    },
+  );
+
+  withEnv(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      CHAT_MEDIA_R2_SECRET_ACCESS_KEY: "chat-secret-key",
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_S3_ENDPOINT: sharedEndpoint,
+      NODE_ENV: "production",
+    },
+    () => {
+      assert.equal(readChatMediaR2S3Config(), null);
+      const hint = chatMediaStorageConfiguredSyncHint();
+      assert.equal(hint.configured, false);
+      assert.equal(hint.mode, "missing");
+      assert.ok(hint.blocker?.includes("incomplete dedicated chat credentials"));
+      assert.ok(!hint.blocker?.includes("chat-secret-key"));
+      assert.ok(!hint.blocker?.includes("branding-secret-key"));
+    },
+  );
+
+  // Branding credentials unaffected by chat-dedicated vars.
+  withEnv(
+    {
+      VERCEL: "1",
+      R2_ACCESS_KEY_ID: "branding-access-key",
+      R2_SECRET_ACCESS_KEY: "branding-secret-key",
+      R2_S3_ENDPOINT: sharedEndpoint,
+      R2_BUCKET_NAME: "houzzatpro-branding-assets",
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      CHAT_MEDIA_R2_ACCESS_KEY_ID: "chat-access-key",
+      CHAT_MEDIA_R2_SECRET_ACCESS_KEY: "chat-secret-key",
+    },
+    () => {
+      const branding = readVercelR2S3Config();
+      assert.ok(branding);
+      assert.equal(branding!.accessKeyId, "branding-access-key");
+      assert.equal(branding!.secretAccessKey, "branding-secret-key");
+      assert.equal(branding!.bucket, "houzzatpro-branding-assets");
+
+      const chat = readChatMediaR2S3Config();
+      assert.ok(chat);
+      assert.equal(chat!.credentialSource, "chat-dedicated");
+      assert.equal(chat!.accessKeyId, "chat-access-key");
+      assert.equal(chat!.bucket, "houzzatpro-chat-media");
+      // No cross-bucket credential substitution.
+      assert.notEqual(chat!.accessKeyId, branding!.accessKeyId);
+      assert.notEqual(chat!.bucket, branding!.bucket);
+    },
+  );
+
+}
+
+async function testChatMediaProductionFailClosed() {
+  await withEnvAsync(
+    {
+      CHAT_MEDIA_R2_BUCKET_NAME: "houzzatpro-chat-media",
+      CHAT_MEDIA_R2_ACCESS_KEY_ID: "chat-only-half",
+      NODE_ENV: "production",
+    },
+    async () => {
+      assert.equal(readChatMediaR2S3Config(), null);
+      await assert.rejects(
+        () =>
+          putChatMediaObject({
+            objectKey: "workspaces/ws/conversations/c/voice/u.webm",
+            bytes: new Uint8Array([1, 2, 3]),
+            contentType: "audio/webm",
+          }),
+        (error: unknown) => error instanceof ChatMediaStorageNotConfiguredError,
+      );
+    },
+  );
 }
 
 async function main() {
@@ -744,6 +982,8 @@ async function main() {
   testKeysAndClientUpload();
   await testPrivateStorageAndSend();
   testUiWiringAndNoPublicBranding();
+  testChatMediaCredentialSelection();
+  await testChatMediaProductionFailClosed();
   console.log("chat-voice-notes-selftest: ok");
 }
 

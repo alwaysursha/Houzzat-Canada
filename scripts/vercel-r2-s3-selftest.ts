@@ -175,12 +175,16 @@ async function main() {
   assert.ok(s3.includes("R2_SECRET_ACCESS_KEY"));
   assert.ok(s3.includes("R2_S3_ENDPOINT"));
   assert.ok(s3.includes("R2_BUCKET_NAME"));
+  // Branding must not consume chat-dedicated credential env vars.
+  assert.ok(!s3.includes("CHAT_MEDIA_R2_ACCESS_KEY_ID"));
+  assert.ok(!s3.includes("CHAT_MEDIA_R2_SECRET_ACCESS_KEY"));
   assert.ok(s3.includes("AWS4-HMAC-SHA256"));
   assert.ok(s3.includes("BrandingAssetStorageRequestError"));
   assert.ok(s3.includes("recognizeS3ErrorCodeFromXml"));
   assert.ok(!s3.includes("console.error(await res.text"));
   assert.ok(envExample.includes("R2_ACCESS_KEY_ID"));
   assert.ok(envExample.includes("BRANDING_ASSETS_PUBLIC_BASE_URL"));
+  assert.ok(envExample.includes("CHAT_MEDIA_R2_ACCESS_KEY_ID"));
   console.log("[0] Binding + Vercel env surface... PASS");
 
   {

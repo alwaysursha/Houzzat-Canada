@@ -5,7 +5,9 @@
  * streaming — clients never receive raw object credentials or unrestricted URLs.
  *
  * Production Cloudflare: CHAT_MEDIA R2 binding (private bucket).
- * Production Vercel: CHAT_MEDIA_R2_BUCKET_NAME (+ shared R2 S3 credentials).
+ * Production Vercel: CHAT_MEDIA_R2_BUCKET_NAME + dedicated chat S3 credentials
+ *   (CHAT_MEDIA_R2_ACCESS_KEY_ID / CHAT_MEDIA_R2_SECRET_ACCESS_KEY), with
+ *   legacy fallback to branding R2_* keys only when both dedicated vars are absent.
  * Development/test: local private/chat-media (outside public/).
  */
 
@@ -78,33 +80,83 @@ function localRootDir(): string {
   return path.join(process.cwd(), "private", "chat-media");
 }
 
-function readChatMediaR2S3Config(): {
+export type ChatMediaR2S3Config = {
   accessKeyId: string;
   secretAccessKey: string;
   endpointOrigin: string;
   bucket: string;
-} | null {
-  const bucket = trimEnv("CHAT_MEDIA_R2_BUCKET_NAME");
-  const accessKeyId = trimEnv("R2_ACCESS_KEY_ID");
-  const secretAccessKey = trimEnv("R2_SECRET_ACCESS_KEY");
-  const endpointRaw = trimEnv("R2_S3_ENDPOINT");
-  if (!bucket || !accessKeyId || !secretAccessKey || !endpointRaw) {
-    return null;
-  }
+  /** Which credential pair was selected (never logged with secret values). */
+  credentialSource: "chat-dedicated" | "legacy-shared";
+};
+
+function parseHttpsEndpointOrigin(endpointRaw: string): string | null {
   try {
     const url = new URL(endpointRaw);
     if (url.protocol !== "https:") return null;
     if (url.username || url.password) return null;
     if (url.pathname && url.pathname !== "/") return null;
-    return {
-      accessKeyId,
-      secretAccessKey,
-      endpointOrigin: url.origin,
-      bucket,
-    };
+    return url.origin;
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve Vercel/Node S3 config for the private chat-media bucket.
+ *
+ * Credential selection (fail closed — never mix pairs):
+ * 1. Both CHAT_MEDIA_R2_ACCESS_KEY_ID + CHAT_MEDIA_R2_SECRET_ACCESS_KEY → dedicated.
+ * 2. Exactly one of those two set → null (do not fall back to branding keys).
+ * 3. Neither set → legacy shared R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY.
+ *
+ * Endpoint: optional CHAT_MEDIA_R2_S3_ENDPOINT, else shared R2_S3_ENDPOINT.
+ * Bucket: always CHAT_MEDIA_R2_BUCKET_NAME (never R2_BUCKET_NAME).
+ */
+export function readChatMediaR2S3Config(): ChatMediaR2S3Config | null {
+  const bucket = trimEnv("CHAT_MEDIA_R2_BUCKET_NAME");
+  if (!bucket) return null;
+
+  const dedicatedAccessKeyId = trimEnv("CHAT_MEDIA_R2_ACCESS_KEY_ID");
+  const dedicatedSecretAccessKey = trimEnv("CHAT_MEDIA_R2_SECRET_ACCESS_KEY");
+  const dedicatedKeyPresent = Boolean(dedicatedAccessKeyId);
+  const dedicatedSecretPresent = Boolean(dedicatedSecretAccessKey);
+
+  if (dedicatedKeyPresent !== dedicatedSecretPresent) {
+    // Incomplete dedicated pair — never substitute the missing half from branding.
+    return null;
+  }
+
+  let accessKeyId: string;
+  let secretAccessKey: string;
+  let credentialSource: ChatMediaR2S3Config["credentialSource"];
+
+  if (dedicatedKeyPresent && dedicatedSecretPresent) {
+    accessKeyId = dedicatedAccessKeyId!;
+    secretAccessKey = dedicatedSecretAccessKey!;
+    credentialSource = "chat-dedicated";
+  } else {
+    const sharedAccessKeyId = trimEnv("R2_ACCESS_KEY_ID");
+    const sharedSecretAccessKey = trimEnv("R2_SECRET_ACCESS_KEY");
+    if (!sharedAccessKeyId || !sharedSecretAccessKey) return null;
+    accessKeyId = sharedAccessKeyId;
+    secretAccessKey = sharedSecretAccessKey;
+    credentialSource = "legacy-shared";
+  }
+
+  const endpointRaw =
+    trimEnv("CHAT_MEDIA_R2_S3_ENDPOINT") || trimEnv("R2_S3_ENDPOINT");
+  if (!endpointRaw) return null;
+
+  const endpointOrigin = parseHttpsEndpointOrigin(endpointRaw);
+  if (!endpointOrigin) return null;
+
+  return {
+    accessKeyId,
+    secretAccessKey,
+    endpointOrigin,
+    bucket,
+    credentialSource,
+  };
 }
 
 async function getChatMediaBucket(): Promise<R2Like | null> {
@@ -293,13 +345,19 @@ export function chatMediaStorageConfiguredSyncHint(): {
     return { configured: true, mode: "r2-s3", blocker: null };
   }
   if (isProductionRuntime()) {
+    const dedicatedPartial =
+      Boolean(trimEnv("CHAT_MEDIA_R2_ACCESS_KEY_ID")) !==
+      Boolean(trimEnv("CHAT_MEDIA_R2_SECRET_ACCESS_KEY"));
     return {
       configured: false,
       mode: "missing",
-      blocker:
-        "Configure Cloudflare R2 binding CHAT_MEDIA (private bucket, no public CDN), " +
-        "or set CHAT_MEDIA_R2_BUCKET_NAME with R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_S3_ENDPOINT. " +
-        "Do not use BRANDING_ASSETS or BRANDING_ASSETS_PUBLIC_BASE_URL for chat audio.",
+      blocker: dedicatedPartial
+        ? "CHAT_MEDIA_R2_ACCESS_KEY_ID and CHAT_MEDIA_R2_SECRET_ACCESS_KEY must both be set (incomplete dedicated chat credentials). " +
+          "Do not mix chat keys with branding R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY."
+        : "Configure Cloudflare R2 binding CHAT_MEDIA (private bucket, no public CDN), " +
+          "or set CHAT_MEDIA_R2_BUCKET_NAME with CHAT_MEDIA_R2_ACCESS_KEY_ID / CHAT_MEDIA_R2_SECRET_ACCESS_KEY " +
+          "(preferred) or legacy R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY, plus R2_S3_ENDPOINT. " +
+          "Do not use BRANDING_ASSETS or BRANDING_ASSETS_PUBLIC_BASE_URL for chat audio.",
     };
   }
   return { configured: true, mode: "local-dev", blocker: null };
