@@ -1,14 +1,14 @@
 /**
- * Phase 1 — canonical per-agent profile photo on User.image.
+ * Canonical per-agent profile photo on User.image.
  *
  * Dual-writes WorkspaceBranding.agentProfilePhotoUrl only when the target
  * user is exactly Workspace.primaryAgentId at commit time (SQL conditional).
  * Never infers OWNER as primary.
  * Never copies the workspace portrait onto unrelated agents.
  *
- * Phase 1 website still reads branding.agentProfilePhotoUrl — removing an
- * individual agent's User.image does NOT clear the public-site portrait.
- * Clearing the workspace public portrait remains an onboarding/branding action.
+ * When the primary agent clears their personal photo, branding.agentProfilePhotoUrl
+ * is cleared in the same transaction so public surfaces cannot resurrect a stale
+ * portrait. Non-primary personal removes never touch workspace branding.
  */
 
 import { OwnerActivationError } from "@/lib/platform/activation/errors";
@@ -144,6 +144,26 @@ async function syncBrandingPortraitIfStillPrimary(
     UPDATE "WorkspaceBranding" AS b
     SET
       "agentProfilePhotoUrl" = ${nextUrl},
+      "version" = b."version" + 1,
+      "updatedAt" = CURRENT_TIMESTAMP
+    FROM "Workspace" AS w
+    WHERE b."workspaceId" = w.id
+      AND w.id = ${workspaceId}
+      AND w."primaryAgentId" = ${userId}
+  `;
+  return Number(updated) > 0;
+}
+
+/** Clear branding portrait only while this user remains primaryAgentId. */
+async function clearBrandingPortraitIfStillPrimary(
+  tx: { $executeRaw: PrismaClient["$executeRaw"] },
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const updated = await tx.$executeRaw`
+    UPDATE "WorkspaceBranding" AS b
+    SET
+      "agentProfilePhotoUrl" = NULL,
       "version" = b."version" + 1,
       "updatedAt" = CURRENT_TIMESTAMP
     FROM "Workspace" AS w
@@ -419,11 +439,11 @@ export async function uploadAgentUserProfilePhoto(input: {
 }
 
 /**
- * Clear an agent's User.image only.
+ * Clear an agent's User.image (and email-headshot association).
  *
- * Phase 1: does NOT clear WorkspaceBranding.agentProfilePhotoUrl — the public
- * website still reads the branding portrait. Removing the workspace public-site
- * portrait remains an onboarding/branding-assets action.
+ * When the remover is still Workspace.primaryAgentId, also clears
+ * WorkspaceBranding.agentProfilePhotoUrl so listing/public cards cannot keep
+ * showing a stale personal portrait after intentional deletion.
  */
 export async function removeAgentUserProfilePhoto(input: {
   workspaceId: string;
@@ -462,14 +482,20 @@ export async function removeAgentUserProfilePhoto(input: {
   }
 
   const previousUserImage = trimUrl(target.image);
+  const previousBrandingPhoto = trimUrl(branding.agentProfilePhotoUrl);
 
-  await db.$transaction(async (tx) => {
+  const clearedBrandingPortrait = await db.$transaction(async (tx) => {
     await tx.user.update({
       where: { id: userId },
       data: { image: null },
     });
     await clearAgentEmailHeadshotAssociation(tx, { workspaceId, userId });
+    return clearBrandingPortraitIfStillPrimary(tx, workspaceId, userId);
   });
+
+  if (clearedBrandingPortrait) {
+    await refreshBrandingStatusAfterPrimarySync(db, workspaceId);
+  }
 
   if (previousUserImage) {
     await deleteManagedAgentProfileUrlIfUnreferenced({
@@ -479,12 +505,23 @@ export async function removeAgentUserProfilePhoto(input: {
       excludeUserIds: [userId],
     });
   }
+  if (
+    clearedBrandingPortrait &&
+    previousBrandingPhoto &&
+    previousBrandingPhoto !== previousUserImage
+  ) {
+    await deleteManagedAgentProfileUrlIfUnreferenced({
+      url: previousBrandingPhoto,
+      workspaceId,
+      prisma: db,
+      excludeUserIds: [userId],
+    });
+  }
 
   return {
     image: null,
     agentProfilePhotoUrl: null,
-    // Phase 1 never mutates the website branding portrait on personal remove.
-    syncedBrandingPortrait: false,
+    syncedBrandingPortrait: clearedBrandingPortrait,
     primaryAgentUnset,
     emailHeadshotStored: false,
     emailHeadshotAssociated: false,

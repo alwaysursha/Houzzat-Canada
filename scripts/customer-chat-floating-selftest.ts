@@ -294,9 +294,18 @@ function testAgentIdentityFallback() {
   const api = read("src/lib/conversations/customer-conversation.ts");
   assert.ok(api.includes("resolveAssignedCustomerChatAgentIdentity"));
   assert.ok(api.includes("customerChatAgentPhotoAllowed"));
-  assert.ok(api.includes("agentProfilePhotoUrl"));
+  // Personal portrait: assigned agent's User.image + minted ACTIVE membership.
+  assert.ok(api.includes("resolvePersonalAgentPhoto"));
+  assert.ok(api.includes("verifiedActiveMembership"));
+  assert.ok(api.includes("select: { name: true, image: true }"));
+  assert.ok(api.includes('status: "ACTIVE"'));
+  // Must not use WorkspaceBranding / brokerage logo as a personal portrait source.
+  assert.equal(api.includes("agentProfilePhotoUrl"), false);
   assert.equal(api.includes("brokerageLogoUrl: true"), false);
-  assert.equal(api.includes("select: { name: true, image"), false);
+  assert.equal(
+    api.includes("workspace?.branding?.agentProfilePhotoUrl"),
+    false,
+  );
   assert.equal(api.includes("Usually replies"), false);
   assert.equal(api.includes("response time"), false);
   const screen = read("src/components/customer-chat/CustomerChatScreen.tsx");

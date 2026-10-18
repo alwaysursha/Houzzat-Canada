@@ -1,11 +1,17 @@
 /**
  * Stage 6.11B / 6.11D — public agent identity for Agent Signature (no invented data).
- * Prefers WorkspaceProfessionalIdentity for name/designation/cell/brokerage/photo.
+ * Prefers WorkspaceProfessionalIdentity for name/designation/cell/brokerage.
+ * Portrait: User.image of Workspace.primaryAgentId when ACTIVE (Phase 3A),
+ * else legacy branding only when there is no trusted personal channel.
  * Bio / markets / email may still come from primary agent profile when present.
  */
 import { cache } from "react";
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import {
+  resolvePublicPrimaryAgentPhoto,
+  verifiedActiveMembership,
+} from "@/lib/tenancy/agent-photo";
 
 export type PublicAgentIdentity = {
   name: string | null;
@@ -86,9 +92,11 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
       },
       primaryAgent: {
         select: {
+          id: true,
           name: true,
           email: true,
           phone: true,
+          image: true,
           agentProfile: {
             select: {
               bio: true,
@@ -104,10 +112,40 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
 
   if (!workspace) return emptyPublicAgentIdentity();
 
+  const primaryAgentId = workspace.primaryAgentId?.trim() || null;
   const agent = workspace.primaryAgent;
   const profile =
     agent?.agentProfile?.active === false ? null : agent?.agentProfile;
   const professional = workspace.professionalIdentity;
+
+  let primaryMembership = null;
+  if (primaryAgentId) {
+    const memberRow = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: primaryAgentId,
+        status: "ACTIVE",
+      },
+      select: {
+        workspaceId: true,
+        userId: true,
+        status: true,
+      },
+    });
+    primaryMembership = verifiedActiveMembership(memberRow, {
+      workspaceId,
+      userId: primaryAgentId,
+    });
+  }
+
+  const photoUrl = resolvePublicPrimaryAgentPhoto({
+    workspaceId,
+    primaryAgentId,
+    primaryUserImage: agent?.image ?? null,
+    primaryMembership,
+    brandingAgentProfilePhotoUrl:
+      workspace.branding?.agentProfilePhotoUrl ?? null,
+  });
 
   return {
     // Stage 6.11D — registered agent name first; displayName is marketing fallback only.
@@ -117,9 +155,7 @@ export const resolvePublicAgentIdentity = cache(async function resolvePublicAgen
       workspace.branding?.displayName,
     ),
     title: firstNonEmpty(professional?.agentDesignation),
-    // Stage 6.11C.1 — canonical website portrait is workspace branding only.
-    // Never User.image; never logoUrl as portrait fallback.
-    photoUrl: firstNonEmpty(workspace.branding?.agentProfilePhotoUrl),
+    photoUrl,
     bio: firstNonEmpty(profile?.bio),
     brokerageName: firstNonEmpty(
       professional?.brokerageRegisteredName,

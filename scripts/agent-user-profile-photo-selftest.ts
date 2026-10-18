@@ -348,9 +348,14 @@ function mockPrisma(state: State): PrismaClient {
       const sql = strings.join("?");
       // Mimic: UPDATE branding FROM workspace WHERE primaryAgentId = userId
       assert.ok(sql.includes("WorkspaceBranding"));
-      const workspaceId = String(values[1] ?? "");
-      const userId = String(values[2] ?? "");
-      const nextUrl = String(values[0] ?? "");
+      const clearing = /agentProfilePhotoUrl"\s*=\s*NULL/i.test(sql);
+      const workspaceId = String(
+        clearing ? (values[0] ?? "") : (values[1] ?? ""),
+      );
+      const userId = String(
+        clearing ? (values[1] ?? "") : (values[2] ?? ""),
+      );
+      const nextUrl = clearing ? null : String(values[0] ?? "");
       if (state.flipPrimaryDuringTxTo) {
         state.primaryAgentId = state.flipPrimaryDuringTxTo;
         state.flipPrimaryDuringTxTo = null;
@@ -433,11 +438,12 @@ async function main() {
     const manage = read("src/lib/tenancy/branding-assets/manage.ts");
     const cdn = read("src/lib/tenancy/branding-assets/managed-profile-cdn.ts");
     const publicId = read("src/lib/tenancy/resolve-public-agent-identity.ts");
-    assert.ok(photoMod.includes("does NOT clear WorkspaceBranding"));
+    assert.ok(photoMod.includes("clearBrandingPortraitIfStillPrimary"));
     assert.ok(photoMod.includes("primaryAgentId"));
     assert.ok(manage.includes("deleteManagedAgentProfileUrlIfUnreferenced"));
     assert.ok(cdn.includes("User.image"));
-    assert.ok(publicId.includes("Never User.image"));
+    assert.ok(publicId.includes("resolvePublicPrimaryAgentPhoto"));
+    assert.ok(publicId.includes("primaryUserImage"));
     console.log("[0] Source invariants... PASS");
   }
 
@@ -576,7 +582,7 @@ async function main() {
     console.log("[C] Unreferenced object deleted... PASS");
   }
 
-  // D — primary User.image remove does not blank website branding
+  // D — primary User.image remove clears branding so public cards cannot resurrect
   {
     const state = createState(PRIMARY);
     const deletes: string[] = [];
@@ -588,18 +594,20 @@ async function main() {
       prisma: mockPrisma(state),
     });
     const portrait = uploaded.image!;
-    const deletesAfterUpload = deletes.length;
     const removed = await removeAgentUserProfilePhoto({
       workspaceId: WS,
       userId: PRIMARY,
       prisma: mockPrisma(state),
     });
-    assert.equal(removed.syncedBrandingPortrait, false);
+    assert.equal(removed.syncedBrandingPortrait, true);
     assert.equal(state.users.get(PRIMARY)?.image, null);
-    assert.equal(state.brandings.get(WS)?.agentProfilePhotoUrl, portrait);
-    // Shared portrait still on branding → CDN retained.
-    assert.equal(deletes.length, deletesAfterUpload);
-    console.log("[D] Primary remove preserves website portrait... PASS");
+    assert.equal(state.brandings.get(WS)?.agentProfilePhotoUrl, null);
+    // Branding + User.image cleared → unreferenced object deleted from storage.
+    assert.ok(
+      deletes.some((k) => portrait.endsWith(k) || portrait.includes(k)),
+      `expected CDN delete for ${portrait}, got ${JSON.stringify(deletes)}`,
+    );
+    console.log("[D] Primary remove clears website portrait... PASS");
   }
 
   // E — non-primary remove does not affect branding

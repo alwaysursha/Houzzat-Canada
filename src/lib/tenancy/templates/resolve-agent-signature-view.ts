@@ -112,8 +112,11 @@ export function resolveAgentSignatureView(
       brand.agent?.phone ??
       null,
     email: brand.agent?.email ?? brand.contact.email,
-    photoUrl:
-      professional.agent.photoUrl ?? brand.agent?.photoUrl ?? null,
+    // Portrait is professional-identity only (User.image of ACTIVE primary, or
+    // legacy branding when no trusted personal channel). Never fall through to
+    // brand.agent.photoUrl — that secondary path could resurrect a cleared
+    // personal portrait from stale WorkspaceBranding-era data.
+    photoUrl: professional.agent.photoUrl ?? null,
     bio: brand.agent?.bio ?? null,
     markets: brand.agent?.markets ?? [],
     brokerage,

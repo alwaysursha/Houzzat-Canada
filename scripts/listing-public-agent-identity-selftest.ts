@@ -39,9 +39,11 @@ type WorkspaceRow = {
     brokerageLogoUrl: string | null;
   } | null;
   primaryAgent: {
+    id?: string | null;
     name: string | null;
     email: string | null;
     phone: string | null;
+    image?: string | null;
     agentProfile: {
       bio: string | null;
       phone: string | null;
@@ -71,9 +73,11 @@ function workspace(
       brokerageLogoUrl: "https://cdn.example/logo.png",
     },
     primaryAgent: partial.primaryAgent ?? {
+      id: "agent-user",
       name: partial.name,
       email: partial.email,
       phone: "416-555-0101",
+      image: null,
       agentProfile: {
         bio: "Bio",
         phone: "416-555-0102",
@@ -84,13 +88,35 @@ function workspace(
   };
 }
 
-function prismaFor(rows: Record<string, WorkspaceRow | null>) {
+function prismaFor(
+  rows: Record<string, WorkspaceRow | null>,
+  opts?: {
+    /** When true, primary agent has ACTIVE membership (User.image is trusted). */
+    activePrimaryMembership?: boolean;
+  },
+) {
   const calls: string[] = [];
   const client = {
     workspace: {
       findUnique: async (args: { where: { id: string } }) => {
         calls.push(args.where.id);
         return rows[args.where.id] ?? null;
+      },
+    },
+    workspaceMember: {
+      findFirst: async (args: {
+        where: { workspaceId: string; userId: string; status?: string };
+      }) => {
+        if (!opts?.activePrimaryMembership) return null;
+        const row = rows[args.where.workspaceId];
+        if (!row?.primaryAgentId) return null;
+        if (args.where.userId !== row.primaryAgentId) return null;
+        if (args.where.status && args.where.status !== "ACTIVE") return null;
+        return {
+          workspaceId: args.where.workspaceId,
+          userId: args.where.userId,
+          status: "ACTIVE",
+        };
       },
     },
   };
@@ -139,11 +165,72 @@ async function main() {
   assert.deepEqual(isolated.calls, ["ws-a", "ws-b"]);
   assert.equal(identityA.name, "Agent A");
   assert.equal(identityA.email, "a@workspace-a.test");
+  // No ACTIVE membership token → legacy branding only.
+  assert.equal(identityA.photoUrl, "https://cdn.example/a.jpg");
   assert.equal(identityB.name, "Agent B");
   assert.equal(identityB.brokerageName, "Other Brokerage");
   assert.notEqual(identityA.email, identityB.email);
   assert.notEqual(identityA.photoUrl, identityB.photoUrl);
   assertPublicOnly(identityA);
+
+  // ACTIVE primary with cleared User.image must not resurrect branding portrait.
+  const clearedPersonal = prismaFor(
+    {
+      "ws-cleared": workspace({
+        name: "Cleared Agent",
+        email: "cleared@workspace.test",
+        primaryAgent: {
+          id: "agent-user",
+          name: "Cleared Agent",
+          email: "cleared@workspace.test",
+          phone: "416-555-0101",
+          image: null,
+          agentProfile: {
+            bio: "Bio",
+            phone: "416-555-0102",
+            markets: ["Mississauga"],
+            active: true,
+          },
+        },
+      }),
+    },
+    { activePrimaryMembership: true },
+  );
+  const clearedIdentity = await resolvePublicAgentIdentity(
+    "ws-cleared",
+    clearedPersonal.client,
+  );
+  assert.equal(clearedIdentity.photoUrl, null);
+
+  // ACTIVE primary with User.image prefers personal over branding.
+  const personalPhoto = "https://cdn.example/personal.jpg";
+  const withPersonal = prismaFor(
+    {
+      "ws-personal": workspace({
+        name: "Personal Agent",
+        email: "personal@workspace.test",
+        primaryAgent: {
+          id: "agent-user",
+          name: "Personal Agent",
+          email: "personal@workspace.test",
+          phone: "416-555-0101",
+          image: personalPhoto,
+          agentProfile: {
+            bio: "Bio",
+            phone: "416-555-0102",
+            markets: ["Mississauga"],
+            active: true,
+          },
+        },
+      }),
+    },
+    { activePrimaryMembership: true },
+  );
+  const personalIdentity = await resolvePublicAgentIdentity(
+    "ws-personal",
+    withPersonal.client,
+  );
+  assert.equal(personalIdentity.photoUrl, personalPhoto);
 
   const emptyCalls = prismaFor({});
   const missingWorkspace = await resolvePublicAgentIdentity(

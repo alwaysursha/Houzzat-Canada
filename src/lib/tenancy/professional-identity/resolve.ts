@@ -1,11 +1,16 @@
 /**
  * Stage 6.11D / 6.11D.2 — canonical public professional identity resolver.
- * Combines WorkspaceProfessionalIdentity + WorkspaceBranding image assets.
+ * Combines WorkspaceProfessionalIdentity + portrait from User.image
+ * (primary, ACTIVE) with legacy branding only when no trusted personal channel.
  * No template-specific logic.
  */
 
 import type { PrismaClient } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
+import {
+  resolvePublicPrimaryAgentPhoto,
+  verifiedActiveMembership,
+} from "@/lib/tenancy/agent-photo";
 import {
   EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
   type PublicProfessionalIdentity,
@@ -27,6 +32,10 @@ export async function resolvePublicProfessionalIdentity(
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: {
+      primaryAgentId: true,
+      primaryAgent: {
+        select: { image: true },
+      },
       professionalIdentity: {
         select: {
           agentRegisteredName: true,
@@ -53,14 +62,42 @@ export async function resolvePublicProfessionalIdentity(
 
   const identity = workspace.professionalIdentity;
   const branding = workspace.branding;
+  const primaryAgentId = workspace.primaryAgentId?.trim() || null;
+
+  let primaryMembership = null;
+  if (primaryAgentId) {
+    const memberRow = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId: primaryAgentId,
+        status: "ACTIVE",
+      },
+      select: {
+        workspaceId: true,
+        userId: true,
+        status: true,
+      },
+    });
+    primaryMembership = verifiedActiveMembership(memberRow, {
+      workspaceId,
+      userId: primaryAgentId,
+    });
+  }
+
+  const photoUrl = resolvePublicPrimaryAgentPhoto({
+    workspaceId,
+    primaryAgentId,
+    primaryUserImage: workspace.primaryAgent?.image ?? null,
+    primaryMembership,
+    brandingAgentProfilePhotoUrl: branding?.agentProfilePhotoUrl ?? null,
+  });
 
   return {
     agent: {
       name: trimOrNull(identity?.agentRegisteredName),
       designation: trimOrNull(identity?.agentDesignation),
       cellPhone: trimOrNull(identity?.agentCellPhone),
-      // Portrait is branding asset only — never User.image / logoUrl.
-      photoUrl: trimOrNull(branding?.agentProfilePhotoUrl),
+      photoUrl,
     },
     brokerage: {
       name: trimOrNull(identity?.brokerageRegisteredName),

@@ -136,7 +136,11 @@ function createFakePrisma(state: {
                 faviconUrl: null,
               }
             : null,
-          primaryAgent: null,
+          primaryAgentId:
+            (ws as { primaryAgentId?: string | null }).primaryAgentId ?? null,
+          primaryAgent:
+            (state as { primaryAgents?: Map<string, { image: string | null }> })
+              .primaryAgents?.get(ws.id) ?? null,
           brokerageAffiliation: null,
           onboardingState: state.onboarding.get(ws.id) ?? null,
           emailIdentity: null,
@@ -152,6 +156,11 @@ function createFakePrisma(state: {
     },
     workspaceTeamProfile: {
       async findUnique() {
+        return null;
+      },
+    },
+    subscription: {
+      async findFirst() {
         return null;
       },
     },
@@ -171,11 +180,17 @@ function createFakePrisma(state: {
       async findFirst({
         where,
       }: {
-        where: { workspaceId: string; role?: string; status?: string };
+        where: {
+          workspaceId: string;
+          userId?: string;
+          role?: string;
+          status?: string;
+        };
       }) {
         const hit = state.members.find(
           (m) =>
             m.workspaceId === where.workspaceId &&
+            (!where.userId || m.userId === where.userId) &&
             (!where.role || m.role === where.role) &&
             (!where.status || m.status === where.status),
         );
@@ -648,11 +663,14 @@ async function main() {
       assert.equal(saved.onboarding.professionalIdentityStatus, "COMPLETE");
       assert.ok(!state.identities.has(WS_B));
       assert.equal(state.users.get(USER_OWNER)?.name, "Jordan Lee");
-      assert.equal(state.users.get(USER_OWNER)?.phone, "647-555-0101");
+      assert.equal(state.users.get(USER_OWNER)?.phone, "(647) 555 - 0101");
       assert.equal(state.users.get(USER_OWNER)?.phoneE164, "+16475550101");
       assert.equal(state.agentProfiles.get(USER_OWNER)?.firstName, "Jordan");
       assert.equal(state.agentProfiles.get(USER_OWNER)?.lastName, "Lee");
-      assert.equal(state.agentProfiles.get(USER_OWNER)?.phone, "647-555-0101");
+      assert.equal(
+        state.agentProfiles.get(USER_OWNER)?.phone,
+        "(647) 555 - 0101",
+      );
       assert.equal(
         state.agentProfiles.get(USER_OWNER)?.recoLicenseNumber,
         "12345678",
@@ -857,8 +875,8 @@ async function main() {
     const resolveAgent = read(
       "src/lib/tenancy/resolve-public-agent-identity.ts",
     );
-    assert.ok(resolveAgent.includes("Never User.image"));
-    assert.ok(resolveAgent.includes("never logoUrl"));
+    assert.ok(resolveAgent.includes("resolvePublicPrimaryAgentPhoto"));
+    assert.ok(resolveAgent.includes("primaryUserImage"));
     assert.ok(resolveAgent.includes("agentCellPhone"));
     assert.ok(resolveAgent.includes("never branding.contactPhone"));
     assert.ok(

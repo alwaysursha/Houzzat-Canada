@@ -56,7 +56,10 @@ function baseBrand(
     agent: {
       name: "Jordan Lee",
       title: "Sales Representative",
-      photoUrl: "/uploads/jordan.jpg",
+      // Stale secondary path — must NOT be used for live portrait once
+      // professionalIdentity.agent.photoUrl is the authoritative source.
+      photoUrl:
+        "https://branding-assets.example/workspaces/ws/branding/agent-profile/stale.jpg",
       bio: "Real biography from tenant profile.",
       phone: "(416) 555-0199",
       email: "jordan@remax-example.com",
@@ -68,7 +71,7 @@ function baseBrand(
         name: null,
         designation: null,
         cellPhone: null,
-        photoUrl: null,
+        photoUrl: "https://cdn.example/agents/jordan.jpg",
       },
       brokerage: {
         name: null,
@@ -139,11 +142,37 @@ async function main() {
     assert.equal(live.isDemoPreview, false);
     assert.equal(live.name, "Jordan Lee");
     assert.equal(live.brokerageName, "RE/MAX Realty Services Inc.");
-    assert.equal(live.photoUrl, "/uploads/jordan.jpg");
+    assert.equal(live.photoUrl, "https://cdn.example/agents/jordan.jpg");
     assert.equal(live.metrics, null);
     assert.equal(live.testimonials, null);
     assert.ok(!live.name.includes("Alex Morgan"));
     assert.ok(live.bio?.includes("Real biography"));
+
+    // Cleared personal portrait must not resurrect via brand.agent.photoUrl.
+    const clearedPersonal = resolveAgentSignatureView(
+      baseBrand({
+        professionalIdentity: {
+          agent: {
+            name: null,
+            designation: null,
+            cellPhone: null,
+            photoUrl: null,
+          },
+          brokerage: {
+            name: null,
+            fax: null,
+            address: null,
+            phone: null,
+            logoUrl: null,
+          },
+        },
+      }),
+    );
+    assert.equal(clearedPersonal.photoUrl, null);
+    assert.notEqual(
+      clearedPersonal.photoUrl,
+      baseBrand().agent?.photoUrl ?? undefined,
+    );
 
     const preview = resolveAgentSignatureView(
       baseBrand({

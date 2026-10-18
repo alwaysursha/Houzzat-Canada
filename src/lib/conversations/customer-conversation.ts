@@ -98,6 +98,10 @@ import { parseJsonText } from "@/lib/http/json-body";
 import { scheduleNotifyAssignedAgentOfCustomerChatMessage } from "@/lib/notifications/customer-chat-agent-push";
 import { isConsumerRole } from "@/lib/roles";
 import {
+  resolvePersonalAgentPhoto,
+  verifiedActiveMembership,
+} from "@/lib/tenancy/agent-photo";
+import {
   resolveWorkspaceFromRequest,
   type HostResolutionDeps,
 } from "@/lib/tenancy/resolve-workspace-host";
@@ -321,9 +325,9 @@ function firstNonEmpty(
 /**
  * Assigned-agent header identity for the customer's lead assignee only.
  * Name: assignee User.name (plus workspace professional registered name when
- * the assignee is the primary agent). Photo: workspace branding
- * agentProfilePhotoUrl only when assignee === primaryAgentId — never User.image,
- * never brokerageLogoUrl, never a branding portrait for a different assignee.
+ * the assignee is the primary agent). Photo: assignee User.image only when they
+ * have ACTIVE membership in this workspace — never WorkspaceBranding portrait,
+ * never brokerageLogoUrl, never another agent's image.
  */
 export async function resolveAssignedCustomerChatAgentIdentity(input: {
   workspaceId: string;
@@ -332,22 +336,38 @@ export async function resolveAssignedCustomerChatAgentIdentity(input: {
     user: {
       findUnique: (args: {
         where: { id: string };
-        select: { name: true };
-      }) => Promise<{ name: string | null } | null>;
+        select: { name: true; image: true };
+      }) => Promise<{ name: string | null; image: string | null } | null>;
+    };
+    workspaceMember: {
+      findFirst: (args: {
+        where: {
+          workspaceId: string;
+          userId: string;
+          status: "ACTIVE";
+        };
+        select: {
+          workspaceId: true;
+          userId: true;
+          status: true;
+        };
+      }) => Promise<{
+        workspaceId: string;
+        userId: string;
+        status: string;
+      } | null>;
     };
     workspace: {
       findUnique: (args: {
         where: { id: string };
         select: {
           primaryAgentId: true;
-          branding: { select: { agentProfilePhotoUrl: true } };
           professionalIdentity: {
             select: { agentRegisteredName: true };
           };
         };
       }) => Promise<{
         primaryAgentId: string | null;
-        branding: { agentProfilePhotoUrl: string | null } | null;
         professionalIdentity: { agentRegisteredName: string | null } | null;
       } | null>;
     };
@@ -356,38 +376,56 @@ export async function resolveAssignedCustomerChatAgentIdentity(input: {
   const agentId = input.assignedAgentId?.trim() || null;
   if (!agentId) return null;
 
-  const [user, workspace] = await Promise.all([
+  const [user, workspace, memberRow] = await Promise.all([
     input.db.user.findUnique({
       where: { id: agentId },
-      select: { name: true },
+      select: { name: true, image: true },
     }),
     input.db.workspace.findUnique({
       where: { id: input.workspaceId },
       select: {
         primaryAgentId: true,
-        branding: { select: { agentProfilePhotoUrl: true } },
         professionalIdentity: {
           select: { agentRegisteredName: true },
         },
+      },
+    }),
+    input.db.workspaceMember.findFirst({
+      where: {
+        workspaceId: input.workspaceId,
+        userId: agentId,
+        status: "ACTIVE",
+      },
+      select: {
+        workspaceId: true,
+        userId: true,
+        status: true,
       },
     }),
   ]);
 
   if (!user) return null;
 
-  const photoAllowed = customerChatAgentPhotoAllowed({
+  const isPrimaryAssignee = customerChatAgentPhotoAllowed({
     assignedAgentId: agentId,
     primaryAgentId: workspace?.primaryAgentId,
   });
   const name = firstNonEmpty(
-    photoAllowed
+    isPrimaryAssignee
       ? workspace?.professionalIdentity?.agentRegisteredName
       : null,
     user.name,
   );
-  const photoUrl = photoAllowed
-    ? firstNonEmpty(workspace?.branding?.agentProfilePhotoUrl)
-    : null;
+  const membership = verifiedActiveMembership(memberRow, {
+    workspaceId: input.workspaceId,
+    userId: agentId,
+  });
+  const photoUrl = resolvePersonalAgentPhoto({
+    workspaceId: input.workspaceId,
+    userId: agentId,
+    userImage: user.image,
+    membership,
+  });
 
   if (!name && !photoUrl) {
     return { name: null, photoUrl: null };

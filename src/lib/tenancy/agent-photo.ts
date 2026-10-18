@@ -332,11 +332,11 @@ export type ResolvePublicPrimaryAgentPhotoInput = {
 /**
  * PUBLIC_PRIMARY policy — workspace public portrait.
  *
- * Prefer the designated primary agent's valid User.image when they have
- * ACTIVE membership. Otherwise fall back to legacy branding portrait.
- * When primaryAgentId is absent, only the branding URL is considered
- * (legacy compatibility) — no person is inferred from branding.
- * Never treats OWNER as an implicit primary.
+ * When a designated primary has ACTIVE membership, User.image is authoritative:
+ * a present personal photo wins; a cleared/missing personal photo yields null
+ * (neutral avatar) — never resurrect via WorkspaceBranding.
+ * Branding is used only when there is no trusted personal channel (no primary,
+ * or primary membership not ACTIVE). Never treats OWNER as an implicit primary.
  */
 export function resolvePublicPrimaryAgentPhoto(
   input: ResolvePublicPrimaryAgentPhotoInput,
@@ -361,8 +361,8 @@ export function resolvePublicPrimaryAgentPhoto(
     membership.userId === primaryAgentId;
 
   if (membershipOk) {
-    const personal = sanitizePublicHttpsImageUrl(input.primaryUserImage);
-    if (personal) return personal;
+    // Authoritative personal channel: do not fall through to branding.
+    return sanitizePublicHttpsImageUrl(input.primaryUserImage);
   }
 
   return brandingPhoto;

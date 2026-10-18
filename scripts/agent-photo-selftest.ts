@@ -374,7 +374,8 @@ function assertAccepted(url: string, label: string) {
       primaryMembership: primaryMem,
       brandingAgentProfilePhotoUrl: CDN_BRANDING,
     }),
-    CDN_BRANDING,
+    null,
+    "cleared User.image must not resurrect via branding",
   );
   assert.equal(
     resolvePublicPrimaryAgentPhoto({
@@ -384,9 +385,10 @@ function assertAccepted(url: string, label: string) {
       primaryMembership: primaryMem,
       brandingAgentProfilePhotoUrl: CDN_BRANDING,
     }),
-    CDN_BRANDING,
+    null,
+    "unsafe User.image must not fall through to branding",
   );
-  section("PUBLIC_PRIMARY: primary without User.image → branding");
+  section("PUBLIC_PRIMARY: primary without User.image → null (no branding resurrect)");
 
   assert.equal(
     resolvePublicPrimaryAgentPhoto({
@@ -396,9 +398,9 @@ function assertAccepted(url: string, label: string) {
       primaryMembership: primaryMem,
       brandingAgentProfilePhotoUrl: HOUZZAT_BRANDING_CDN,
     }),
-    HOUZZAT_BRANDING_CDN,
+    null,
   );
-  section("PUBLIC_PRIMARY: legacy branding fallback (Houzzat CDN)");
+  section("PUBLIC_PRIMARY: Houzzat CDN branding ignored when personal channel trusted");
 
   assert.equal(
     resolvePublicPrimaryAgentPhoto({
@@ -459,7 +461,8 @@ function assertAccepted(url: string, label: string) {
       primaryMembership: nextMem,
       brandingAgentProfilePhotoUrl: CDN_BRANDING,
     }),
-    CDN_BRANDING,
+    null,
+    "reassigned primary with no photo → null, not previous branding",
   );
   // Stale membership for previous primary must not expose previous User.image.
   assert.equal(
