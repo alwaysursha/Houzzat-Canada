@@ -139,9 +139,10 @@ function testEmailStillExposed() {
     "src/components/agent/lead-profile-v2/LeadProfileV2Tabs.tsx",
   );
   assert.ok(conversations.includes('label="Email"'));
-  assert.ok(conversations.includes("Send email"));
+  assert.ok(conversations.includes("Compose an email"));
   assert.ok(conversations.includes("No emails logged yet."));
-  assert.ok(conversations.includes("LeadEmailForm"));
+  assert.ok(conversations.includes("onComposeEmail"));
+  assert.equal(conversations.includes("LeadEmailForm"), false);
   assert.ok(conversations.includes("EmailPreviewModal"));
   assert.ok(conversations.includes("Opened"));
   assert.ok(conversations.includes("Clicked"));
@@ -491,12 +492,15 @@ function testEmailFunctionalityUntouched() {
   const host = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
   );
-  assert.ok(conversations.includes('from "@/components/agent/LeadEmailForm"'));
-  assert.ok(conversations.includes("onUpdated={onEmailSent}"));
+  assert.ok(conversations.includes("onComposeEmail"));
+  assert.ok(conversations.includes("Compose an email"));
+  assert.equal(conversations.includes("LeadEmailForm"), false);
   assert.ok(conversations.includes("setPreviewEmailId(e.id)"));
   assert.ok(host.includes('tab === "conversations"'));
   assert.ok(host.includes("useLeadProfileV2Emails("));
   assert.ok(host.includes("applyV2ConversationsEmailSentRefresh"));
+  assert.ok(host.includes("EmailComposerProvider"));
+  assert.ok(host.includes("onComposeEmail={onComposeEmail}"));
   assert.equal(conversations.includes("e.body"), false);
 }
 

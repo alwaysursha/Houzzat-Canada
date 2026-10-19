@@ -266,7 +266,9 @@ function testEmailRemainsUntouched() {
     "src/components/agent/lead-profile-v2/LeadProfileV2Tabs.tsx",
   );
   assert.ok(conversations.includes('label="Email"'));
-  assert.ok(conversations.includes("LeadEmailForm"));
+  assert.ok(conversations.includes("Compose an email"));
+  assert.ok(conversations.includes("onComposeEmail"));
+  assert.equal(conversations.includes("LeadEmailForm"), false);
   assert.ok(conversations.includes("EmailPreviewModal"));
   assert.ok(tabs.includes('{ id: "conversations", label: "Conversations" }'));
   assert.equal(tabs.includes('id: "chat"'), false);

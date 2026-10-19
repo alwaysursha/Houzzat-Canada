@@ -342,11 +342,17 @@ function testSendRefreshTargeted() {
   const panel = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel.tsx",
   );
-  assert.ok(panel.includes("onUpdated={onEmailSent}"));
-  assert.ok(panel.includes('from "@/components/agent/LeadEmailForm"'));
-  const form = read("src/components/agent/LeadEmailForm.tsx");
-  assert.ok(form.includes('fetch("/api/agent/email"'));
-  assert.ok(form.includes('mode: "single"'));
+  assert.ok(panel.includes("onComposeEmail"));
+  assert.ok(panel.includes("Compose an email"));
+  assert.equal(panel.includes("LeadEmailForm"), false);
+  assert.ok(host.includes("EmailComposerProvider"));
+  assert.ok(host.includes("onComposeEmail={onComposeEmail}"));
+  assert.equal(host.includes('mode: "single"'), false);
+  const composer = read(
+    "src/components/agent/email-composer/email-composer-context.tsx",
+  );
+  assert.ok(composer.includes('fetch("/api/agent/email"'));
+  assert.ok(composer.includes('mode: "single"'));
   assert.equal(host.includes("/summary"), false);
   const applyFn =
     helper.split("export function applyV2ConversationsEmailSentRefresh")[1] ??
@@ -359,18 +365,21 @@ function testSendRefreshTargeted() {
 }
 
 function testConsentPreserved() {
-  const form = read("src/components/agent/LeadEmailForm.tsx");
-  assert.ok(form.includes("disabled={pending || !consented || !defaultTo}"));
-  assert.ok(form.includes('consented ? "CASL ok" : "No consent"'));
   const panel = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2ConversationsPanel.tsx",
   );
-  assert.ok(panel.includes("consented={consented}"));
-  assert.ok(panel.includes("defaultTo={defaultTo}"));
+  assert.ok(panel.includes("consented"));
+  assert.ok(panel.includes("defaultTo"));
+  assert.ok(panel.includes("CASL consent"));
   const host = read(
     "src/components/agent/lead-profile-v2/LeadProfileV2Host.tsx",
   );
-  assert.ok(host.includes("consented={data.permissions.consented}"));
+  assert.ok(host.includes("consented: data.permissions.consented"));
+  const composer = read(
+    "src/components/agent/email-composer/email-composer-context.tsx",
+  );
+  assert.ok(composer.includes("canSubmitEmailComposer"));
+  assert.ok(composer.includes("CASL consent required before sending."));
 }
 
 function testMutationAndPreviewProtectAccess() {
@@ -400,7 +409,7 @@ function testPresentationParity() {
   );
   const legacy = read("src/components/agent/CustomerProfile.tsx");
   for (const copy of [
-    "Send email",
+    "Compose an email",
     "No emails logged yet.",
     "Loading…",
     "Failed to load",
@@ -412,6 +421,19 @@ function testPresentationParity() {
     "To {e.toEmail}",
   ]) {
     assert.ok(panel.includes(copy), `missing ${copy}`);
+  }
+  for (const copy of [
+    "Send email",
+    "No emails logged yet.",
+    "Loading…",
+    "Failed to load",
+    "Not opened yet",
+    "Opened",
+    "Clicked",
+    "Preview",
+    "Load more",
+    "To {e.toEmail}",
+  ]) {
     assert.ok(legacy.includes(copy), `legacy missing ${copy}`);
   }
 }

@@ -154,8 +154,27 @@ export async function POST(request: Request) {
       continue;
     }
 
+    // Suppressed / stub-skipped must not count as delivered.
+    if (result.status === "suppressed") {
+      skipped += 1;
+      errors.push(
+        result.reason
+          ? `${toEmail}: suppressed (${result.reason})`
+          : `${toEmail}: suppressed`,
+      );
+      continue;
+    }
+    if (result.status === "skipped") {
+      skipped += 1;
+      errors.push(`${toEmail}: delivery unavailable`);
+      continue;
+    }
+
     sent += 1;
   }
 
-  return NextResponse.json({ ok: true, sent, skipped, errors });
+  const delivery =
+    sent > 0 ? ("sent" as const) : skipped > 0 ? ("skipped" as const) : ("failed" as const);
+
+  return NextResponse.json({ ok: true, sent, skipped, errors, delivery });
 }

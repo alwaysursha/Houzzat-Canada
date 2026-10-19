@@ -66,18 +66,20 @@ type ActionItem = {
   href?: string;
   className: string;
   label: string;
+  disabled?: boolean;
   onClick?: (event: { currentTarget: HTMLElement }) => void;
 };
 
 function renderAction(action: ActionItem, size: "rail" | "inline") {
   const Icon = action.icon;
+  const interactive = Boolean(action.href || action.onClick) && !action.disabled;
   const className = cn(
     "flex items-center justify-center rounded-full text-white shadow-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2",
     size === "rail" ? "size-11" : "size-10",
     action.className,
-    !action.href && "pointer-events-none opacity-40",
+    !interactive && "pointer-events-none opacity-40",
   );
-  if (action.href) {
+  if (action.href && !action.disabled) {
     return (
       <a
         key={action.label}
@@ -89,6 +91,21 @@ function renderAction(action: ActionItem, size: "rail" | "inline") {
       >
         <Icon className="size-4" />
       </a>
+    );
+  }
+  if (action.onClick) {
+    return (
+      <button
+        key={action.label}
+        type="button"
+        className={className}
+        title={action.label}
+        aria-label={action.label}
+        disabled={action.disabled}
+        onClick={(event) => action.onClick?.(event)}
+      >
+        <Icon className="size-4" />
+      </button>
     );
   }
   return (
@@ -124,6 +141,7 @@ export function LeadProfileV2Rail({
   onReassignUpdated,
   onOpenEngagement,
   onCall,
+  onComposeEmail,
 }: {
   leadId: string;
   data: LeadProfileV2Shell;
@@ -150,6 +168,7 @@ export function LeadProfileV2Rail({
   onReassignUpdated: () => void;
   onOpenEngagement: () => void;
   onCall: (target: HTMLElement) => void;
+  onComposeEmail: () => void;
 }) {
   const name =
     data.lead.customer?.name ||
@@ -185,9 +204,10 @@ export function LeadProfileV2Rail({
     },
     {
       icon: Mail,
-      href: email ? `mailto:${email}` : undefined,
       className: "bg-[#38bdf8]",
       label: "Email",
+      disabled: !email,
+      onClick: () => onComposeEmail(),
     },
   ];
 
@@ -603,11 +623,13 @@ export function LeadProfileV2ActionRail({
   phoneE164,
   email,
   onCall,
+  onComposeEmail,
 }: {
   phone: string | null | undefined;
   phoneE164: string | null | undefined;
   email: string | null | undefined;
   onCall: (target: HTMLElement) => void;
+  onComposeEmail: () => void;
 }) {
   const actions: ActionItem[] = [
     {
@@ -625,9 +647,10 @@ export function LeadProfileV2ActionRail({
     },
     {
       icon: Mail,
-      href: email ? `mailto:${email}` : undefined,
       className: "bg-[#38bdf8]",
       label: "Email",
+      disabled: !email,
+      onClick: () => onComposeEmail(),
     },
   ];
   return (

@@ -9,6 +9,11 @@ import {
   useState,
 } from "react";
 import { CallOutcomeDialog } from "@/components/agent/CallOutcomeDialog";
+import {
+  EmailComposerProvider,
+  EmailComposerShell,
+  useEmailComposer,
+} from "@/components/agent/email-composer";
 import { useWebCallOutcomeSession } from "@/components/agent/use-web-call-outcome-session";
 import { webCallOutcomeDialogOpen } from "@/lib/agent/call-outcome-web-session";
 import { LeadProfileV2ActivityPanel } from "@/components/agent/lead-profile-v2/LeadProfileV2ActivityPanel";
@@ -78,6 +83,49 @@ export function LeadProfileV2Host({
   onNavigateLead?: (leadId: string) => void;
   leadIds?: string[];
 }) {
+  const onSentRef = useRef<(() => void) | null>(null);
+  const hostLeadIdRef = useRef(leadId);
+  hostLeadIdRef.current = leadId;
+  return (
+    <EmailComposerProvider
+      hostLeadId={leadId}
+      onSent={(sentLeadId) => {
+        // Refresh only when the host still shows the lead that was sent.
+        if (sentLeadId !== hostLeadIdRef.current) return;
+        onSentRef.current?.();
+      }}
+    >
+      <LeadProfileV2HostContent
+        leadId={leadId}
+        variant={variant}
+        onClose={onClose}
+        onNavigateLead={onNavigateLead}
+        leadIds={leadIds}
+        bindEmailSentHandler={(fn) => {
+          onSentRef.current = fn;
+        }}
+      />
+      <EmailComposerShell />
+    </EmailComposerProvider>
+  );
+}
+
+function LeadProfileV2HostContent({
+  leadId,
+  variant = "modal",
+  onClose,
+  onNavigateLead,
+  leadIds,
+  bindEmailSentHandler,
+}: {
+  leadId: string;
+  variant?: "page" | "modal";
+  onClose?: () => void;
+  onNavigateLead?: (leadId: string) => void;
+  leadIds?: string[];
+  bindEmailSentHandler: (fn: (() => void) | null) => void;
+}) {
+  const { openComposer } = useEmailComposer();
   const [data, setData] = useState<LeadProfileV2Shell | null>(null);
   const [error, setError] = useState<{ leadId: string; message: string } | null>(
     null,
@@ -422,6 +470,21 @@ export function LeadProfileV2Host({
     tab,
   ]);
 
+  useEffect(() => {
+    bindEmailSentHandler(onEmailSent);
+    return () => bindEmailSentHandler(null);
+  }, [bindEmailSentHandler, onEmailSent]);
+
+  const onComposeEmail = useCallback(() => {
+    if (!data) return;
+    openComposer({
+      leadId,
+      toEmail: data.lead.customer?.email ?? null,
+      consented: data.permissions.consented,
+      recipientName: data.lead.customer?.name ?? null,
+    });
+  }, [data, leadId, openComposer]);
+
   const onMatchboardUpdated = useCallback(() => {
     applyV2MatchboardUpdatedRefresh({
       reloadEngagementOverview,
@@ -689,7 +752,7 @@ export function LeadProfileV2Host({
             panel={emails.panel}
             loading={emails.loading}
             error={emails.error}
-            onEmailSent={onEmailSent}
+            onComposeEmail={onComposeEmail}
             onLoadMore={emails.loadMore}
             chat={{
               panel: chat.panel,
@@ -765,6 +828,7 @@ export function LeadProfileV2Host({
           phoneE164={data.lead.customer?.phoneE164}
           email={data.lead.customer?.email}
           onCall={beginCallOutcome}
+          onComposeEmail={onComposeEmail}
         />
       ) : null}
 
@@ -822,6 +886,7 @@ export function LeadProfileV2Host({
               onReassignUpdated={onUpdated}
               onOpenEngagement={() => setTab("engagement")}
               onCall={beginCallOutcome}
+              onComposeEmail={onComposeEmail}
             />
             <section className="flex min-w-0 flex-col bg-[#f7f9fb] lg:min-h-0 lg:overflow-hidden">
               <LeadProfileV2NoteComposer

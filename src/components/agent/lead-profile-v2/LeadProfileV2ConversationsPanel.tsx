@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Eye } from "lucide-react";
+import { Eye, Mail } from "lucide-react";
 import { EmailPreviewModal } from "@/components/agent/EmailPreviewModal";
-import { LeadEmailForm } from "@/components/agent/LeadEmailForm";
 import { LeadProfileV2ChatPane } from "@/components/agent/lead-profile-v2/LeadProfileV2ChatPane";
 import type { V2ChatSurface } from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
@@ -22,7 +21,7 @@ export function LeadProfileV2ConversationsPanel({
   panel,
   loading,
   error,
-  onEmailSent,
+  onComposeEmail,
   onLoadMore,
   chat,
 }: {
@@ -34,7 +33,7 @@ export function LeadProfileV2ConversationsPanel({
   panel: LeadProfileV2EmailsPanel | null;
   loading: boolean;
   error: boolean;
-  onEmailSent: () => void;
+  onComposeEmail: () => void;
   onLoadMore: () => void;
   chat: {
     panel: LeadProfileV2ChatPanel | null;
@@ -134,13 +133,28 @@ export function LeadProfileV2ConversationsPanel({
         </div>
       ) : (
         <div id="v2-conversations-email-panel" role="tabpanel" aria-labelledby="v2-conversations-email-tab">
-          <Panel title="Send email">
-            <LeadEmailForm
-              leadId={leadId}
-              defaultTo={defaultTo}
-              consented={consented}
-              onUpdated={onEmailSent}
-            />
+          <Panel title="Email">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-[#1e2a38]">
+                  {defaultTo || "No email on file"}
+                </p>
+                <p className="text-[11px] text-[#64748b]">
+                  {consented
+                    ? "CASL consent on file — compose opens the shared CRM email window."
+                    : "No CASL consent — composing is available, sending stays blocked."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onComposeEmail}
+                disabled={!defaultTo}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0f766e] px-4 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#0d9488] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Mail className="size-4" aria-hidden />
+                Compose an email
+              </button>
+            </div>
           </Panel>
           {loading ? (
             <p className="rounded-lg border border-dashed border-[#d8dee6] bg-white px-4 py-10 text-center text-sm text-[#94a3b8]">
