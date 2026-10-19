@@ -17,6 +17,7 @@ export const STAFF_PUSH_TYPES = [
   "hot_pipeline",
   "task_due",
   "alert_engagement",
+  "email_engagement",
   "appointment",
   "lead_reassigned",
   "lead_info_updated",
@@ -115,6 +116,11 @@ export const STAFF_PUSH_CATALOG: PushTypeItem[] = [
     description: "A client opened or clicked a property alert",
   },
   {
+    id: "email_engagement",
+    label: "Email opened",
+    description: "A client opened a manual CRM email you sent",
+  },
+  {
     id: "appointment",
     label: "Appointments",
     description: "A showing was requested or is starting soon",
@@ -168,14 +174,31 @@ export function shellForAudience(
   return audience === "staff" ? "houzzatpro" : "houzzat";
 }
 
-/** Missing key = enabled (all types on by default). */
+/**
+ * Missing key = enabled (all types on by default), except `email_engagement`:
+ * that type was added after Engagement prefs existed. When its key is absent
+ * (or when its Engagement partner `alert_engagement` is explicitly off),
+ * inherit the legacy Engagement opt-out so CRM email-open pushes do not
+ * revive for agents who already disabled Engagement.
+ *
+ * Unrelated push types keep the global missing=ON default unchanged.
+ */
 export function isPushTypeEnabled(
   prefs: unknown,
   type: PushType,
 ): boolean {
   if (!prefs || typeof prefs !== "object" || Array.isArray(prefs)) return true;
-  const value = (prefs as Record<string, unknown>)[type];
+  const record = prefs as Record<string, unknown>;
+  const value = record[type];
   if (value === false) return false;
+
+  if (type === "email_engagement") {
+    // Category partner opt-out (legacy Engagement = alert_engagement only).
+    if (record.alert_engagement === false) return false;
+    // Explicit true, or missing while alert is on/absent → enabled.
+    return true;
+  }
+
   return true;
 }
 

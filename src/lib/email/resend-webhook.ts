@@ -1,8 +1,12 @@
 import { Resend } from "resend";
-import { isPropertyAlertEmailKind } from "@/lib/agent/email-alert-kinds";
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { handleResendSuppressionWebhook } from "@/lib/communications/resend-webhook-suppression";
 import type { ResendDeliveryEvent } from "@/lib/communications/resend-delivery";
+import {
+  emailClickNotificationCopy,
+  emailOpenNotificationCopy,
+  shouldNotifyAgentOnEmailOpen,
+} from "@/lib/email/email-open-notification";
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
@@ -45,31 +49,75 @@ async function findEmailLog(providerId: string) {
       workspaceId: true,
       subject: true,
       kind: true,
+      mlsNumber: true,
       openedAt: true,
       openCount: true,
       clickCount: true,
-      lead: { select: { assignedAgentId: true, workspaceId: true } },
+      lead: {
+        select: {
+          assignedAgentId: true,
+          workspaceId: true,
+          customer: { select: { name: true } },
+        },
+      },
     },
   });
 }
 
-async function notifyAlertEngagement(input: {
+/** Address only when this email log carries an MLS# — never from other lead properties. */
+async function propertyAddressForEmailMls(
+  mlsNumber: string | null | undefined,
+): Promise<string | null> {
+  const mls = mlsNumber?.trim();
+  if (!mls) return null;
+  const listing = await prisma.listing.findFirst({
+    where: { mlsNumber: mls },
+    select: { addressLine: true },
+  });
+  const line = listing?.addressLine?.trim();
+  return line || null;
+}
+
+async function notifyEmailEngagement(input: {
   leadId: string;
   assigneeId: string;
   title: string;
   body: string;
+  pushType: "alert_engagement" | "email_engagement";
 }) {
   const ok = await authorizeStaffRecipientForLead({
     userId: input.assigneeId,
     leadId: input.leadId,
-    event: "alert_engagement",
+    event: input.pushType,
   });
   if (!ok) return;
   sendPushToUser(input.assigneeId, {
-    type: "alert_engagement",
+    type: input.pushType,
     title: input.title,
     body: input.body,
     href: openLeadHandoffHref(input.leadId),
+  });
+}
+
+async function maybeNotifyFirstOpen(log: NonNullable<
+  Awaited<ReturnType<typeof findEmailLog>>
+>) {
+  if (!shouldNotifyAgentOnEmailOpen(log.kind)) return;
+  if (!log.lead.assignedAgentId) return;
+
+  const propertyAddress = await propertyAddressForEmailMls(log.mlsNumber);
+  const copy = emailOpenNotificationCopy({
+    kind: log.kind,
+    subject: log.subject,
+    leadName: log.lead.customer?.name ?? null,
+    propertyAddress,
+  });
+  void notifyEmailEngagement({
+    leadId: log.leadId,
+    assigneeId: log.lead.assignedAgentId,
+    title: copy.title,
+    body: copy.body,
+    pushType: copy.pushType,
   });
 }
 
@@ -95,18 +143,12 @@ async function recordOpened(providerId: string, at: Date) {
         meta: {
           emailLogId: log.id,
           providerId,
+          kind: log.kind,
           previewPath: `/agent/emails/${log.id}`,
         },
       },
     });
-    if (isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
-      void notifyAlertEngagement({
-        leadId: log.leadId,
-        assigneeId: log.lead.assignedAgentId,
-        title: "Property alert opened",
-        body: log.subject,
-      });
-    }
+    await maybeNotifyFirstOpen(log);
   }
 
   await verifyCustomerEmailFromLeadEmailOpen({ providerId, at });
@@ -149,6 +191,7 @@ async function recordClicked(
         emailLogId: log.id,
         providerId,
         url,
+        kind: log.kind,
         previewPath: `/agent/emails/${log.id}`,
       },
     },
@@ -163,20 +206,32 @@ async function recordClicked(
         meta: {
           emailLogId: log.id,
           providerId,
+          kind: log.kind,
           previewPath: `/agent/emails/${log.id}`,
           inferredFromClick: true,
         },
       },
     });
+    await maybeNotifyFirstOpen(log);
   }
 
-  if (isFirstClick && isPropertyAlertEmailKind(log.kind) && log.lead.assignedAgentId) {
-    void notifyAlertEngagement({
-      leadId: log.leadId,
-      assigneeId: log.lead.assignedAgentId,
-      title: "Property alert clicked",
-      body: log.subject,
+  if (isFirstClick && log.lead.assignedAgentId) {
+    const propertyAddress = await propertyAddressForEmailMls(log.mlsNumber);
+    const copy = emailClickNotificationCopy({
+      kind: log.kind,
+      subject: log.subject,
+      leadName: log.lead.customer?.name ?? null,
+      propertyAddress,
     });
+    if (copy) {
+      void notifyEmailEngagement({
+        leadId: log.leadId,
+        assigneeId: log.lead.assignedAgentId,
+        title: copy.title,
+        body: copy.body,
+        pushType: copy.pushType,
+      });
+    }
   }
 
   await verifyCustomerEmailFromLeadEmailOpen({ providerId, at });

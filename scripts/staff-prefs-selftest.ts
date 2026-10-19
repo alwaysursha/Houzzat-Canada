@@ -127,6 +127,35 @@ function testChatMessagePrefsDefaultOnWithoutUiRow() {
   );
 }
 
+function testLegacyEmailEngagementInheritsAlertOptOut() {
+  assert.equal(
+    isPushTypeEnabled({ alert_engagement: false }, "email_engagement"),
+    false,
+  );
+  assert.equal(
+    isPushTypeEnabled({ alert_engagement: true }, "email_engagement"),
+    true,
+  );
+  assert.equal(
+    isPushTypeEnabled({ email_engagement: false }, "email_engagement"),
+    false,
+  );
+  assert.equal(
+    isPushTypeEnabled(
+      { alert_engagement: false, email_engagement: true },
+      "email_engagement",
+    ),
+    false,
+  );
+  // Property alerts and unrelated types unchanged.
+  assert.equal(
+    isPushTypeEnabled({ alert_engagement: true }, "alert_engagement"),
+    true,
+  );
+  assert.equal(isPushTypeEnabled({ alert_engagement: false }, "new_lead"), true);
+  assert.equal(isStaffCategoryPushEnabled({ alert_engagement: false }, "engagement"), false);
+}
+
 function testUiCatalog() {
   const rows = staffCategoriesForUi(null);
   assert.equal(rows.length, STAFF_CATEGORY_CATALOG.length);
@@ -186,6 +215,7 @@ testLiveActivityMapsBothPushKeys();
 testEmailNestPreservesPushKeys();
 testUiCatalog();
 testChatMessagePrefsDefaultOnWithoutUiRow();
+testLegacyEmailEngagementInheritsAlertOptOut();
 testStructuralWiring();
 
 console.log("staff-prefs-selftest: ok");

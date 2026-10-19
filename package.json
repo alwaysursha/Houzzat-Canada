@@ -281,6 +281,7 @@
     "lead-profile-v2-conversations:selftest": "node --import tsx scripts/lead-profile-v2-conversations-selftest.ts",
     "lead-profile-v2-conversations-engagement:selftest": "node --import tsx scripts/lead-profile-v2-conversations-engagement-selftest.ts",
     "email-composer-phase1:selftest": "node --import tsx scripts/email-composer-phase1-selftest.ts",
+    "email-open-notification:selftest": "node --import tsx scripts/email-open-notification-selftest.ts",
     "lead-import-classify:selftest": "node --import tsx scripts/lead-import-classify-selftest.ts",
     "lead-import-persist:selftest": "node --import tsx scripts/lead-import-persist-selftest.ts",
     "lead-classification-cutover:selftest": "node --import tsx scripts/lead-classification-cutover-selftest.ts",

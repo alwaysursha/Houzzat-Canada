@@ -98,8 +98,9 @@ export const STAFF_CATEGORY_CATALOG: StaffCategoryDefinition[] = [
   {
     id: "engagement",
     label: "Engagement",
-    description: "When a client opens or clicks a property alert email.",
-    pushTypes: ["alert_engagement"],
+    description:
+      "When a client opens a CRM email you sent, or opens/clicks a property alert.",
+    pushTypes: ["alert_engagement", "email_engagement"],
     emailActive: false,
     highStakes: false,
   },

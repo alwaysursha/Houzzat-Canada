@@ -79,7 +79,7 @@ function mergeStaffCategoryPrefs(
     contact_appointments: ["contact_requested", "appointment"],
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
-    engagement: ["alert_engagement"],
+    engagement: ["alert_engagement", "email_engagement"],
     customer_alert_changes: ["customer_alert_change"],
   };
   const next = { ...existing };
@@ -98,6 +98,21 @@ function mergeStaffCategoryPrefs(
   return next;
 }
 
+/**
+ * Mirror catalog.isPushTypeEnabled for Engagement inheritance:
+ * missing email_engagement inherits alert_engagement opt-out.
+ */
+function isPushTypeEnabledMirror(
+  prefs: Record<string, unknown>,
+  type: string,
+): boolean {
+  if (prefs[type] === false) return false;
+  if (type === "email_engagement" && prefs.alert_engagement === false) {
+    return false;
+  }
+  return true;
+}
+
 function staffCategoriesForUi(prefs: Record<string, unknown>) {
   const email =
     prefs.staffEmail && typeof prefs.staffEmail === "object"
@@ -110,12 +125,12 @@ function staffCategoriesForUi(prefs: Record<string, unknown>) {
     contact_appointments: ["contact_requested", "appointment"],
     live_activity: ["lead_online", "hot_pipeline"],
     tasks: ["task_due"],
-    engagement: ["alert_engagement"],
+    engagement: ["alert_engagement", "email_engagement"],
     customer_alert_changes: ["customer_alert_change"],
   };
   return CATEGORIES.map((id) => {
     const types = pushMap[id] || [];
-    const pushEnabled = types.every((t) => prefs[t] !== false);
+    const pushEnabled = types.every((t) => isPushTypeEnabledMirror(prefs, t));
     return {
       id,
       pushEnabled,
@@ -383,6 +398,54 @@ async function runStage510Tests() {
     assert.equal(screen.includes(">SMS<"), false);
     const route = readFileSync(ROUTE, "utf8");
     assert.ok(route.includes("smsPreferenceNotCanonicalForStaff: true"));
+    console.log("  -> PASS");
+  }
+
+  console.log("[11] Legacy Engagement opt-out: UI matches email_engagement delivery...");
+  {
+    const catalog = readFileSync(
+      join(REPO_ROOT, "src/lib/notifications/catalog.ts"),
+      "utf8",
+    );
+    assert.ok(catalog.includes('type === "email_engagement"'));
+    assert.ok(catalog.includes("alert_engagement === false"));
+
+    // Legacy: alert off, email key missing → Engagement UI OFF (no CRM open push).
+    const legacyOff = staffCategoriesForUi({ alert_engagement: false });
+    assert.equal(
+      legacyOff.find((c) => c.id === "engagement")?.pushEnabled,
+      false,
+    );
+    assert.equal(isPushTypeEnabledMirror({ alert_engagement: false }, "email_engagement"), false);
+    assert.equal(isPushTypeEnabledMirror({ alert_engagement: false }, "alert_engagement"), false);
+
+    // Legacy alert on / absent → Engagement ON; email_engagement permitted.
+    assert.equal(
+      staffCategoriesForUi({ alert_engagement: true }).find(
+        (c) => c.id === "engagement",
+      )?.pushEnabled,
+      true,
+    );
+    assert.equal(isPushTypeEnabledMirror({}, "email_engagement"), true);
+    assert.equal(
+      isPushTypeEnabledMirror({ email_engagement: false }, "email_engagement"),
+      false,
+    );
+    assert.equal(
+      isPushTypeEnabledMirror(
+        { alert_engagement: false, email_engagement: true },
+        "email_engagement",
+      ),
+      false,
+    );
+
+    // Unrelated categories unchanged by legacy engagement blob.
+    const mixed = staffCategoriesForUi({
+      alert_engagement: false,
+      new_lead: true,
+    });
+    assert.equal(mixed.find((c) => c.id === "engagement")?.pushEnabled, false);
+    assert.equal(mixed.find((c) => c.id === "new_leads")?.pushEnabled, true);
     console.log("  -> PASS");
   }
 

@@ -127,10 +127,12 @@ function testBeaconWorkerOwnership() {
 }
 
 function testAlertEngagementHref() {
-  assert.ok(resendWebhook.includes("notifyAlertEngagement"));
+  assert.ok(resendWebhook.includes("notifyEmailEngagement"));
   assert.ok(resendWebhook.includes("authorizeStaffRecipientForLead"));
   assert.ok(resendWebhook.includes("openLeadHandoffHref(input.leadId)"));
-  assert.ok(resendWebhook.includes('type: "alert_engagement"'));
+  assert.ok(resendWebhook.includes("alert_engagement"));
+  assert.ok(resendWebhook.includes("email_engagement"));
+  assert.ok(resendWebhook.includes("emailOpenNotificationCopy"));
 }
 
 function testMissingToolsNotWired() {

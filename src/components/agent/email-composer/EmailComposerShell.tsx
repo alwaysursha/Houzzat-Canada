@@ -14,11 +14,14 @@ import {
   STAFF_OVERLAY_PRIORITY,
   useStaffOverlay,
 } from "@/lib/mobile/use-staff-overlay";
+import { visualViewportOverlayStyle } from "@/lib/visual-viewport-overlay-style";
 import { cn } from "@/lib/utils";
 
 /**
  * Floating Gmail-style CRM email composer.
  * Portaled to document.body so Lead Profile V2 stacking cannot clip it.
+ * On mobile, pinned to the visual viewport + safe-area insets so Android
+ * keyboards and status bars cannot cover the header or Send controls.
  */
 export function EmailComposerShell() {
   const {
@@ -43,6 +46,7 @@ export function EmailComposerShell() {
   const titleId = useId();
   const subjectRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const open = windowState !== "closed";
   const minimized = windowState === "minimized";
   const maximized = windowState === "maximized";
@@ -51,7 +55,8 @@ export function EmailComposerShell() {
     open: open && !minimized,
     id: draft ? `email-composer:${draft.leadId}` : "email-composer",
     priority: STAFF_OVERLAY_PRIORITY.emailPreview + 5,
-    lockScroll: maximized,
+    // Lock page scroll whenever the full composer is up (incl. mobile keyboard).
+    lockScroll: open && !minimized,
     onClose: () => {
       if (pending) return;
       requestClose();
@@ -98,6 +103,41 @@ export function EmailComposerShell() {
     send,
   ]);
 
+  // Pin the portal root to the visual viewport so Android Chrome keyboard
+  // resizes do not leave the header under the status bar or Send off-screen.
+  useEffect(() => {
+    if (!open || minimized) return;
+    function syncViewport() {
+      const el = overlayRef.current;
+      if (!el) return;
+      const style = visualViewportOverlayStyle(window.visualViewport);
+      el.style.left = style.left;
+      el.style.top = style.top;
+      el.style.width = style.width;
+      el.style.height = style.height;
+      el.style.right = style.right;
+      el.style.bottom = style.bottom;
+    }
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", syncViewport);
+    vv?.addEventListener("scroll", syncViewport);
+    return () => {
+      window.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("resize", syncViewport);
+      vv?.removeEventListener("scroll", syncViewport);
+      const el = overlayRef.current;
+      if (!el) return;
+      el.style.left = "";
+      el.style.top = "";
+      el.style.width = "";
+      el.style.height = "";
+      el.style.right = "";
+      el.style.bottom = "";
+    };
+  }, [open, minimized]);
+
   if (typeof document === "undefined" || !open || !draft) return null;
 
   const recipientLabel = draft.recipientName
@@ -107,7 +147,7 @@ export function EmailComposerShell() {
   if (minimized) {
     return createPortal(
       <div
-        className="pointer-events-auto fixed bottom-0 right-3 z-[105] w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-t-xl border border-[#c5d0dc] bg-[#1e2a38] text-white shadow-[0_-8px_30px_rgba(15,23,42,0.28)] sm:right-5"
+        className="pointer-events-auto fixed bottom-0 right-3 z-[105] w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-t-xl border border-[#c5d0dc] bg-[#1e2a38] text-white shadow-[0_-8px_30px_rgba(15,23,42,0.28)] sm:right-5 pb-[env(safe-area-inset-bottom,0px)]"
         role="dialog"
         aria-label="Minimized email composer"
       >
@@ -136,11 +176,12 @@ export function EmailComposerShell() {
 
   return createPortal(
     <div
+      ref={overlayRef}
       className={cn(
         "pointer-events-none fixed inset-0 z-[105]",
         maximized
           ? "flex items-stretch justify-stretch p-0 sm:p-3"
-          : "flex items-end justify-center sm:items-end sm:justify-end sm:p-0 sm:pr-5 sm:pb-0",
+          : "flex items-stretch justify-center sm:items-end sm:justify-end sm:p-0 sm:pr-5 sm:pb-0",
       )}
     >
       {maximized ? (
@@ -158,10 +199,12 @@ export function EmailComposerShell() {
         aria-modal="true"
         aria-labelledby={titleId}
         className={cn(
-          "pointer-events-auto flex w-full flex-col overflow-hidden border border-[#c5d0dc] bg-white shadow-[0_16px_48px_rgba(15,23,42,0.22)] transition-[width,height,border-radius] duration-200 ease-out",
+          "pointer-events-auto flex w-full min-h-0 flex-col overflow-hidden border border-[#c5d0dc] bg-white shadow-[0_16px_48px_rgba(15,23,42,0.22)] transition-[width,height,border-radius] duration-200 ease-out",
+          // Mobile: fill the visual-viewport overlay; pad for status bar / home indicator.
+          "h-full max-h-full pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
           maximized
-            ? "relative h-full max-h-none rounded-none sm:rounded-2xl"
-            : "h-[min(36rem,calc(100dvh-0.5rem))] max-h-[min(36rem,calc(100dvh-0.5rem))] rounded-none sm:h-[min(34rem,calc(100dvh-2rem))] sm:w-[min(36rem,calc(100vw-2.5rem))] sm:rounded-t-2xl",
+            ? "relative rounded-none sm:rounded-2xl"
+            : "rounded-none sm:h-[min(34rem,calc(100%-2rem))] sm:max-h-[min(34rem,calc(100%-2rem))] sm:w-[min(36rem,calc(100vw-2.5rem))] sm:rounded-t-2xl sm:pt-0 sm:pb-0",
         )}
       >
         <header className="flex shrink-0 items-center gap-2 bg-[#1e2a38] px-3 py-2 text-white">
@@ -187,7 +230,7 @@ export function EmailComposerShell() {
           </IconBtn>
         </header>
 
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="shrink-0 border-b border-[#e2e8f0] px-3 py-2">
             <div className="flex items-baseline gap-2 text-[12px]">
               <span className="w-10 shrink-0 font-semibold text-[#64748b]">
@@ -225,7 +268,7 @@ export function EmailComposerShell() {
             maxLength={20000}
             placeholder="Write your message…"
             disabled={pending}
-            className="min-h-0 flex-1 resize-none border-0 bg-white px-3 py-3 text-[13px] leading-relaxed text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
+            className="min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-white px-3 py-3 text-[13px] leading-relaxed text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
           />
 
           <footer className="flex shrink-0 flex-col gap-2 border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
@@ -264,7 +307,7 @@ export function EmailComposerShell() {
         </div>
 
         {discardOpen ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0f172a]/45 p-4">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#0f172a]/45 p-4 pt-[max(1rem,env(safe-area-inset-top,0px))] pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             <div
               role="alertdialog"
               aria-labelledby={`${titleId}-discard`}

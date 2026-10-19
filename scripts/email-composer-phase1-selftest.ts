@@ -502,14 +502,39 @@ function testMobileLayoutBehavior() {
   const shell = read(
     "src/components/agent/email-composer/EmailComposerShell.tsx",
   );
+  const vv = read("src/lib/visual-viewport-overlay-style.ts");
   assert.ok(shell.includes("createPortal"));
   assert.ok(shell.includes("document.body"));
   assert.ok(shell.includes("z-[105]"));
-  assert.ok(shell.includes("100dvh"));
+  assert.ok(shell.includes("visualViewportOverlayStyle"));
+  assert.ok(shell.includes("visualViewport"));
+  assert.ok(shell.includes("env(safe-area-inset-top"));
+  assert.ok(shell.includes("env(safe-area-inset-bottom"));
+  assert.ok(shell.includes("overlayRef"));
+  assert.ok(shell.includes("lockScroll: open && !minimized"));
   assert.ok(shell.includes("sm:w-[min(36rem"));
-  assert.ok(shell.includes("items-end justify-center"));
+  assert.ok(shell.includes("sm:items-end"));
   assert.ok(shell.includes('aria-modal="true"'));
   assert.ok(shell.includes("Escape"));
+  // Desktop floating size preserved (sm: breakpoint), not device-pixel hacks.
+  assert.ok(shell.includes("sm:h-[min(34rem"));
+  assert.equal(shell.includes("paddingTop: 24"), false);
+  assert.equal(shell.includes("statusBarHeight"), false);
+  assert.ok(vv.includes("offsetLeft"));
+  assert.ok(vv.includes("offsetTop"));
+}
+
+function testAndroidKeyboardViewportHandling() {
+  const shell = read(
+    "src/components/agent/email-composer/EmailComposerShell.tsx",
+  );
+  assert.ok(shell.includes('vv?.addEventListener("resize", syncViewport)'));
+  assert.ok(shell.includes('vv?.addEventListener("scroll", syncViewport)'));
+  assert.ok(shell.includes('window.addEventListener("resize", syncViewport)'));
+  assert.ok(shell.includes("overflow-y-auto"));
+  assert.ok(shell.includes("min-h-0 flex-1"));
+  // Footer/Send stay in shrink-0 footer inside flex column.
+  assert.ok(shell.includes("shrink-0 flex-col gap-2 border-t"));
 }
 
 function testNoFakePhase2Controls() {
@@ -539,6 +564,7 @@ function main() {
   testSignatureServerOwned();
   testTenantAuthorizationServerEnforced();
   testMobileLayoutBehavior();
+  testAndroidKeyboardViewportHandling();
   testNoFakePhase2Controls();
   console.log("email-composer-phase1-selftest: ok");
 }
