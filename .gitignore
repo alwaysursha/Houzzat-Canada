@@ -68,6 +68,10 @@ next-env.d.ts
 tmp/identity-phase2/
 tmp/identity-phase3/
 
+# Local working artifacts (caches, previews, agent-photo backups — never commit)
+.tmp/
+.local/
+
 # Firebase admin service-account keys (never commit)
 *-firebase-adminsdk-*.json
 firebase-adminsdk*.json
