@@ -46,7 +46,9 @@ yarn-error.log*
 
 # local / editor / agent tooling (not for deploy)
 .agents/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 .neon
 skills-lock.json
 Houzzat Canada/
