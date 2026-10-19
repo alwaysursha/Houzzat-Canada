@@ -200,7 +200,7 @@ export function LeadProfileV2Rail({
     {
       icon: MessageSquare,
       className: "bg-[#0ea5e9]",
-      label: "Text",
+      label: "Chat",
       onClick: () => onOpenCrmSms(),
     },
     {
@@ -645,7 +645,7 @@ export function LeadProfileV2ActionRail({
     {
       icon: MessageSquare,
       className: "bg-[#0ea5e9]",
-      label: "Text",
+      label: "Chat",
       onClick: () => onOpenCrmSms(),
     },
     {

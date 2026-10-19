@@ -249,10 +249,12 @@ function testTextQuickActionOpensSmsForThatLead() {
     request: { leadId: "lead-a", nonce: 1 },
     appliedNonce: null,
     panelLeadId: "lead-a",
-    state: chatState(),
+    hasDraft: false,
+    state: chatState({ channel: "SMS", manualChannel: "SMS" }),
   });
-  assert.equal(applied.state.channel, "SMS");
-  assert.equal(applied.state.manualChannel, "SMS");
+  assert.equal(applied.state.channel, "CHAT");
+  assert.equal(applied.state.manualChannel, "CHAT");
+  assert.equal(applied.state.resetDraft, false);
   assert.equal(applied.focusComposer, true);
   assert.equal(applied.appliedNonce, 1);
 
@@ -263,11 +265,33 @@ function testTextQuickActionOpensSmsForThatLead() {
     state: applied.state,
   });
   assert.equal(again.focusComposer, false);
-  assert.equal(again.state.channel, "SMS");
+  assert.equal(again.state.channel, "CHAT");
 
-  const chat = selectAgentComposerChannel("CHAT");
-  assert.equal(chat.channel, "CHAT");
-  assert.equal(chat.manualChannel, "CHAT");
+  const smsDraft = applyV2TextQuickActionChannel({
+    request: { leadId: "lead-a", nonce: 2 },
+    appliedNonce: null,
+    panelLeadId: "lead-a",
+    hasDraft: true,
+    state: chatState({ channel: "SMS", manualChannel: "SMS" }),
+  });
+  assert.equal(smsDraft.state.channel, "SMS");
+  assert.equal(smsDraft.state.manualChannel, "SMS");
+  assert.equal(smsDraft.state.resetDraft, false);
+  assert.equal(smsDraft.appliedNonce, 2);
+
+  const chatDraft = applyV2TextQuickActionChannel({
+    request: { leadId: "lead-a", nonce: 3 },
+    appliedNonce: null,
+    panelLeadId: "lead-a",
+    hasDraft: true,
+    state: chatState({ channel: "CHAT", manualChannel: "CHAT" }),
+  });
+  assert.equal(chatDraft.state.channel, "CHAT");
+  assert.equal(chatDraft.state.resetDraft, false);
+
+  const sms = selectAgentComposerChannel("SMS");
+  assert.equal(sms.channel, "SMS");
+  assert.equal(sms.manualChannel, "SMS");
 }
 
 function testTextQuickActionDoesNotLeakAcrossLeads() {
@@ -299,7 +323,7 @@ function testTextQuickActionDoesNotLeakAcrossLeads() {
     panelLeadId: "lead-b",
     state: switched,
   });
-  assert.equal(matching.state.channel, "SMS");
+  assert.equal(matching.state.channel, "CHAT");
   assert.equal(matching.focusComposer, true);
 }
 
@@ -391,7 +415,7 @@ function testActiveDraftKeepsComposerChannel() {
   assert.equal(leadSwitch.resetDraft, true);
 
   const pane = read("src/components/agent/chat/AgentChatTranscriptPane.tsx");
-  assert.ok(pane.includes("hasDraft: draft.trim().length > 0"));
+  assert.ok(pane.includes("const hasDraft = draft.trim().length > 0"));
 }
 
 function testTextQuickActionDoesNotSend() {
@@ -406,11 +430,15 @@ function testTextQuickActionDoesNotSend() {
   assert.equal(openFn.includes("sms:"), false);
   assert.equal(rail.includes("contactSmsHref"), false);
   assert.equal(rail.includes("sms:"), false);
-  assert.equal(rail.split('label: "Text"').length - 1, 2);
+  assert.equal(rail.split('label: "Chat"').length - 1, 2);
+  assert.equal(rail.split('label: "Text"').length - 1, 0);
+  assert.ok(rail.includes("MessageSquare"));
+  assert.ok(rail.includes('className: "bg-[#0ea5e9]"'));
   assert.ok(rail.includes("onOpenCrmSms"));
   assert.ok(host.includes("setSmsOpenRequest(null)"));
   assert.ok(pane.includes("applyV2TextQuickActionChannel"));
-  assert.ok(pane.includes("selectDisplayedChannel(\"CHAT\")") || pane.includes('selectDisplayedChannel("CHAT")'));
+  assert.ok(pane.includes('selectDisplayedChannel("CHAT")'));
+  assert.ok(pane.includes('selectDisplayedChannel("SMS")'));
   assert.ok(pane.includes("v2SmsBlockedCopy"));
   assert.equal(pane.includes("window.location"), false);
 }

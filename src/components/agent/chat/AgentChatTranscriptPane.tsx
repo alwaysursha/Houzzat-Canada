@@ -146,7 +146,7 @@ export function AgentChatTranscriptPane({
     page: { hasMore: boolean; nextCursor: string | null };
   }>;
   onEnsureMessage?: (messageId: string) => Promise<boolean>;
-  /** Text quick action. Applied once per nonce, and only for this pane's lead. */
+  /** Chat quick action. Applied once per nonce, and only for this pane's lead. */
   smsOpenRequest?: V2SmsOpenRequest | null;
   composerId?: string;
   frame?: "card" | "plain";
@@ -187,10 +187,12 @@ export function AgentChatTranscriptPane({
   const conversationId = panel?.conversation.id ?? null;
   const peerTyping = peerTypingFromPayload(panel?.peerTyping);
   const inbound = latestInboundCustomerComposerChannel(panel?.messages ?? []);
+  const hasDraft = draft.trim().length > 0;
   const nextComposer = applyV2TextQuickActionChannel({
     request: smsOpenRequest,
     appliedNonce: appliedSmsNonce,
     panelLeadId: leadId,
+    hasDraft,
     state: nextAgentComposerChannelState({
       leadId,
       prevLeadId: composerLeadId,
@@ -199,7 +201,7 @@ export function AgentChatTranscriptPane({
       appliedInboundId,
       manualChannel,
       channel,
-      hasDraft: draft.trim().length > 0,
+      hasDraft,
     }),
   });
   if (
@@ -219,7 +221,7 @@ export function AgentChatTranscriptPane({
       setReplyTo(null);
     }
     if (nextComposer.focusComposer) {
-      setReplyTo(null);
+      if (nextComposer.state.channel !== "CHAT") setReplyTo(null);
       setSmsFocusNonce(nextComposer.appliedNonce);
     } else if (nextComposer.state.leadId !== composerLeadId) {
       setSmsFocusNonce(null);
@@ -291,7 +293,7 @@ export function AgentChatTranscriptPane({
   }, [busy]);
 
   useEffect(() => {
-    if (smsFocusNonce == null || displayedChannel !== "SMS") return;
+    if (smsFocusNonce == null) return;
     if (composerMode === "hidden") return;
     const el = textareaRef.current;
     if (!el || el.disabled) return;
