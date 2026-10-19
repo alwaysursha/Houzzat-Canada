@@ -17,6 +17,50 @@ import {
 import { visualViewportOverlayStyle } from "@/lib/visual-viewport-overlay-style";
 import { cn } from "@/lib/utils";
 
+/** Matches the composer header. Dark enough for Android to use light status icons. */
+const COMPOSER_STATUS_THEME = "#1e2a38";
+const MOBILE_COMPOSER_QUERY = "(max-width: 639px)";
+
+/**
+ * Point existing theme-color metas at the composer navy while it is open.
+ * Restores each tag's previous content. Chrome/PWA status icons follow
+ * theme-color luminance; this page cannot set icon colour on its own.
+ * Does not touch the Capacitor StatusBar (agent shell already uses this navy).
+ */
+function pinComposerThemeColor(): () => void {
+  const metas = Array.from(
+    document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'),
+  );
+  const previous = metas.map((meta) => ({
+    meta,
+    content: meta.getAttribute("content"),
+  }));
+  const created: HTMLMetaElement[] = [];
+  if (metas.length === 0) {
+    const meta = document.createElement("meta");
+    meta.setAttribute("name", "theme-color");
+    meta.setAttribute("content", COMPOSER_STATUS_THEME);
+    document.head.appendChild(meta);
+    created.push(meta);
+  } else {
+    for (const meta of metas) {
+      meta.setAttribute("content", COMPOSER_STATUS_THEME);
+    }
+  }
+  return () => {
+    for (const { meta, content } of previous) {
+      // Leave a newer theme-color written by another component alone.
+      if (meta.getAttribute("content") !== COMPOSER_STATUS_THEME) continue;
+      if (content == null) meta.removeAttribute("content");
+      else meta.setAttribute("content", content);
+    }
+    for (const meta of created) {
+      if (meta.getAttribute("content") !== COMPOSER_STATUS_THEME) continue;
+      meta.remove();
+    }
+  };
+}
+
 /**
  * Floating Gmail-style CRM email composer.
  * Portaled to document.body so Lead Profile V2 stacking cannot clip it.
@@ -102,6 +146,26 @@ export function EmailComposerShell() {
     cancelDiscard,
     send,
   ]);
+
+  // Mobile only: dark theme-color while the full composer is up, then restore.
+  useEffect(() => {
+    if (!open || minimized) return;
+    const media = window.matchMedia(MOBILE_COMPOSER_QUERY);
+    let restore: (() => void) | null = null;
+    function syncTheme() {
+      restore?.();
+      restore = null;
+      if (!media.matches) return;
+      restore = pinComposerThemeColor();
+    }
+    syncTheme();
+    media.addEventListener("change", syncTheme);
+    return () => {
+      media.removeEventListener("change", syncTheme);
+      restore?.();
+      restore = null;
+    };
+  }, [open, minimized]);
 
   // Pin the portal root to the visual viewport so Android Chrome keyboard
   // resizes do not leave the header under the status bar or Send off-screen.
@@ -200,24 +264,33 @@ export function EmailComposerShell() {
         aria-labelledby={titleId}
         className={cn(
           "pointer-events-auto flex w-full min-h-0 flex-col overflow-hidden border border-[#c5d0dc] bg-white shadow-[0_16px_48px_rgba(15,23,42,0.22)] transition-[width,height,border-radius] duration-200 ease-out",
-          // Mobile: fill the visual-viewport overlay; pad for status bar / home indicator.
-          "h-full max-h-full pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]",
+          // Home-indicator inset stays on the panel. Status-bar inset is on the navy header.
+          "h-full max-h-full pb-[env(safe-area-inset-bottom,0px)]",
           maximized
             ? "relative rounded-none sm:rounded-2xl"
-            : "rounded-none sm:h-[min(34rem,calc(100%-2rem))] sm:max-h-[min(34rem,calc(100%-2rem))] sm:w-[min(36rem,calc(100vw-2.5rem))] sm:rounded-t-2xl sm:pt-0 sm:pb-0",
+            : "rounded-none sm:h-[min(34rem,calc(100%-2rem))] sm:max-h-[min(34rem,calc(100%-2rem))] sm:w-[min(36rem,calc(100vw-2.5rem))] sm:rounded-t-2xl sm:pb-0",
         )}
       >
-        <header className="flex shrink-0 items-center gap-2 bg-[#1e2a38] px-3 py-2 text-white">
-          <h2 id={titleId} className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+        <header className="flex shrink-0 items-center gap-2 bg-[#1e2a38] px-3 pb-2 pt-[calc(env(safe-area-inset-top,0px)+0.5rem)] text-white sm:pt-2">
+          <h2
+            id={titleId}
+            className="min-w-0 flex-1 truncate text-[18px] font-semibold leading-snug sm:text-[13px]"
+          >
             New message
           </h2>
-          <IconBtn label="Minimize" onClick={minimize} disabled={pending}>
+          <IconBtn
+            label="Minimize"
+            onClick={minimize}
+            disabled={pending}
+            className="hidden sm:inline-flex"
+          >
             <Minus className="size-3.5" />
           </IconBtn>
           <IconBtn
             label={maximized ? "Restore size" : "Maximize"}
             onClick={toggleMaximize}
             disabled={pending}
+            className="hidden sm:inline-flex"
           >
             {maximized ? (
               <Minimize2 className="size-3.5" />
@@ -225,18 +298,23 @@ export function EmailComposerShell() {
               <Maximize2 className="size-3.5" />
             )}
           </IconBtn>
-          <IconBtn label="Close" onClick={requestClose} disabled={pending}>
-            <X className="size-3.5" />
+          <IconBtn
+            label="Close"
+            onClick={requestClose}
+            disabled={pending}
+            className="size-11 sm:size-7"
+          >
+            <X className="size-4 sm:size-3.5" />
           </IconBtn>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 border-b border-[#e2e8f0] px-3 py-2">
-            <div className="flex items-baseline gap-2 text-[12px]">
-              <span className="w-10 shrink-0 font-semibold text-[#64748b]">
+          <div className="shrink-0 border-b border-[#e2e8f0] px-3 py-2.5 sm:py-2">
+            <div className="flex items-baseline gap-2 text-[15px] sm:text-[12px]">
+              <span className="w-12 shrink-0 font-semibold text-[#64748b] sm:w-10">
                 To
               </span>
-              <span className="min-w-0 truncate font-medium text-[#1e2a38]">
+              <span className="min-w-0 truncate text-[16px] font-medium leading-snug text-[#1e2a38] sm:text-[12px]">
                 {recipientLabel}
               </span>
             </div>
@@ -247,8 +325,8 @@ export function EmailComposerShell() {
             ) : null}
           </div>
 
-          <label className="flex shrink-0 items-center gap-2 border-b border-[#e2e8f0] px-3 py-1.5">
-            <span className="w-10 shrink-0 text-[12px] font-semibold text-[#64748b]">
+          <label className="flex shrink-0 items-center gap-2 border-b border-[#e2e8f0] px-3 py-2 sm:py-1.5">
+            <span className="w-12 shrink-0 text-[15px] font-semibold text-[#64748b] sm:w-10 sm:text-[12px]">
               Subject
             </span>
             <input
@@ -258,7 +336,7 @@ export function EmailComposerShell() {
               maxLength={200}
               placeholder="Subject"
               disabled={pending}
-              className="min-w-0 flex-1 border-0 bg-transparent py-1 text-[13px] text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
+              className="min-w-0 flex-1 border-0 bg-transparent py-1 text-[17px] leading-normal text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60 sm:text-[13px]"
             />
           </label>
 
@@ -268,7 +346,7 @@ export function EmailComposerShell() {
             maxLength={20000}
             placeholder="Write your message…"
             disabled={pending}
-            className="min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-white px-3 py-3 text-[13px] leading-relaxed text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60"
+            className="min-h-0 flex-1 resize-none overflow-y-auto border-0 bg-white px-3 py-3 text-[17px] leading-relaxed text-[#1e2a38] outline-none placeholder:text-[#94a3b8] disabled:opacity-60 sm:text-[13px]"
           />
 
           <footer className="flex shrink-0 flex-col gap-2 border-t border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
@@ -286,7 +364,7 @@ export function EmailComposerShell() {
                 {statusMessage}
               </p>
             ) : (
-              <p className="text-[11px] text-[#94a3b8]">
+              <p className="text-[13px] leading-snug text-[#94a3b8] sm:text-[11px]">
                 Signature and legal footer are added automatically when sent.
               </p>
             )}
@@ -295,7 +373,7 @@ export function EmailComposerShell() {
                 type="button"
                 onClick={() => void send()}
                 disabled={!canSubmit}
-                className="rounded-lg bg-[#0f766e] px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-[#0d9488] disabled:cursor-not-allowed disabled:opacity-45"
+                className="rounded-lg bg-[#0f766e] px-4 py-2.5 text-[16px] font-semibold text-white shadow-sm transition hover:bg-[#0d9488] disabled:cursor-not-allowed disabled:opacity-45 sm:py-2 sm:text-[12px]"
               >
                 {pending ? "Sending…" : "Send"}
               </button>
@@ -351,11 +429,13 @@ function IconBtn({
   label,
   onClick,
   disabled,
+  className,
   children,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -365,7 +445,10 @@ function IconBtn({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex size-7 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 disabled:opacity-40"
+      className={cn(
+        "inline-flex size-7 items-center justify-center rounded-md text-white/90 transition hover:bg-white/15 disabled:opacity-40",
+        className,
+      )}
     >
       {children}
     </button>

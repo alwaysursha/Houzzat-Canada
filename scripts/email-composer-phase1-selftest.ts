@@ -537,6 +537,63 @@ function testAndroidKeyboardViewportHandling() {
   assert.ok(shell.includes("shrink-0 flex-col gap-2 border-t"));
 }
 
+function testMobileComposerPolish() {
+  const shell = read(
+    "src/components/agent/email-composer/EmailComposerShell.tsx",
+  );
+  // Status bar: navy theme-color only while the mobile composer is open, then restore.
+  assert.ok(shell.includes('const COMPOSER_STATUS_THEME = "#1e2a38"'));
+  assert.ok(shell.includes('meta[name="theme-color"]'));
+  assert.ok(shell.includes("pinComposerThemeColor"));
+  assert.ok(shell.includes('meta.setAttribute("content", COMPOSER_STATUS_THEME)'));
+  assert.ok(shell.includes('meta.getAttribute("content") !== COMPOSER_STATUS_THEME'));
+  assert.ok(shell.includes('meta.setAttribute("content", content)'));
+  assert.ok(shell.includes("meta.remove()"));
+  assert.ok(shell.includes('"(max-width: 639px)"'));
+  assert.ok(shell.includes('media.addEventListener("change", syncTheme)'));
+  assert.ok(shell.includes('media.removeEventListener("change", syncTheme)'));
+  assert.ok(shell.includes("restore?.()"));
+  // Safe-area inset is painted by the navy header, not the white panel.
+  assert.ok(
+    shell.includes(
+      "pt-[calc(env(safe-area-inset-top,0px)+0.5rem)]",
+    ),
+  );
+  assert.ok(shell.includes("sm:pt-2"));
+  assert.equal(
+    shell.includes("pt-[env(safe-area-inset-top,0px)]"),
+    false,
+  );
+  assert.equal(shell.includes("battery"), false);
+  assert.equal(shell.includes("status-bar-icon"), false);
+
+  // Mobile type scale; desktop sizes stay on sm:.
+  assert.ok(shell.includes("text-[18px] font-semibold leading-snug sm:text-[13px]"));
+  assert.ok(shell.includes("text-[15px] sm:text-[12px]"));
+  assert.ok(shell.includes("text-[16px] font-medium leading-snug"));
+  assert.ok(shell.includes("sm:text-[12px]"));
+  assert.ok(shell.includes("text-[17px] leading-normal"));
+  assert.ok(shell.includes("text-[17px] leading-relaxed"));
+  assert.ok(shell.includes("sm:text-[13px]"));
+  assert.ok(shell.includes("text-[16px] font-semibold"));
+  assert.ok(shell.includes("sm:py-2 sm:text-[12px]"));
+  assert.ok(shell.includes("text-[13px] leading-snug text-[#94a3b8] sm:text-[11px]"));
+  assert.ok(shell.includes("min-w-0 truncate"));
+
+  // Minimize / Maximize hidden below sm; Close stays available and larger on mobile.
+  const minimize = shell.split('label="Minimize"')[1]?.split("</IconBtn>")[0] ?? "";
+  const maximize = shell.split('label={maximized ? "Restore size" : "Maximize"}')[1]?.split("</IconBtn>")[0] ?? "";
+  const fullCloseAt = shell.lastIndexOf('label="Close"');
+  const close = shell.slice(fullCloseAt).split("</IconBtn>")[0] ?? "";
+  assert.ok(minimize.includes("hidden sm:inline-flex"));
+  assert.ok(maximize.includes("hidden sm:inline-flex"));
+  assert.equal(close.includes("hidden"), false);
+  assert.ok(close.includes("size-11 sm:size-7"));
+  assert.ok(shell.includes(">New message<") || shell.includes("New message"));
+  assert.ok(shell.includes("sm:h-[min(34rem"));
+  assert.ok(shell.includes("sm:w-[min(36rem"));
+}
+
 function testNoFakePhase2Controls() {
   const shell = read(
     "src/components/agent/email-composer/EmailComposerShell.tsx",
@@ -565,6 +622,7 @@ function main() {
   testTenantAuthorizationServerEnforced();
   testMobileLayoutBehavior();
   testAndroidKeyboardViewportHandling();
+  testMobileComposerPolish();
   testNoFakePhase2Controls();
   console.log("email-composer-phase1-selftest: ok");
 }
