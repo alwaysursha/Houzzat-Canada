@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Eye, Mail } from "lucide-react";
 import { EmailPreviewModal } from "@/components/agent/EmailPreviewModal";
 import { LeadProfileV2ChatPane } from "@/components/agent/lead-profile-v2/LeadProfileV2ChatPane";
-import type { V2ChatSurface } from "@/lib/agent/lead-profile-v2/chat-query";
+import type {
+  V2ChatSurface,
+  V2SmsOpenRequest,
+} from "@/lib/agent/lead-profile-v2/chat-query";
 import type {
   LeadProfileV2ChatMessage,
   LeadProfileV2ChatPanel,
@@ -23,6 +26,7 @@ export function LeadProfileV2ConversationsPanel({
   error,
   onComposeEmail,
   onLoadMore,
+  smsOpenRequest = null,
   chat,
 }: {
   leadId: string;
@@ -35,6 +39,7 @@ export function LeadProfileV2ConversationsPanel({
   error: boolean;
   onComposeEmail: () => void;
   onLoadMore: () => void;
+  smsOpenRequest?: V2SmsOpenRequest | null;
   chat: {
     panel: LeadProfileV2ChatPanel | null;
     loading: boolean;
@@ -81,6 +86,14 @@ export function LeadProfileV2ConversationsPanel({
     setActiveLeadId(leadId);
     setPreviewEmailId(null);
   }
+
+  useEffect(() => {
+    if (!smsOpenRequest || smsOpenRequest.leadId !== leadId) return;
+    if (surface !== "chat") return;
+    document
+      .getElementById("v2-conversations-chat-panel")
+      ?.scrollIntoView({ block: "nearest" });
+  }, [smsOpenRequest, leadId, surface]);
 
   return (
     <div
@@ -129,6 +142,9 @@ export function LeadProfileV2ConversationsPanel({
             onReact={chat.onReact}
             onSearch={chat.onSearch}
             onEnsureMessage={chat.onEnsureMessage}
+            smsOpenRequest={
+              smsOpenRequest?.leadId === leadId ? smsOpenRequest : null
+            }
           />
         </div>
       ) : (

@@ -47,6 +47,7 @@ import { useLeadProfileV2Tasks } from "@/components/agent/lead-profile-v2/hooks/
 import { useLeadProfileV2Timeline } from "@/components/agent/lead-profile-v2/hooks/useLeadProfileV2Timeline";
 import {
   type V2ChatSurface,
+  type V2SmsOpenRequest,
   v2ChatIsOpen,
 } from "@/lib/agent/lead-profile-v2/chat-query";
 import { fetchV2Json } from "@/lib/agent/lead-profile-v2/fetch-json";
@@ -135,9 +136,13 @@ function LeadProfileV2HostContent({
     useState<V2ChatSurface>("chat");
   const [conversationSurfaceLeadId, setConversationSurfaceLeadId] =
     useState(leadId);
+  const [smsOpenRequest, setSmsOpenRequest] = useState<V2SmsOpenRequest | null>(
+    null,
+  );
   if (leadId !== conversationSurfaceLeadId) {
     setConversationSurfaceLeadId(leadId);
     setConversationSurface("chat");
+    setSmsOpenRequest(null);
   }
   const [refreshing, setRefreshing] = useState(false);
   const {
@@ -485,6 +490,12 @@ function LeadProfileV2HostContent({
     });
   }, [data, leadId, openComposer]);
 
+  const onOpenCrmSms = useCallback(() => {
+    setConversationSurface("chat");
+    setTab("conversations");
+    setSmsOpenRequest({ leadId, nonce: Date.now() });
+  }, [leadId]);
+
   const onMatchboardUpdated = useCallback(() => {
     applyV2MatchboardUpdatedRefresh({
       reloadEngagementOverview,
@@ -754,6 +765,7 @@ function LeadProfileV2HostContent({
             error={emails.error}
             onComposeEmail={onComposeEmail}
             onLoadMore={emails.loadMore}
+            smsOpenRequest={smsOpenRequest}
             chat={{
               panel: chat.panel,
               loading: chat.loading,
@@ -829,6 +841,7 @@ function LeadProfileV2HostContent({
           email={data.lead.customer?.email}
           onCall={beginCallOutcome}
           onComposeEmail={onComposeEmail}
+          onOpenCrmSms={onOpenCrmSms}
         />
       ) : null}
 
@@ -887,6 +900,7 @@ function LeadProfileV2HostContent({
               onOpenEngagement={() => setTab("engagement")}
               onCall={beginCallOutcome}
               onComposeEmail={onComposeEmail}
+              onOpenCrmSms={onOpenCrmSms}
             />
             <section className="flex min-w-0 flex-col bg-[#f7f9fb] lg:min-h-0 lg:overflow-hidden">
               <LeadProfileV2NoteComposer

@@ -227,7 +227,9 @@ function testCallTelDestination() {
 
   const rail = read("src/components/agent/lead-profile-v2/LeadProfileV2Rail.tsx");
   assert.ok(rail.includes("contactTelHref(phone, phoneE164)"));
-  assert.ok(rail.includes("contactSmsHref(phone, phoneE164)"));
+  // Profile Text opens CRM SMS; native sms: stays off this rail.
+  assert.equal(rail.includes("contactSmsHref"), false);
+  assert.equal(rail.includes("sms:"), false);
   assert.equal(rail.includes("`tel:${phone}`"), false);
   const table = read("src/components/agent/LeadsTableClient.tsx");
   assert.ok(table.includes("contactTelHref(phone, phoneE164)"));

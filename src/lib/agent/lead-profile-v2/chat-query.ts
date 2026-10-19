@@ -221,6 +221,8 @@ export function nextAgentComposerChannelState(input: {
   appliedInboundId: string | null;
   manualChannel: AgentComposerChannel | null;
   channel: AgentComposerChannel;
+  /** Non-empty unsent composer text. Keeps that channel when a new inbound arrives. */
+  hasDraft?: boolean;
 }): {
   leadId: string | null;
   channel: AgentComposerChannel;
@@ -243,6 +245,18 @@ export function nextAgentComposerChannelState(input: {
   }
 
   if (inboundId && inboundChannel && inboundId !== input.appliedInboundId) {
+    const displayed = input.manualChannel ?? input.channel;
+    // A live draft stays on the channel being composed. The inbound is still
+    // marked applied so it cannot move the draft after the text is cleared.
+    if (input.hasDraft && inboundChannel !== displayed) {
+      return {
+        leadId: input.leadId,
+        channel: displayed,
+        manualChannel: input.manualChannel,
+        appliedInboundId: inboundId,
+        resetDraft: false,
+      };
+    }
     return {
       leadId: input.leadId,
       channel: inboundChannel,
@@ -268,6 +282,63 @@ export function selectAgentComposerChannel(
   manualChannel: AgentComposerChannel;
 } {
   return { channel: next, manualChannel: next };
+}
+
+/** One Text quick-action click. Nonce distinguishes repeat clicks on the same lead. */
+export type V2SmsOpenRequest = {
+  leadId: string;
+  nonce: number;
+};
+
+/**
+ * Apply a Text quick-action onto the composer channel for that lead only.
+ * A request for another lead is ignored so navigation cannot open the wrong SMS thread.
+ * An already-applied nonce is ignored. Manual Chat/SMS switches stay available afterward.
+ */
+export function applyV2TextQuickActionChannel(input: {
+  request: V2SmsOpenRequest | null;
+  appliedNonce: number | null;
+  panelLeadId: string | null;
+  state: {
+    leadId: string | null;
+    channel: AgentComposerChannel;
+    manualChannel: AgentComposerChannel | null;
+    appliedInboundId: string | null;
+    resetDraft: boolean;
+  };
+}): {
+  state: {
+    leadId: string | null;
+    channel: AgentComposerChannel;
+    manualChannel: AgentComposerChannel | null;
+    appliedInboundId: string | null;
+    resetDraft: boolean;
+  };
+  appliedNonce: number | null;
+  focusComposer: boolean;
+} {
+  const request = input.request;
+  const sameLead =
+    Boolean(request) &&
+    Boolean(input.panelLeadId) &&
+    request!.leadId === input.panelLeadId &&
+    input.state.leadId === input.panelLeadId;
+  if (!request || !sameLead || request.nonce === input.appliedNonce) {
+    return {
+      state: input.state,
+      appliedNonce: input.appliedNonce,
+      focusComposer: false,
+    };
+  }
+  return {
+    state: {
+      ...input.state,
+      channel: "SMS",
+      manualChannel: "SMS",
+    },
+    appliedNonce: request.nonce,
+    focusComposer: true,
+  };
 }
 
 export function composerSendPayload(

@@ -30,7 +30,7 @@ import {
   v2RailBlueStatTiles,
 } from "@/lib/agent/lead-profile-v2/rail-query";
 import { cn } from "@/lib/utils";
-import { contactSmsHref, contactTelHref } from "@/lib/sms/e164";
+import { contactTelHref } from "@/lib/sms/e164";
 
 function RingStat({
   label,
@@ -142,6 +142,7 @@ export function LeadProfileV2Rail({
   onOpenEngagement,
   onCall,
   onComposeEmail,
+  onOpenCrmSms,
 }: {
   leadId: string;
   data: LeadProfileV2Shell;
@@ -169,6 +170,7 @@ export function LeadProfileV2Rail({
   onOpenEngagement: () => void;
   onCall: (target: HTMLElement) => void;
   onComposeEmail: () => void;
+  onOpenCrmSms: () => void;
 }) {
   const name =
     data.lead.customer?.name ||
@@ -183,7 +185,6 @@ export function LeadProfileV2Rail({
   const phone = data.lead.customer?.phone;
   const phoneE164 = data.lead.customer?.phoneE164;
   const telHref = contactTelHref(phone, phoneE164);
-  const smsHref = contactSmsHref(phone, phoneE164);
   const email = data.lead.customer?.email;
   const address = data.lead.customer?.homeAddress;
   const rings = v2EmailRingRates(rail);
@@ -198,9 +199,9 @@ export function LeadProfileV2Rail({
     },
     {
       icon: MessageSquare,
-      href: smsHref,
       className: "bg-[#0ea5e9]",
       label: "Text",
+      onClick: () => onOpenCrmSms(),
     },
     {
       icon: Mail,
@@ -624,12 +625,14 @@ export function LeadProfileV2ActionRail({
   email,
   onCall,
   onComposeEmail,
+  onOpenCrmSms,
 }: {
   phone: string | null | undefined;
   phoneE164: string | null | undefined;
   email: string | null | undefined;
   onCall: (target: HTMLElement) => void;
   onComposeEmail: () => void;
+  onOpenCrmSms: () => void;
 }) {
   const actions: ActionItem[] = [
     {
@@ -641,9 +644,9 @@ export function LeadProfileV2ActionRail({
     },
     {
       icon: MessageSquare,
-      href: contactSmsHref(phone, phoneE164),
       className: "bg-[#0ea5e9]",
       label: "Text",
+      onClick: () => onOpenCrmSms(),
     },
     {
       icon: Mail,

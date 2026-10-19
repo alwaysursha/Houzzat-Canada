@@ -11,11 +11,13 @@ import {
 import { Send } from "lucide-react";
 import {
   V2_CHAT_TEXT_MAX_LENGTH,
+  applyV2TextQuickActionChannel,
   composerSendButtonLabel,
   composerSendPayload,
   latestInboundCustomerComposerChannel,
   nextAgentComposerChannelState,
   selectAgentComposerChannel,
+  type V2SmsOpenRequest,
   v2ChatComposerCanSubmit,
   v2ChatComposerKeyAction,
   v2ChatComposerMode,
@@ -106,6 +108,7 @@ export function AgentChatTranscriptPane({
   onReact,
   onSearch,
   onEnsureMessage,
+  smsOpenRequest = null,
   composerId = "v2-chat-composer",
   frame = "card",
 }: {
@@ -143,6 +146,8 @@ export function AgentChatTranscriptPane({
     page: { hasMore: boolean; nextCursor: string | null };
   }>;
   onEnsureMessage?: (messageId: string) => Promise<boolean>;
+  /** Text quick action. Applied once per nonce, and only for this pane's lead. */
+  smsOpenRequest?: V2SmsOpenRequest | null;
   composerId?: string;
   frame?: "card" | "plain";
 }) {
@@ -151,6 +156,8 @@ export function AgentChatTranscriptPane({
   const [manualChannel, setManualChannel] =
     useState<AgentComposerChannel | null>(null);
   const [appliedInboundId, setAppliedInboundId] = useState<string | null>(null);
+  const [appliedSmsNonce, setAppliedSmsNonce] = useState<number | null>(null);
+  const [smsFocusNonce, setSmsFocusNonce] = useState<number | null>(null);
   const [composerLeadId, setComposerLeadId] = useState(
     panel?.conversation.leadId ?? null,
   );
@@ -180,31 +187,45 @@ export function AgentChatTranscriptPane({
   const conversationId = panel?.conversation.id ?? null;
   const peerTyping = peerTypingFromPayload(panel?.peerTyping);
   const inbound = latestInboundCustomerComposerChannel(panel?.messages ?? []);
-  const nextComposer = nextAgentComposerChannelState({
-    leadId,
-    prevLeadId: composerLeadId,
-    inboundId: inbound?.id ?? null,
-    inboundChannel: inbound?.channel ?? null,
-    appliedInboundId,
-    manualChannel,
-    channel,
+  const nextComposer = applyV2TextQuickActionChannel({
+    request: smsOpenRequest,
+    appliedNonce: appliedSmsNonce,
+    panelLeadId: leadId,
+    state: nextAgentComposerChannelState({
+      leadId,
+      prevLeadId: composerLeadId,
+      inboundId: inbound?.id ?? null,
+      inboundChannel: inbound?.channel ?? null,
+      appliedInboundId,
+      manualChannel,
+      channel,
+      hasDraft: draft.trim().length > 0,
+    }),
   });
   if (
-    nextComposer.leadId !== composerLeadId ||
-    nextComposer.channel !== channel ||
-    nextComposer.manualChannel !== manualChannel ||
-    nextComposer.appliedInboundId !== appliedInboundId
+    nextComposer.state.leadId !== composerLeadId ||
+    nextComposer.state.channel !== channel ||
+    nextComposer.state.manualChannel !== manualChannel ||
+    nextComposer.state.appliedInboundId !== appliedInboundId ||
+    nextComposer.appliedNonce !== appliedSmsNonce
   ) {
-    setComposerLeadId(nextComposer.leadId);
-    setChannel(nextComposer.channel);
-    setManualChannel(nextComposer.manualChannel);
-    setAppliedInboundId(nextComposer.appliedInboundId);
-    if (nextComposer.resetDraft) {
+    setComposerLeadId(nextComposer.state.leadId);
+    setChannel(nextComposer.state.channel);
+    setManualChannel(nextComposer.state.manualChannel);
+    setAppliedInboundId(nextComposer.state.appliedInboundId);
+    setAppliedSmsNonce(nextComposer.appliedNonce);
+    if (nextComposer.state.resetDraft) {
       setDraft("");
       setReplyTo(null);
     }
+    if (nextComposer.focusComposer) {
+      setReplyTo(null);
+      setSmsFocusNonce(nextComposer.appliedNonce);
+    } else if (nextComposer.state.leadId !== composerLeadId) {
+      setSmsFocusNonce(null);
+    }
   }
-  const displayedChannel = nextComposer.channel;
+  const displayedChannel = nextComposer.state.channel;
   const composerMode = v2ChatComposerMode({
     loading,
     error,
@@ -268,6 +289,14 @@ export function AgentChatTranscriptPane({
       pendingPrependRef.current = false;
     }
   }, [busy]);
+
+  useEffect(() => {
+    if (smsFocusNonce == null || displayedChannel !== "SMS") return;
+    if (composerMode === "hidden") return;
+    const el = textareaRef.current;
+    if (!el || el.disabled) return;
+    el.focus();
+  }, [smsFocusNonce, displayedChannel, composerMode, smsEnabled]);
 
   function handleScroll() {
     const el = scrollerRef.current;
