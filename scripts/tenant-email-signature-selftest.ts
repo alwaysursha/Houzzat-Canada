@@ -15,6 +15,7 @@ import type {
 import {
   formatEmailFooterNoteHtml,
   EMAIL_LAYOUT_DEFAULT_FOOTER_NOTE,
+  resolveEmailHeroLogoUrl,
 } from "@/lib/email/layout";
 import {
   appendAgentSignatureHtml,
@@ -715,13 +716,20 @@ function testMultiLineLegalFooterPreserved() {
   assert.match(brand.signatureText, /Royal Lepage Credit Valley Real Estate/);
   // Signature must not swallow the chrome footer block.
   assert.notEqual(brand.footerNote, brand.signatureText);
+  assert.ok(brand.signaturePhotoUrl);
+
+  const chrome = toEmailBrandChrome(brand);
+  // Body signatures are omitted — footer is the sole signature block.
+  assert.equal(chrome.agentSignatureHtml, undefined);
+  assert.equal(chrome.agentSignatureText, undefined);
+  assert.equal(chrome.footerAgentPhotoUrl, brand.signaturePhotoUrl);
 
   const rendered = renderAgentMessageEmail({
     subject: "Signature canary",
     body: "Checking branded footer.",
     preferencesManageUrl: "https://houzzat.com/account/email-preferences",
     unsubscribeIntentUrl: "https://houzzat.com/account/unsubscribe-intent",
-    ...toEmailBrandChrome(brand),
+    ...chrome,
   });
 
   for (const line of HOUZZAT_STYLE_FOOTER.split("\n")) {
@@ -732,15 +740,20 @@ function testMultiLineLegalFooterPreserved() {
     rendered.html,
     /Ali Syed<br \/>\nSales Representative<br \/>\nRoyal LePage Credit Valley Real Estate/,
   );
-  assert.match(rendered.html, /data-houzzat-agent-signature="1"/);
+  // Sole signature/footer block (no body agent signature).
+  assert.match(rendered.html, /data-houzzat-email-footer-signature="1"/);
+  assert.doesNotMatch(rendered.html, /data-houzzat-agent-signature="1"/);
+  assert.match(
+    rendered.html,
+    new RegExp(escapeRegExp(brand.signaturePhotoUrl!)),
+  );
+  assert.match(rendered.html, /border-radius:50%/);
   assert.match(rendered.html, /Manage email preferences/);
   assert.match(rendered.html, /Unsubscribe/);
   assert.match(rendered.html, /houzzat\.com/);
-  // Plain-text: signature then full footer (not first line only).
-  assert.match(
-    rendered.text,
-    /Ali Syed[\s\S]*Royal Lepage Credit Valley Real Estate[\s\S]*Ali Syed\nSales Representative\nRoyal LePage Credit Valley Real Estate/,
-  );
+  // Plain-text: complete legal footer once (no duplicate body signature).
+  assert.equal(rendered.text.split(HOUZZAT_STYLE_FOOTER).length - 1, 1);
+  assert.ok(rendered.text.endsWith(HOUZZAT_STYLE_FOOTER));
   section("Multi-line Houzzat-style legal footer preserved");
 }
 
@@ -960,11 +973,12 @@ function testBrandedPathsPlainTextLegalFooter() {
   section("Branded paths append complete legal footer once in plain text");
 }
 
-function testSignatureAndLegalFooterCoexist() {
+function testFooterIsSoleSignatureBlock() {
   const brand = assembleTenantEmailBrand({
     workspaceId: WS,
     branding: {
       ...TENANT_B_TEST_BRANDING_ROW,
+      logoUrl: "/images/houzzat-house-mark.png",
       footerLegalText: HOUZZAT_STYLE_FOOTER,
     },
     identity: identity(WS),
@@ -977,16 +991,39 @@ function testSignatureAndLegalFooterCoexist() {
     body: "Hello",
     ...toEmailBrandChrome(brand),
   });
-  const sigIdx = rendered.html.indexOf('data-houzzat-agent-signature="1"');
-  const footerIdx = rendered.html.indexOf("Sales Representative<br");
-  assert.ok(sigIdx >= 0);
-  assert.ok(footerIdx > sigIdx);
-  assert.match(rendered.html, /Photo of Ali Syed/);
+  // One footer signature block; no body profile signature.
+  assert.equal(
+    (rendered.html.match(/data-houzzat-email-footer-signature="1"/g) ?? [])
+      .length,
+    1,
+  );
+  assert.doesNotMatch(rendered.html, /data-houzzat-agent-signature="1"/);
+  const footerIdx = rendered.html.indexOf(
+    'data-houzzat-email-footer-signature="1"',
+  );
+  const legalIdx = rendered.html.indexOf("Sales Representative<br");
+  assert.ok(footerIdx >= 0);
+  assert.ok(legalIdx > footerIdx);
+  assert.ok(brand.signaturePhotoUrl);
+  assert.match(
+    rendered.html,
+    new RegExp(escapeRegExp(brand.signaturePhotoUrl!)),
+  );
+  // Hero uses dark-green house mark above the textmark (not the white mark).
+  assert.match(rendered.html, /houzzat-house-mark-dark-green\.png/);
+  assert.ok(
+    !rendered.html.includes("houzzat-house-mark.png"),
+    "white house mark must not appear in hero src",
+  );
+  assert.equal(
+    resolveEmailHeroLogoUrl("https://houzzat.com/images/houzzat-house-mark.png"),
+    "https://houzzat.com/images/houzzat-house-mark-dark-green.png",
+  );
   assert.equal(
     appendEmailFooterText("Body\n\n— Agent", "Legal line"),
     "Body\n\n— Agent\n\nLegal line",
   );
-  section("Signature + complete legal footer coexistence");
+  section("Footer is the sole signature block with headshot");
 }
 
 async function testAllowlistIsolationForFooterBrand() {
@@ -1127,7 +1164,7 @@ async function main() {
   testEmptyFooterFallsBack();
   testFooterHtmlEscapingAndInjection();
   testBrandedPathsPlainTextLegalFooter();
-  testSignatureAndLegalFooterCoexist();
+  testFooterIsSoleSignatureBlock();
   await testAllowlistIsolationForFooterBrand();
   testPublishedTemplatesUnaffected();
   testSecurityTransactionalEmailsUntouched();

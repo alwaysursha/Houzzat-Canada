@@ -93,6 +93,8 @@ function layoutBrandProps(brand?: EmailBrandChrome | null) {
     brandPrimaryColor: brand.brandPrimaryColor ?? undefined,
     brandWebsiteUrl: brand.brandWebsiteUrl ?? undefined,
     footerNote: brand.footerNote ?? undefined,
+    footerAgentPhotoUrl: brand.footerAgentPhotoUrl ?? undefined,
+    footerAgentPhotoAlt: brand.footerAgentPhotoAlt ?? undefined,
   };
 }
 

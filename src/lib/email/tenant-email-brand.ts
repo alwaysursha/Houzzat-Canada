@@ -78,6 +78,11 @@ export type TenantEmailBrand = {
   agent: TenantEmailAgentIdentity | null;
   signatureHtml: string;
   signatureText: string;
+  /**
+   * Resolved circular headshot / canonical photo URL for the layout footer.
+   * Null when no verified photo is available (company signature / missing image).
+   */
+  signaturePhotoUrl: string | null;
   footerNote: string;
   poweredByHouzzatPro: boolean;
 };
@@ -89,6 +94,14 @@ export type EmailBrandChrome = {
   brandPrimaryColor?: string | null;
   brandWebsiteUrl?: string | null;
   footerNote?: string | null;
+  /** Circular agent headshot shown beside the legal footer (not in the body). */
+  footerAgentPhotoUrl?: string | null;
+  /** Accessible alt text for footerAgentPhotoUrl. */
+  footerAgentPhotoAlt?: string | null;
+  /**
+   * Legacy body signature injection. Production branded chrome leaves these
+   * unset — the layout footer is the sole signature block.
+   */
   agentSignatureHtml?: string | null;
   agentSignatureText?: string | null;
   /** Subtitle helper e.g. agent message "from your X agent". */
@@ -277,7 +290,7 @@ export function buildAgentEmailSignature(input: {
   primaryColor: string;
   /** Optional persisted email-headshot association for this agent (read-only). */
   emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
-}): { html: string; text: string } {
+}): { html: string; text: string; photoUrl: string | null } {
   const accent = resolveSignatureAccent(input.primaryColor);
   const brokerage =
     input.brokerageRegisteredName?.trim() ||
@@ -352,7 +365,11 @@ export function buildAgentEmailSignature(input: {
       </tr>
     </table>`;
 
-    return { html, text: textLines.join("\n") };
+    return {
+      html,
+      text: textLines.join("\n"),
+      photoUrl: photo?.url ?? null,
+    };
   }
 
   // Company-level signature — no personal headshot, no agent email.
@@ -392,18 +409,24 @@ export function buildAgentEmailSignature(input: {
     </tr>
   </table>`;
 
-  return { html, text: textLines.join("\n") };
+  return { html, text: textLines.join("\n"), photoUrl: null };
 }
 
+/**
+ * Map assembled brand → renderer chrome.
+ * Body signatures are intentionally omitted: the layout footer is the only
+ * signature/legal block for tenant-branded mail.
+ */
 export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
+  const agentName = brand.agent?.name?.trim();
   return {
     brandLabel: brand.displayName,
     brandLogoUrl: brand.logoUrl,
     brandPrimaryColor: brand.primaryColor,
     brandWebsiteUrl: brand.websiteUrl,
     footerNote: brand.footerNote,
-    agentSignatureHtml: brand.signatureHtml,
-    agentSignatureText: brand.signatureText,
+    footerAgentPhotoUrl: brand.signaturePhotoUrl,
+    footerAgentPhotoAlt: agentName ? `Photo of ${agentName}` : null,
     agentFromLabel: brand.agent?.name ?? brand.displayName,
   };
 }
@@ -637,6 +660,7 @@ export function assembleTenantEmailBrand(input: {
     agent: input.agent,
     signatureHtml: signature.html,
     signatureText: signature.text,
+    signaturePhotoUrl: signature.photoUrl,
     footerNote,
     poweredByHouzzatPro: mapped.poweredByHouzzatPro,
   };

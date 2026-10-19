@@ -6,6 +6,11 @@ export {
   type EmailStream,
 } from "@/lib/email/config";
 export {
+  EMAIL_HERO_HOUSE_MARK_DARK_GREEN_PATH,
+  formatEmailFooterNoteHtml,
+  resolveEmailHeroLogoUrl,
+} from "@/lib/email/layout";
+export {
   emailPreferencesUrl,
   emailPreviewAbsoluteUrl,
   emailPreviewPath,

@@ -253,13 +253,19 @@ async function testHouzzatVsCanaryIsolation() {
   }).html;
 
   assert.match(houzzatHtml, /Houzzat/);
-  assert.match(houzzatHtml, /Houzzat Agent/);
+  // Agent identity stays on chrome/assembly; body no longer repeats a profile block.
+  assert.equal(toEmailBrandChrome(houzzat).agentFromLabel, "Houzzat Agent");
+  assert.match(houzzat.signatureHtml, /Houzzat Agent/);
+  assert.match(houzzatHtml, /data-houzzat-email-footer-signature="1"/);
+  assert.doesNotMatch(houzzatHtml, /data-houzzat-agent-signature="1"/);
   assert.doesNotMatch(houzzatHtml, /Tenant Canary/);
   assert.doesNotMatch(houzzatHtml, /Canary Agent/);
 
   assert.match(canaryHtml, /Tenant Canary/);
-  assert.match(canaryHtml, /Canary Agent/);
+  assert.equal(toEmailBrandChrome(canary).agentFromLabel, "Canary Agent");
+  assert.match(canary.signatureHtml, /Canary Agent/);
   assert.match(canaryHtml, new RegExp(TENANT_B_TEST_PRIMARY_COLOR, "i"));
+  assert.match(canaryHtml, /data-houzzat-email-footer-signature="1"/);
   assert.doesNotMatch(canaryHtml, />Houzzat</);
   assert.doesNotMatch(canaryHtml, /Houzzat Agent/);
   assert.doesNotMatch(canaryHtml, /agent@houzzat\.com/);

@@ -3,6 +3,32 @@ import { SITE_NAME, SITE_URL } from "@/lib/constants";
 export const EMAIL_MINT_GRADIENT =
   "linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%)";
 
+/** Dark-green house mark — readable on the mint hero (white mark is not). */
+export const EMAIL_HERO_HOUSE_MARK_DARK_GREEN_PATH =
+  "/images/houzzat-house-mark-dark-green.png" as const;
+
+const FOOTER_PHOTO_PX = 72;
+const FOOTER_SIGNATURE_MARKER = 'data-houzzat-email-footer-signature="1"';
+
+/**
+ * Prefer the dark-green Houzzat house mark in email heroes.
+ * The stock white mark disappears on the mint gradient.
+ */
+export function resolveEmailHeroLogoUrl(
+  logoUrl: string | null | undefined,
+): string | null {
+  const raw = logoUrl?.trim();
+  if (!raw) return null;
+  if (/dark-green/i.test(raw)) return raw;
+  if (/houzzat-house-mark\.png(\?|#|$)/i.test(raw)) {
+    return raw.replace(
+      /houzzat-house-mark\.png/i,
+      "houzzat-house-mark-dark-green.png",
+    );
+  }
+  return raw;
+}
+
 export function emailLayout(input: {
   preheader?: string;
   title: string;
@@ -10,6 +36,10 @@ export function emailLayout(input: {
   subtitle?: string | null;
   bodyHtml: string;
   footerNote?: string | null;
+  /** Circular agent headshot beside the legal footer (branded mail). */
+  footerAgentPhotoUrl?: string | null;
+  /** Alt text for footerAgentPhotoUrl. */
+  footerAgentPhotoAlt?: string | null;
   unsubscribeUrl?: string | null;
   preferencesManageUrl?: string | null;
   /** Presentation-only GET intent. Must not be a mutating endpoint. */
@@ -27,14 +57,16 @@ export function emailLayout(input: {
   const brandColor = input.brandPrimaryColor?.trim() || "#047857";
   const websiteUrl = input.brandWebsiteUrl?.trim() || SITE_URL;
   const websiteHost = websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
-  const logo = input.brandLogoUrl?.trim()
-    ? `<img src="${escapeAttr(input.brandLogoUrl.trim())}" alt="${escapeHtml(brandLabel)}" width="140" style="display:block;max-width:140px;height:auto;margin:0 0 14px;border:0" />`
+  const heroLogoUrl = resolveEmailHeroLogoUrl(input.brandLogoUrl);
+  // Compact mark above the textmark — left-aligned with the headline block.
+  const logo = heroLogoUrl
+    ? `<img src="${escapeAttr(heroLogoUrl)}" alt="${escapeHtml(brandLabel)}" width="48" height="48" style="display:block;width:48px;height:48px;max-width:48px;margin:0 0 8px;border:0;padding:0" />`
     : "";
   const preheader = input.preheader
     ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>`
     : "";
   const unsub = input.preferencesManageUrl
-    ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
+    ? `<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#047857">
          <a href="${escapeAttr(input.preferencesManageUrl)}" style="color:#047857;text-decoration:underline">Manage email preferences</a>
          ${
            input.unsubscribeIntentUrl
@@ -43,14 +75,22 @@ export function emailLayout(input: {
          }
        </p>`
     : input.unsubscribeUrl
-      ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.5;color:#047857">
+      ? `<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#047857">
          <a href="${escapeAttr(input.unsubscribeUrl)}" style="color:#047857;text-decoration:underline">Unsubscribe / email preferences</a>
        </p>`
       : "";
   const subtitle = input.subtitle?.trim()
-    ? `<p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.subtitle.trim())}</p>`
+    ? `<p style="margin:8px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.subtitle.trim())}</p>`
     : "";
   const footerHtml = formatEmailFooterNoteHtml(input.footerNote);
+  const footerBlock = formatEmailFooterSignatureHtml({
+    footerNoteHtml: footerHtml,
+    photoUrl: input.footerAgentPhotoUrl,
+    photoAlt: input.footerAgentPhotoAlt,
+    websiteUrl,
+    websiteHost,
+    unsubHtml: unsub,
+  });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -67,10 +107,10 @@ export function emailLayout(input: {
       <td align="center" style="padding:0">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:680px;border-radius:20px;overflow:hidden;background:#ecfdf5;background-image:${EMAIL_MINT_GRADIENT};border:1px solid #a7f3d0">
           <tr>
-            <td style="width:100%;background:#d1fae5;background-image:${EMAIL_MINT_GRADIENT};padding:32px 24px 28px;text-align:left;border-radius:20px 20px 0 0">
+            <td align="left" style="width:100%;background:#d1fae5;background-image:${EMAIL_MINT_GRADIENT};padding:20px 24px 16px;text-align:left;border-radius:20px 20px 0 0">
               ${logo}
               <p style="margin:0;font-size:11px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:${escapeAttr(brandColor)}">${escapeHtml(brandLabel)}</p>
-              <h1 style="margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.title)}</h1>
+              <h1 style="margin:8px 0 0;font-size:28px;line-height:1.15;font-weight:800;color:#064e3b;letter-spacing:-0.02em">${escapeHtml(input.title)}</h1>
               ${subtitle}
             </td>
           </tr>
@@ -80,14 +120,8 @@ export function emailLayout(input: {
             </td>
           </tr>
           <tr>
-            <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-              <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
-                ${footerHtml}
-              </p>
-              <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
-                <a href="${escapeAttr(websiteUrl)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(websiteHost)}</a>
-              </p>
-              ${unsub}
+            <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:20px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+              ${footerBlock}
             </td>
           </tr>
         </table>
@@ -96,6 +130,45 @@ export function emailLayout(input: {
   </table>
 </body>
 </html>`;
+}
+
+/**
+ * Sole branded signature/footer: optional circular headshot + full legal text,
+ * then website + preferences/unsubscribe.
+ */
+function formatEmailFooterSignatureHtml(input: {
+  footerNoteHtml: string;
+  photoUrl?: string | null;
+  photoAlt?: string | null;
+  websiteUrl: string;
+  websiteHost: string;
+  unsubHtml: string;
+}): string {
+  const photo = input.photoUrl?.trim();
+  const photoAlt = input.photoAlt?.trim() || "Agent photo";
+  const legalColumn = `
+    <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
+      ${input.footerNoteHtml}
+    </p>
+    <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
+      <a href="${escapeAttr(input.websiteUrl)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(input.websiteHost)}</a>
+    </p>
+    ${input.unsubHtml}`;
+
+  if (!photo) {
+    return `<div ${FOOTER_SIGNATURE_MARKER}>${legalColumn}</div>`;
+  }
+
+  return `<table ${FOOTER_SIGNATURE_MARKER} role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;width:100%">
+    <tr>
+      <td width="${FOOTER_PHOTO_PX + 14}" valign="top" style="width:${FOOTER_PHOTO_PX + 14}px;padding:0 14px 0 0;vertical-align:top">
+        <img src="${escapeAttr(photo)}" width="${FOOTER_PHOTO_PX}" height="${FOOTER_PHOTO_PX}" alt="${escapeAttr(photoAlt)}" style="display:block;width:${FOOTER_PHOTO_PX}px;height:${FOOTER_PHOTO_PX}px;border-radius:50%;border:0" />
+      </td>
+      <td valign="top" style="padding:0;vertical-align:top">
+        ${legalColumn}
+      </td>
+    </tr>
+  </table>`;
 }
 
 /** Primary mint CTA (pill). */
