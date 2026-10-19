@@ -1,4 +1,8 @@
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import {
+  formatHiddenEmailPreheaderHtml,
+  resolveEmailPreheader,
+} from "@/lib/email/preheader";
 
 export const EMAIL_MINT_GRADIENT =
   "linear-gradient(160deg,#ecfdf5 0%,#a7f3d0 48%,#6ee7b7 100%)";
@@ -30,7 +34,15 @@ export function resolveEmailHeroLogoUrl(
 }
 
 export function emailLayout(input: {
-  preheader?: string;
+  /**
+   * Preferred inbox preview. When missing or an echo of subject/title,
+   * a short preview is derived from body text/HTML (then subtitle).
+   */
+  preheader?: string | null;
+  /** Inbox subject — used only to avoid duplicating it in the preview. */
+  subject?: string | null;
+  /** Optional plain body used before HTML stripping for higher-quality previews. */
+  preheaderBodyText?: string | null;
   title: string;
   /** Optional line under the hero title. */
   subtitle?: string | null;
@@ -62,9 +74,20 @@ export function emailLayout(input: {
   const logo = heroLogoUrl
     ? `<img src="${escapeAttr(heroLogoUrl)}" alt="${escapeHtml(brandLabel)}" width="48" height="48" style="display:block;width:48px;height:48px;max-width:48px;margin:0 0 8px;border:0;padding:0" />`
     : "";
-  const preheader = input.preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(input.preheader)}</div>`
-    : "";
+  const resolvedPreheader = resolveEmailPreheader({
+    explicit: input.preheader,
+    subject: input.subject,
+    title: input.title,
+    subtitle: input.subtitle,
+    brandLabel,
+    footerNote: input.footerNote,
+    bodyText: input.preheaderBodyText,
+    bodyHtml: input.bodyHtml,
+  });
+  const preheader = formatHiddenEmailPreheaderHtml(
+    resolvedPreheader,
+    escapeHtml,
+  );
   const unsub = input.preferencesManageUrl
     ? `<p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#047857">
          <a href="${escapeAttr(input.preferencesManageUrl)}" style="color:#047857;text-decoration:underline">Manage email preferences</a>

@@ -683,8 +683,10 @@ export function renderPriceReductionEmail(
   );
   const html = emailLayout({
     title: "Price reduced",
+    subject,
     subtitle: override.introText,
     preheader: `${input.addressLine} is now ${money(input.newPrice)}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -797,8 +799,10 @@ export function renderSoldAlertEmail(
   );
   const html = emailLayout({
     title: input.statusLabel,
+    subject,
     subtitle: override.introText,
     preheader: `${input.addressLine} · ${input.statusLabel}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -884,8 +888,10 @@ export function renderJustListedEmail(
   );
   const html = emailLayout({
     title: `Just listed · ${input.areaName}`,
+    subject,
     subtitle: override.introText,
     preheader: `${input.addressLine} · ${money(input.price)}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -971,8 +977,10 @@ export function renderPropertyUpdateEmail(
   );
   const html = emailLayout({
     title: "Property update",
+    subject,
     subtitle: override.introText,
-    preheader: input.title,
+    preheader: `${input.addressLine} · ${input.title}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -1068,10 +1076,12 @@ export function renderShortlistEmail(
   );
   const html = emailLayout({
     title: "Homes selected for you",
+    subject,
     subtitle: hasCustomIntro
       ? override.introText
       : `${input.agentName} put together a shortlist for you.`,
     preheader: `${input.agentName} shared a shortlist`,
+    preheaderBodyText: input.note?.trim() || override.introText,
     ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
@@ -1202,8 +1212,10 @@ export function renderAgentMessageEmail(
     : "";
   const html = emailLayout({
     title: agentSubject,
+    subject: agentSubject,
     subtitle,
-    preheader: agentSubject,
+    // Prefer agent body as inbox preview — never echo the subject/H1.
+    preheaderBodyText: agentBody,
     ...override.brandProps,
     bodyHtml: appendAgentSignatureHtml(
       `
@@ -1446,10 +1458,12 @@ export function renderSavedSearchDigestEmail(
 
   const html = emailLayout({
     title: "New listings found!",
+    subject,
     subtitle: hasCustomIntro
       ? override.introText
       : "We've found new homes that match your criteria—take a look.",
     preheader: `${count} new home${count === 1 ? "" : "s"} for ${input.searchName}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -1559,10 +1573,12 @@ export function renderNeighborhoodWeeklyEmail(
 
   const html = emailLayout({
     title: "Neighborhood weekly report",
+    subject,
     subtitle: hasCustomIntro
       ? override.introText
       : `Here’s what happened near ${input.homeLabel} this week.`,
     preheader: `${input.newCount} new · ${input.soldCount} sold near ${input.homeLabel}`,
+    preheaderBodyText: override.introText,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
@@ -1673,10 +1689,12 @@ export function renderCmaEmail(
 
   const html = emailLayout({
     title: "Your market analysis is ready",
+    subject,
     subtitle: hasCustomIntro
       ? override.introText
       : `${brand} · Comparative Market Analysis`,
     preheader: `CMA for ${input.subjectAddress}`,
+    preheaderBodyText: override.introText,
     footerNote:
       input.footerNote?.trim() ||
       `Prepared by ${input.agentName} · Powered by HouzzatPRO`,

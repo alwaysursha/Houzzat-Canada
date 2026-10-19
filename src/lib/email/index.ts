@@ -11,6 +11,14 @@ export {
   resolveEmailHeroLogoUrl,
 } from "@/lib/email/layout";
 export {
+  EMAIL_PREHEADER_MAX_CHARS,
+  EMAIL_PREHEADER_TARGET_MIN_CHARS,
+  formatHiddenEmailPreheaderHtml,
+  normalizeEmailPreheaderKey,
+  resolveEmailPreheader,
+  stripHtmlToEmailPreviewText,
+} from "@/lib/email/preheader";
+export {
   emailPreferencesUrl,
   emailPreviewAbsoluteUrl,
   emailPreviewPath,
