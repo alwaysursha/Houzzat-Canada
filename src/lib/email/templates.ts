@@ -10,6 +10,8 @@ import {
 import {
   appendAgentSignatureHtml,
   appendAgentSignatureText,
+  appendEmailFooterText,
+  normalizeTenantEmailFooterLegalText,
   type EmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import {
@@ -92,6 +94,17 @@ function layoutBrandProps(brand?: EmailBrandChrome | null) {
     brandWebsiteUrl: brand.brandWebsiteUrl ?? undefined,
     footerNote: brand.footerNote ?? undefined,
   };
+}
+
+/**
+ * Append complete branded legal footer to plain text when chrome supplies
+ * footerNote (branding ON). No-op when branding is OFF / footerNote absent.
+ */
+function withBrandedPlainTextFooter(
+  text: string,
+  chrome?: Pick<EmailBrandChrome, "footerNote"> | null,
+): string {
+  return appendEmailFooterText(text, chrome?.footerNote);
 }
 
 type WatchOverrideFallback = {
@@ -648,20 +661,23 @@ export function renderPriceReductionEmail(
     input,
   );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-      `${money(input.oldPrice)} → ${money(input.newPrice)} (−${money(drop)})`,
-      "",
-      input.listingUrl,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+        `${money(input.oldPrice)} → ${money(input.newPrice)} (−${money(drop)})`,
+        "",
+        input.listingUrl,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const html = emailLayout({
     title: "Price reduced",
@@ -759,20 +775,23 @@ export function renderSoldAlertEmail(
             input,
           );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-      input.priceLabel,
-      "",
-      input.listingUrl,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+        input.priceLabel,
+        "",
+        input.listingUrl,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const html = emailLayout({
     title: input.statusLabel,
@@ -844,19 +863,22 @@ export function renderJustListedEmail(
     input,
   );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      `${input.addressLine}, ${input.city} · ${money(input.price)} (${input.mlsNumber})`,
-      "",
-      input.listingUrl,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        `${input.addressLine}, ${input.city} · ${money(input.price)} (${input.mlsNumber})`,
+        "",
+        input.listingUrl,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const html = emailLayout({
     title: `Just listed · ${input.areaName}`,
@@ -927,20 +949,23 @@ export function renderPropertyUpdateEmail(
     input,
   );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
-      ...input.changes,
-      "",
-      input.listingUrl,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        `${input.addressLine}, ${input.city} (${input.mlsNumber})`,
+        ...input.changes,
+        "",
+        input.listingUrl,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const html = emailLayout({
     title: "Property update",
@@ -1021,20 +1046,23 @@ export function renderShortlistEmail(
             `• ${l.addressLine}, ${l.city} · ${l.priceLabel} — ${l.listingUrl}`,
         )
       : (input.listingLines ?? []);
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      input.note ? `\n${input.note}\n` : "",
-      `View all: ${input.shareUrl}`,
-      "",
-      ...textLines,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        input.note ? `\n${input.note}\n` : "",
+        `View all: ${input.shareUrl}`,
+        "",
+        ...textLines,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const html = emailLayout({
     title: "Homes selected for you",
@@ -1160,9 +1188,12 @@ export function renderAgentMessageEmail(
   if (injectGreeting) textParts.push(greet);
   if (wrapperParagraphsText) textParts.push(wrapperParagraphsText);
   textParts.push(agentBody);
-  const text = appendAgentSignatureText(
-    textParts.join("\n\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      textParts.join("\n\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
   const greetHtml = injectGreeting
     ? `<p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>`
@@ -1374,22 +1405,25 @@ export function renderSavedSearchDigestEmail(
     input,
   );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      ...input.listings.map(
-        (l) =>
-          `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
-      ),
-      "",
-      `Browse all matches: ${input.searchUrl}`,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        ...input.listings.map(
+          (l) =>
+            `• ${l.addressLine}, ${l.city} · ${l.priceLabel}${l.metaLabel ? ` · ${l.metaLabel}` : ""} — ${l.listingUrl}`,
+        ),
+        "",
+        `Browse all matches: ${input.searchUrl}`,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
 
   const cards = input.listings
@@ -1470,32 +1504,35 @@ export function renderNeighborhoodWeeklyEmail(
     input,
   );
   const subject = override.subject;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      `• ${input.newCount} new listing${input.newCount === 1 ? "" : "s"}`,
-      `• ${input.soldCount} sold/leased`,
-      input.medianSoldLabel ? `• Median sold ${input.medianSoldLabel}` : "",
-      "",
-      "New:",
-      ...input.newListings.map(
-        (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
-      ),
-      "",
-      "Sold / leased:",
-      ...input.soldListings.map(
-        (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
-      ),
-      "",
-      input.ctaUrl,
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .filter(Boolean)
-      .join("\n"),
-    input.agentSignatureText,
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        `• ${input.newCount} new listing${input.newCount === 1 ? "" : "s"}`,
+        `• ${input.soldCount} sold/leased`,
+        input.medianSoldLabel ? `• Median sold ${input.medianSoldLabel}` : "",
+        "",
+        "New:",
+        ...input.newListings.map(
+          (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
+        ),
+        "",
+        "Sold / leased:",
+        ...input.soldListings.map(
+          (l) => `• ${l.addressLine} · ${l.priceLabel} — ${l.listingUrl}`,
+        ),
+        "",
+        input.ctaUrl,
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .filter(Boolean)
+        .join("\n"),
+      input.agentSignatureText,
+    ),
+    input,
   );
 
   const listBlock = (
@@ -1602,28 +1639,34 @@ export function renderCmaEmail(
     input.recommendedListPrice != null
       ? `Recommended list price: ${money(input.recommendedListPrice)}`
       : null;
-  const text = appendAgentSignatureText(
-    [
-      greet,
-      "",
-      override.introText,
-      override.paragraphsText.trim(),
-      "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
-      priceLine ? `\n${priceLine}\n` : "",
-      `View your CMA: ${input.cmaUrl}`,
-      "",
-      input.agentName,
-      input.agentPhone ? input.agentPhone : "",
-      input.agentEmail ? input.agentEmail : "",
-      "",
-      "Powered by HouzzatPRO",
-    ]
-      .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
-      .filter((line) => line !== "")
-      .join("\n"),
-    // CMA already includes agent contact in-body; skip duplicate signature text
-    // unless chrome supplies a distinct fallback-only signature without agent block.
-    null,
+  const hasBrandedLegalFooter = Boolean(
+    normalizeTenantEmailFooterLegalText(input.footerNote),
+  );
+  const text = withBrandedPlainTextFooter(
+    appendAgentSignatureText(
+      [
+        greet,
+        "",
+        override.introText,
+        override.paragraphsText.trim(),
+        "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
+        priceLine ? `\n${priceLine}\n` : "",
+        `View your CMA: ${input.cmaUrl}`,
+        "",
+        input.agentName,
+        input.agentPhone ? input.agentPhone : "",
+        input.agentEmail ? input.agentEmail : "",
+        // Legacy powered-by only when branding OFF (no legal footerNote).
+        ...(hasBrandedLegalFooter ? [] : ["", "Powered by HouzzatPRO"]),
+      ]
+        .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
+        .filter((line) => line !== "")
+        .join("\n"),
+      // CMA already includes agent contact in-body; skip duplicate signature text
+      // unless chrome supplies a distinct fallback-only signature without agent block.
+      null,
+    ),
+    input,
   );
 
   const html = emailLayout({

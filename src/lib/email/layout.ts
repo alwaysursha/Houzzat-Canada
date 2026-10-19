@@ -50,6 +50,7 @@ export function emailLayout(input: {
   const subtitle = input.subtitle?.trim()
     ? `<p style="margin:12px 0 0;font-size:15px;line-height:1.5;color:#115e59">${escapeHtml(input.subtitle.trim())}</p>`
     : "";
+  const footerHtml = formatEmailFooterNoteHtml(input.footerNote);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -81,7 +82,7 @@ export function emailLayout(input: {
           <tr>
             <td style="width:100%;background:#a7f3d0;background-image:linear-gradient(160deg,#a7f3d0 0%,#6ee7b7 100%);padding:22px 24px;border-top:1px solid #6ee7b7;border-radius:0 0 20px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
               <p style="margin:0;font-size:13px;line-height:1.5;font-weight:600;color:#064e3b">
-                ${escapeHtml(input.footerNote ?? "GTA Real Estate — Just a click away.")}
+                ${footerHtml}
               </p>
               <p style="margin:8px 0 0;font-size:12px;line-height:1.5;color:#115e59">
                 <a href="${escapeAttr(websiteUrl)}" style="color:#064e3b;text-decoration:none;font-weight:600">${escapeHtml(websiteHost)}</a>
@@ -107,6 +108,27 @@ export function ctaButton(href: string, label: string) {
 /** White card with mint border for listing / detail callouts. */
 export function infoCard(innerHtml: string) {
   return `<div style="margin:16px 0;padding:18px 20px;border-radius:12px;background:#ffffff;border:1px solid #a7f3d0">${innerHtml}</div>`;
+}
+
+export const EMAIL_LAYOUT_DEFAULT_FOOTER_NOTE =
+  "GTA Real Estate — Just a click away." as const;
+
+/**
+ * Escape footer copy and preserve line breaks for HTML email clients.
+ * Stored legal text is never interpreted as HTML.
+ */
+export function formatEmailFooterNoteHtml(
+  footerNote: string | null | undefined,
+): string {
+  const normalized = (footerNote ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join("\n");
+  const text = normalized || EMAIL_LAYOUT_DEFAULT_FOOTER_NOTE;
+  return escapeHtml(text).replaceAll("\n", "<br />\n");
 }
 
 export function escapeHtml(value: string) {

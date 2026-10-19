@@ -13,17 +13,33 @@ import type {
   WorkspaceEmailIdentity,
 } from "@prisma/client";
 import {
+  formatEmailFooterNoteHtml,
+  EMAIL_LAYOUT_DEFAULT_FOOTER_NOTE,
+} from "@/lib/email/layout";
+import {
   appendAgentSignatureHtml,
   appendAgentSignatureText,
+  appendEmailFooterText,
   assembleTenantEmailBrand,
   buildAgentEmailSignature,
   buildTelHref,
+  normalizeTenantEmailFooterLegalText,
   resolveTenantEmailBrand,
   toEmailBrandChrome,
   type TenantEmailAgentIdentity,
   type TenantEmailBrandDeps,
 } from "@/lib/email/tenant-email-brand";
-import { renderAgentMessageEmail } from "@/lib/email/templates";
+import {
+  renderAgentMessageEmail,
+  renderCmaEmail,
+  renderJustListedEmail,
+  renderNeighborhoodWeeklyEmail,
+  renderPriceReductionEmail,
+  renderPropertyUpdateEmail,
+  renderSavedSearchDigestEmail,
+  renderShortlistEmail,
+  renderSoldAlertEmail,
+} from "@/lib/email/templates";
 import {
   TENANT_B_TEST_BRANDING_ROW,
   TENANT_B_TEST_WORKSPACE_ID,
@@ -641,6 +657,16 @@ function testNoAgentEmailInSignature() {
   section("No agent email address in signature");
 }
 
+const HOUZZAT_STYLE_FOOTER = [
+  "Ali Syed",
+  "Sales Representative",
+  "Royal LePage Credit Valley Real Estate",
+  "Direct: 647 - 221 - 4949",
+  "Office: 905 - 793 - 5000",
+  "1-10045 Hurontario St.",
+  "Brampton, ON, L6Z 0E6",
+].join("\n");
+
 function testLegalFooterPreserved() {
   const brand = assembleTenantEmailBrand({
     workspaceId: WS,
@@ -662,7 +688,360 @@ function testLegalFooterPreserved() {
   });
   assert.match(rendered.html, /Legal Brokerage Line · RECO/);
   assert.match(rendered.html, /Ali Syed/);
-  section("Existing legal footer preserved");
+  assert.match(rendered.text, /Legal Brokerage Line · RECO/);
+  section("Existing single-line legal footer preserved");
+}
+
+function testMultiLineLegalFooterPreserved() {
+  assert.equal(
+    normalizeTenantEmailFooterLegalText(`\n${HOUZZAT_STYLE_FOOTER}\n\n`),
+    HOUZZAT_STYLE_FOOTER,
+  );
+
+  const brand = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: HOUZZAT_STYLE_FOOTER,
+    },
+    identity: identity(WS),
+    agent: agentA({ image: PHOTO_A, designation: null }),
+    websiteUrl: "https://houzzat.com",
+    brokerageRegisteredName: "Royal Lepage Credit Valley Real Estate",
+  });
+  assert.equal(brand.footerNote, HOUZZAT_STYLE_FOOTER);
+  assert.match(brand.signatureHtml, /data-houzzat-agent-signature="1"/);
+  assert.match(brand.signatureText, /Ali Syed/);
+  assert.match(brand.signatureText, /Royal Lepage Credit Valley Real Estate/);
+  // Signature must not swallow the chrome footer block.
+  assert.notEqual(brand.footerNote, brand.signatureText);
+
+  const rendered = renderAgentMessageEmail({
+    subject: "Signature canary",
+    body: "Checking branded footer.",
+    preferencesManageUrl: "https://houzzat.com/account/email-preferences",
+    unsubscribeIntentUrl: "https://houzzat.com/account/unsubscribe-intent",
+    ...toEmailBrandChrome(brand),
+  });
+
+  for (const line of HOUZZAT_STYLE_FOOTER.split("\n")) {
+    assert.match(rendered.html, new RegExp(escapeRegExp(line)));
+    assert.match(rendered.text, new RegExp(escapeRegExp(line)));
+  }
+  assert.match(
+    rendered.html,
+    /Ali Syed<br \/>\nSales Representative<br \/>\nRoyal LePage Credit Valley Real Estate/,
+  );
+  assert.match(rendered.html, /data-houzzat-agent-signature="1"/);
+  assert.match(rendered.html, /Manage email preferences/);
+  assert.match(rendered.html, /Unsubscribe/);
+  assert.match(rendered.html, /houzzat\.com/);
+  // Plain-text: signature then full footer (not first line only).
+  assert.match(
+    rendered.text,
+    /Ali Syed[\s\S]*Royal Lepage Credit Valley Real Estate[\s\S]*Ali Syed\nSales Representative\nRoyal LePage Credit Valley Real Estate/,
+  );
+  section("Multi-line Houzzat-style legal footer preserved");
+}
+
+function testEmptyFooterFallsBack() {
+  assert.equal(normalizeTenantEmailFooterLegalText(""), null);
+  assert.equal(normalizeTenantEmailFooterLegalText("\n\n"), null);
+  assert.equal(normalizeTenantEmailFooterLegalText(null), null);
+
+  const brand = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: "   \n\t\n  ",
+      tagline: "Custom tagline fallback",
+    },
+    identity: identity(WS),
+    agent: agentA({ image: null }),
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+    brokerageRegisteredName: BROKERAGE,
+  });
+  assert.equal(brand.footerNote, "Custom tagline fallback");
+
+  const noTagline = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: null,
+      // Empty string (not null): brand mapper fills null tagline from neutral defaults.
+      tagline: "",
+      displayName: "Acme Realty",
+    },
+    identity: identity(WS),
+    agent: null,
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+    brokerageRegisteredName: null,
+  });
+  assert.equal(noTagline.footerNote, "Acme Realty — Powered by HouzzatPRO");
+  assert.equal(
+    formatEmailFooterNoteHtml(null),
+    escapeHtmlForTest(EMAIL_LAYOUT_DEFAULT_FOOTER_NOTE),
+  );
+  section("Empty footer falls back");
+}
+
+function testFooterHtmlEscapingAndInjection() {
+  const evil =
+    'Line one\n<script>alert(1)</script>\nOffice: <img src=x onerror=alert(1)>';
+  const brand = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: evil,
+    },
+    identity: identity(WS),
+    agent: agentA({ image: null }),
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+    brokerageRegisteredName: BROKERAGE,
+  });
+  const rendered = renderAgentMessageEmail({
+    subject: "Escape check",
+    body: "Body",
+    ...toEmailBrandChrome(brand),
+  });
+  assert.doesNotMatch(rendered.html, /<script>/i);
+  assert.doesNotMatch(rendered.html, /<img\b[^>]*onerror=/i);
+  assert.match(rendered.html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(
+    rendered.html,
+    /&lt;img src=x onerror=alert\(1\)&gt;/,
+  );
+  assert.equal(
+    formatEmailFooterNoteHtml("A\nB"),
+    "A<br />\nB",
+  );
+  section("Footer HTML escaping and injection attempts");
+}
+
+function assertCompleteLegalFooterOnce(text: string, footer: string) {
+  for (const line of footer.split("\n")) {
+    assert.match(text, new RegExp(escapeRegExp(line)));
+  }
+  assert.equal(
+    text.split(footer).length - 1,
+    1,
+    "complete legal footer must appear exactly once in plain text",
+  );
+  assert.ok(
+    text.endsWith(footer),
+    "complete legal footer must be the trailing plain-text block",
+  );
+}
+
+/** Every branded renderer that builds a plain-text alternative. */
+function testBrandedPathsPlainTextLegalFooter() {
+  const brand = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: HOUZZAT_STYLE_FOOTER,
+    },
+    identity: identity(WS),
+    agent: agentA({ image: PHOTO_A }),
+    websiteUrl: "https://houzzat.com",
+    brokerageRegisteredName: "Royal Lepage Credit Valley Real Estate",
+  });
+  const chrome = toEmailBrandChrome(brand);
+  const listing = {
+    addressLine: "10 King St",
+    city: "Toronto",
+    mlsNumber: "X123",
+    listingUrl: "https://example.com/l/X123",
+  };
+
+  const branded = [
+    renderPriceReductionEmail({
+      ...listing,
+      oldPrice: 900_000,
+      newPrice: 850_000,
+      ...chrome,
+    }),
+    renderSoldAlertEmail({
+      ...listing,
+      statusLabel: "Sold",
+      priceLabel: "$850,000",
+      ...chrome,
+    }),
+    renderJustListedEmail({
+      ...listing,
+      areaName: "Riverdale",
+      price: 850_000,
+      ...chrome,
+    }),
+    renderPropertyUpdateEmail({
+      ...listing,
+      title: "Status update",
+      changes: ["Status → Sold"],
+      ...chrome,
+    }),
+    renderShortlistEmail({
+      agentName: "Ali Syed",
+      shareUrl: "https://example.com/shortlist/1",
+      listingLines: ["10 King St — $850,000"],
+      ...chrome,
+    }),
+    renderAgentMessageEmail({
+      subject: "Hello",
+      body: "Checking in.",
+      ...chrome,
+    }),
+    renderSavedSearchDigestEmail({
+      searchName: "Riverdale under 1M",
+      searchUrl: "https://example.com/search",
+      listings: [
+        {
+          ...listing,
+          priceLabel: "$850,000",
+        },
+      ],
+      ...chrome,
+    }),
+    renderNeighborhoodWeeklyEmail({
+      homeLabel: "10 King St",
+      radiusKm: 1,
+      newCount: 1,
+      soldCount: 0,
+      newListings: [
+        {
+          ...listing,
+          priceLabel: "$850,000",
+        },
+      ],
+      soldListings: [],
+      ctaUrl: "https://example.com/seller",
+      ...chrome,
+    }),
+    renderCmaEmail({
+      agentName: "Ali Syed",
+      tenantDisplayName: "Tenant Canary",
+      subjectAddress: "10 King St",
+      subjectCity: "Toronto",
+      cmaUrl: "https://example.com/cma/1",
+      ...chrome,
+    }),
+  ];
+
+  for (const mail of branded) {
+    assertCompleteLegalFooterOnce(mail.text, HOUZZAT_STYLE_FOOTER);
+    for (const line of HOUZZAT_STYLE_FOOTER.split("\n")) {
+      assert.match(mail.html, new RegExp(escapeRegExp(line)));
+    }
+  }
+
+  // Branding OFF / no footerNote: plain text must not invent legal lines;
+  // CMA keeps its legacy powered-by line.
+  const unbrandedCma = renderCmaEmail({
+    agentName: "Ali Syed",
+    tenantDisplayName: "Tenant Canary",
+    subjectAddress: "10 King St",
+    subjectCity: "Toronto",
+    cmaUrl: "https://example.com/cma/1",
+  });
+  assert.match(unbrandedCma.text, /Powered by HouzzatPRO/);
+  assert.doesNotMatch(unbrandedCma.text, /Sales Representative/);
+  assert.doesNotMatch(
+    renderPriceReductionEmail({
+      ...listing,
+      oldPrice: 900_000,
+      newPrice: 850_000,
+    }).text,
+    /Sales Representative/,
+  );
+
+  // Idempotent append helper — re-appending the same footer must not duplicate.
+  const once = appendEmailFooterText("Body", HOUZZAT_STYLE_FOOTER);
+  assert.equal(appendEmailFooterText(once, HOUZZAT_STYLE_FOOTER), once);
+
+  section("Branded paths append complete legal footer once in plain text");
+}
+
+function testSignatureAndLegalFooterCoexist() {
+  const brand = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: HOUZZAT_STYLE_FOOTER,
+    },
+    identity: identity(WS),
+    agent: agentA({ image: PHOTO_A }),
+    websiteUrl: "https://houzzat.com",
+    brokerageRegisteredName: "Royal Lepage Credit Valley Real Estate",
+  });
+  const rendered = renderAgentMessageEmail({
+    subject: "Coexist",
+    body: "Hello",
+    ...toEmailBrandChrome(brand),
+  });
+  const sigIdx = rendered.html.indexOf('data-houzzat-agent-signature="1"');
+  const footerIdx = rendered.html.indexOf("Sales Representative<br");
+  assert.ok(sigIdx >= 0);
+  assert.ok(footerIdx > sigIdx);
+  assert.match(rendered.html, /Photo of Ali Syed/);
+  assert.equal(
+    appendEmailFooterText("Body\n\n— Agent", "Legal line"),
+    "Body\n\n— Agent\n\nLegal line",
+  );
+  section("Signature + complete legal footer coexistence");
+}
+
+async function testAllowlistIsolationForFooterBrand() {
+  const deps = makeDeps({
+    agentsByKey: new Map([[`${WS}:${AGENT_A}`, agentA()]]),
+    membership: new Set([`${WS}:${AGENT_A}`]),
+    branding: {
+      ...TENANT_B_TEST_BRANDING_ROW,
+      footerLegalText: HOUZZAT_STYLE_FOOTER,
+    },
+    brokerage: "Royal Lepage Credit Valley Real Estate",
+  });
+  const onAllowlist = await resolveTenantEmailBrand(
+    { workspaceId: WS, preferredAgentUserId: AGENT_A },
+    deps,
+    {
+      TENANT_EMAIL_BRANDING: "on",
+      TENANT_EMAIL_BRANDING_WORKSPACE_IDS: WS,
+    },
+  );
+  assert.ok(onAllowlist);
+  assert.equal(onAllowlist.footerNote, HOUZZAT_STYLE_FOOTER);
+
+  const otherTenant = await resolveTenantEmailBrand(
+    { workspaceId: WS_B, preferredAgentUserId: AGENT_A },
+    deps,
+    {
+      TENANT_EMAIL_BRANDING: "on",
+      TENANT_EMAIL_BRANDING_WORKSPACE_IDS: WS,
+    },
+  );
+  assert.equal(otherTenant, null);
+
+  const emptyAllowlist = await resolveTenantEmailBrand(
+    { workspaceId: WS, preferredAgentUserId: AGENT_A },
+    deps,
+    {
+      TENANT_EMAIL_BRANDING: "on",
+      TENANT_EMAIL_BRANDING_WORKSPACE_IDS: "",
+    },
+  );
+  assert.equal(emptyAllowlist, null);
+  section("Allowlist isolation for branded footer");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function escapeHtmlForTest(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function testPublishedTemplatesUnaffected() {
@@ -744,6 +1123,12 @@ async function main() {
   testNoDuplicateSignature();
   testNoAgentEmailInSignature();
   testLegalFooterPreserved();
+  testMultiLineLegalFooterPreserved();
+  testEmptyFooterFallsBack();
+  testFooterHtmlEscapingAndInjection();
+  testBrandedPathsPlainTextLegalFooter();
+  testSignatureAndLegalFooterCoexist();
+  await testAllowlistIsolationForFooterBrand();
   testPublishedTemplatesUnaffected();
   testSecurityTransactionalEmailsUntouched();
   testDesignationOmittedWithoutPerAgentField();

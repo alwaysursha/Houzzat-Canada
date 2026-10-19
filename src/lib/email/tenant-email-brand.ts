@@ -408,6 +408,44 @@ export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
   };
 }
 
+/**
+ * Normalize WorkspaceBranding.footerLegalText for email chrome.
+ * Keeps every non-empty line in order; never truncates to the first line.
+ * Returns null when empty so tagline / powered-by fallbacks still apply.
+ */
+export function normalizeTenantEmailFooterLegalText(
+  footerLegalText: string | null | undefined,
+): string | null {
+  if (footerLegalText == null) return null;
+  const lines = footerLegalText
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return null;
+  return lines.join("\n");
+}
+
+/**
+ * Append layout footer copy to a plain-text email body (after signature).
+ * Footer remains separate from the agent signature block.
+ */
+export function appendEmailFooterText(
+  bodyText: string,
+  footerNote?: string | null,
+): string {
+  const footer = normalizeTenantEmailFooterLegalText(footerNote);
+  if (!footer) return bodyText;
+  const base = bodyText.replace(/\s+$/u, "");
+  if (!base) return footer;
+  // Idempotent — avoid duplicating an already-appended legal footer block.
+  if (base === footer || base.endsWith(`\n\n${footer}`) || base.endsWith(`\n${footer}`)) {
+    return base;
+  }
+  return `${base}\n\n${footer}`;
+}
+
 export function appendAgentSignatureHtml(
   bodyHtml: string,
   signatureHtml?: string | null,
@@ -578,7 +616,9 @@ export function assembleTenantEmailBrand(input: {
     emailHeadshotAssociation: input.emailHeadshotAssociation ?? null,
   });
 
-  const footerLegal = mapped.footerLegalText?.trim().split("\n")[0]?.trim();
+  const footerLegal = normalizeTenantEmailFooterLegalText(
+    mapped.footerLegalText,
+  );
   const footerNote =
     footerLegal ||
     mapped.tagline?.trim() ||
