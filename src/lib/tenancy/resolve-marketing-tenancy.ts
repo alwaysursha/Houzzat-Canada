@@ -23,7 +23,10 @@ import { resolveActiveTemplatePreviewForWorkspace } from "@/lib/tenancy/template
 import { resolvePublicTeamRosterForWorkspace } from "@/lib/tenancy/team-roster/public";
 import {
   DEFAULT_TEMPLATE_ID,
+  getTemplate,
+  isRoyalCollectionOneTemplateId,
   isTeamSignatureTemplateId,
+  parseThemeId,
   resolvePublicTemplateIdForPlan,
   resolveTemplateIdFromThemeId,
   resolveThemePalette,
@@ -168,6 +171,28 @@ export async function resolveMarketingChromeBrand(): Promise<MarketingChromeBran
   return resolveMarketingPresentationBrand();
 }
 
+/**
+ * Public sites ignore unfinished templates. A development preview may still
+ * render Royal Collection without writing a tenant theme.
+ */
+function resolvePresentedTemplateId(
+  themeId: string | null,
+  previewSource: "owner_cookie" | "dev_only" | null,
+): ImplementedTemplateId {
+  if (
+    previewSource === "dev_only" &&
+    process.env.NODE_ENV !== "production" &&
+    themeId
+  ) {
+    const parsed = parseThemeId(themeId);
+    if (parsed && isRoyalCollectionOneTemplateId(parsed.templateId)) {
+      const template = getTemplate(parsed.templateId);
+      if (template) return template.id;
+    }
+  }
+  return resolveTemplateIdFromThemeId(themeId);
+}
+
 export async function resolveMarketingPresentationBrand(): Promise<MarketingPresentationBrand | null> {
   const tenancy = await resolveMarketingTenancy();
   if (!tenancy) return null;
@@ -195,7 +220,7 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
 
   const effectiveThemeId = previewThemeId ?? persistedThemeId;
   const persistedTemplateId: ImplementedTemplateId =
-    resolveTemplateIdFromThemeId(effectiveThemeId);
+    resolvePresentedTemplateId(effectiveThemeId, activePreview?.source ?? null);
   const plan = await resolveWorkspacePlanCapabilities(tenancy.workspaceId);
   const templateId = resolvePublicTemplateIdForPlan(
     persistedTemplateId,
@@ -207,11 +232,14 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   if (previewThemeId) {
     const palette = resolveThemePalette(previewThemeId);
     if (palette) {
+      const previewTemplateId = resolvePresentedTemplateId(
+        previewThemeId,
+        activePreview?.source ?? null,
+      );
       const isPremiumPreview =
-        resolveTemplateIdFromThemeId(previewThemeId) ===
-          "agent-signature" ||
-        resolveTemplateIdFromThemeId(previewThemeId) ===
-          "team-signature";
+        previewTemplateId === "agent-signature" ||
+        previewTemplateId === "team-signature" ||
+        isRoyalCollectionOneTemplateId(previewTemplateId);
       presentationTenancy = {
         ...tenancy,
         brand: {

@@ -7,6 +7,7 @@ import { HomeHeroSearch } from "@/components/home/HomeHeroSearch";
 import { HomePreviewMotion } from "@/components/platform/public/HomePreviewMotion";
 import { HomePreviewPage } from "@/components/platform/public/HomePreviewPage";
 import { AgentSignatureHome } from "@/components/templates/agent-signature/AgentSignatureHome";
+import { RoyalCollectionHome } from "@/components/templates/royal-collection-one/RoyalCollectionHome";
 import { TeamSignatureHome } from "@/components/templates/team-signature/TeamSignatureHome";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import { isHouzzatProPlatformHomeRequest } from "@/lib/platform/public";
@@ -14,6 +15,7 @@ import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
   isAgentSignatureTemplateId,
+  isRoyalCollectionOneTemplateId,
   isTeamSignatureTemplateId,
 } from "@/lib/tenancy/templates";
 
@@ -41,6 +43,9 @@ export default async function HomePage() {
   }
   if (chromeBrand && isTeamSignatureTemplateId(chromeBrand.templateId)) {
     return <TeamSignatureHome brand={chromeBrand} />;
+  }
+  if (chromeBrand && isRoyalCollectionOneTemplateId(chromeBrand.templateId)) {
+    return <RoyalCollectionHome brand={chromeBrand} />;
   }
 
   const suggestionCities = suggestedCitiesForLocation({ limit: 8 });

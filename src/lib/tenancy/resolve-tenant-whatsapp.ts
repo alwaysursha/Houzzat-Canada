@@ -11,6 +11,7 @@ import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
   resolveTemplateIdFromThemeId,
   type ImplementedTemplateId,
@@ -26,6 +27,7 @@ export function whatsappTemplateKind(
 ): WhatsAppTemplateKind {
   switch (templateId) {
     case AGENT_SIGNATURE_TEMPLATE_ID:
+    case ROYAL_COLLECTION_ONE_TEMPLATE_ID:
       return "AGENT";
     case DEFAULT_TEMPLATE_ID:
     case TEAM_SIGNATURE_TEMPLATE_ID:

@@ -3,12 +3,14 @@
  */
 import { AGENT_SIGNATURE_THEMES } from "./agent-signature-themes";
 import { DEFAULT_SIGNATURE_THEMES } from "./default-signature-themes";
+import { ROYAL_COLLECTION_ONE_THEMES } from "./royal-collection-one-themes";
 import { TEAM_SIGNATURE_THEMES } from "./team-signature-themes";
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
   IMPLEMENTED_TEMPLATE_IDS,
   RESERVED_TEMPLATE_IDS,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
   TEMPLATE_CATEGORIES,
   buildThemeId,
@@ -24,12 +26,14 @@ export {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
   IMPLEMENTED_TEMPLATE_IDS,
   RESERVED_TEMPLATE_IDS,
   TEMPLATE_CATEGORIES,
   DEFAULT_THEME_KEYS,
   AGENT_SIGNATURE_THEME_KEYS,
   TEAM_SIGNATURE_THEME_KEYS,
+  ROYAL_COLLECTION_ONE_THEME_KEYS,
   buildThemeId,
   parseThemeId,
 } from "./types";
@@ -37,6 +41,7 @@ export type {
   AgentSignatureThemeKey,
   DefaultThemeKey,
   TeamSignatureThemeKey,
+  RoyalCollectionOneThemeKey,
   ImplementedTemplateId,
   TemplateCategory,
   TemplateDefinition,
@@ -69,6 +74,22 @@ const AGENT_SIGNATURE_TEMPLATE: TemplateDefinition = {
 };
 
 /**
+ * Local luxury foundation. Not selectable and not presentation-ready,
+ * so onboarding and public theme resolution cannot assign it.
+ */
+const ROYAL_COLLECTION_ONE_TEMPLATE: TemplateDefinition = {
+  id: ROYAL_COLLECTION_ONE_TEMPLATE_ID,
+  category: "AGENT",
+  categoryLabel: "Agent Branded",
+  label: "Royal Collection — Signature One",
+  description:
+    "Personal luxury homepage foundation. Development preview only until it is explicitly released.",
+  selectable: false,
+  presentationReady: false,
+  themes: ROYAL_COLLECTION_ONE_THEMES,
+};
+
+/**
  * Stage 6.11E.2 / V1 launch — Team Signature is commercially selectable.
  */
 const TEAM_SIGNATURE_TEMPLATE: TemplateDefinition = {
@@ -87,12 +108,14 @@ const TEMPLATES_BY_ID: Record<ImplementedTemplateId, TemplateDefinition> = {
   [DEFAULT_TEMPLATE_ID]: DEFAULT_TEMPLATE,
   [AGENT_SIGNATURE_TEMPLATE_ID]: AGENT_SIGNATURE_TEMPLATE,
   [TEAM_SIGNATURE_TEMPLATE_ID]: TEAM_SIGNATURE_TEMPLATE,
+  [ROYAL_COLLECTION_ONE_TEMPLATE_ID]: ROYAL_COLLECTION_ONE_TEMPLATE,
 };
 
 const THEMES_BY_ID = new Map<string, TemplateThemeDefinition>([
   ...DEFAULT_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
   ...AGENT_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
   ...TEAM_SIGNATURE_THEMES.map((theme) => [theme.id, theme] as const),
+  ...ROYAL_COLLECTION_ONE_THEMES.map((theme) => [theme.id, theme] as const),
 ]);
 
 /** OWNER-selectable templates for onboarding Website Design. */
@@ -383,6 +406,12 @@ export function isTeamSignatureTemplateId(
   templateId: string | null | undefined,
 ): boolean {
   return templateId === TEAM_SIGNATURE_TEMPLATE_ID;
+}
+
+export function isRoyalCollectionOneTemplateId(
+  templateId: string | null | undefined,
+): boolean {
+  return templateId === ROYAL_COLLECTION_ONE_TEMPLATE_ID;
 }
 
 export { AGENT_SIGNATURE_DEMO } from "./agent-signature-demo";

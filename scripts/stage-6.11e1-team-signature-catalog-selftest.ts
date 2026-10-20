@@ -13,6 +13,7 @@ import {
   DEFAULT_TEMPLATE_ID,
   IMPLEMENTED_TEMPLATE_IDS,
   RESERVED_TEMPLATE_IDS,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
   TEAM_SIGNATURE_THEMES,
   buildThemeId,
@@ -77,8 +78,14 @@ async function main() {
     assert.ok(isTeamSignatureTemplateId(TEAM_SIGNATURE_TEMPLATE_ID));
     assert.ok(!isTeamSignatureTemplateId(AGENT_SIGNATURE_TEMPLATE_ID));
     const implemented = listImplementedTemplates();
-    assert.equal(implemented.length, 3);
+    assert.ok(implemented.some((t) => t.id === DEFAULT_TEMPLATE_ID));
+    assert.ok(implemented.some((t) => t.id === AGENT_SIGNATURE_TEMPLATE_ID));
     assert.ok(implemented.some((t) => t.id === TEAM_SIGNATURE_TEMPLATE_ID));
+    const royal = getTemplate(ROYAL_COLLECTION_ONE_TEMPLATE_ID);
+    assert.ok(royal);
+    assert.equal(royal.selectable, false);
+    assert.equal(royal.presentationReady, false);
+    assert.ok(implemented.some((t) => t.id === ROYAL_COLLECTION_ONE_TEMPLATE_ID));
     console.log("[0] team-signature implemented + TEAM category... PASS");
   }
 

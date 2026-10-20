@@ -274,6 +274,7 @@ export default auth((request) => {
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-houzzat-request-path", pathname);
+  requestHeaders.set("x-houzzat-request-search", request.nextUrl.search);
   const response = NextResponse.next({
     request: {
       headers: requestHeaders,

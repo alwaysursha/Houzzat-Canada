@@ -9,13 +9,16 @@ import { SeoFooterLinks } from "@/components/site/SeoFooterLinks";
 import { SeoLocationProvider } from "@/components/site/SeoLocationContext";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { AgentSignatureFooter } from "@/components/templates/agent-signature/AgentSignatureFooter";
+import { RoyalCollectionFooter } from "@/components/templates/royal-collection-one/RoyalCollectionFooter";
 import { TeamSignatureFooter } from "@/components/templates/team-signature/TeamSignatureFooter";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
   isAgentSignatureTemplateId,
+  isRoyalCollectionOneTemplateId,
   isTeamSignatureTemplateId,
 } from "@/lib/tenancy/templates";
 import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
+import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { resolveTeamSignatureView } from "@/lib/tenancy/templates/resolve-team-signature-view";
 
 /** Hides marketing chrome on immersive routes like /search and listing sheet. */
@@ -74,7 +77,8 @@ export function MarketingBelowHeader({
         {!hideChrome ? (
           <div className="pb-[var(--mobile-bottom-nav,0px)] md:pb-0">
             {!isAgentSignatureTemplateId(chromeBrand.templateId) &&
-            !isTeamSignatureTemplateId(chromeBrand.templateId) ? (
+            !isTeamSignatureTemplateId(chromeBrand.templateId) &&
+            !isRoyalCollectionOneTemplateId(chromeBrand.templateId) ? (
               <SeoFooterLinks fallbackCities={cities} />
             ) : null}
             {isAgentSignatureTemplateId(chromeBrand.templateId) ? (
@@ -82,6 +86,8 @@ export function MarketingBelowHeader({
                 view={resolveAgentSignatureView(chromeBrand)}
                 fallbackCities={cities}
               />
+            ) : isRoyalCollectionOneTemplateId(chromeBrand.templateId) ? (
+              <RoyalCollectionFooter view={resolveRoyalCollectionView(chromeBrand)} />
             ) : isTeamSignatureTemplateId(chromeBrand.templateId) ? (
               <TeamSignatureFooter
                 view={resolveTeamSignatureView(chromeBrand)}

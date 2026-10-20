@@ -205,6 +205,11 @@ function createFakePrisma(state: FakeState): PrismaClient {
         return null;
       },
     },
+    subscription: {
+      async findFirst() {
+        return null;
+      },
+    },
     workspaceMember: {
       async findUnique({
         where,

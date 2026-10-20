@@ -15,15 +15,24 @@ import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
 import { AgentSignatureHeader } from "@/components/templates/agent-signature/AgentSignatureHeader";
+import { RoyalCollectionHeader } from "@/components/templates/royal-collection-one/RoyalCollectionHeader";
+import { royalCollectionFonts } from "@/components/templates/royal-collection-one/royal-collection-fonts";
+import royalCollectionStyles from "@/components/templates/royal-collection-one/royal-collection.module.css";
 import { TeamSignatureHeader } from "@/components/templates/team-signature/TeamSignatureHeader";
 import { OwnerTemplatePreviewBar } from "@/components/templates/OwnerTemplatePreviewBar";
 import { TemplatePresentationProvider } from "@/components/templates/TemplatePresentationProvider";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import {
   isAgentSignatureTemplateId,
+  isRoyalCollectionOneTemplateId,
   isTeamSignatureTemplateId,
 } from "@/lib/tenancy/templates";
 import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
+import {
+  isHighOctaneRoyalPreview,
+  resolveRoyalCollectionView,
+} from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import { RoyalCollectionPreviewGuard } from "@/components/templates/royal-collection-one/RoyalCollectionPreviewGuard";
 import { resolveTeamSignatureView } from "@/lib/tenancy/templates/resolve-team-signature-view";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import {
@@ -114,6 +123,19 @@ export async function generateMetadata(): Promise<Metadata> {
   if (!tenancy) {
     return { title: "Not found" };
   }
+  const previewBrand = await resolveMarketingPresentationBrand();
+  if (previewBrand && isHighOctaneRoyalPreview(previewBrand)) {
+    return {
+      title: { absolute: "HIGH OCTANE Real Estate — Design Preview" },
+      description: "Local design preview. Actions are disabled.",
+      robots: {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: { index: false, follow: false, noimageindex: true },
+      },
+    };
+  }
   const canonicalOrigin = await resolveCanonicalPublicOrigin(
     tenancy.workspaceId,
     tenancy.hostname,
@@ -190,6 +212,10 @@ export default async function MarketingLayout({
   const teamSignatureView = teamSignature
     ? resolveTeamSignatureView(chromeBrand)
     : null;
+  const royalCollection = isRoyalCollectionOneTemplateId(chromeBrand.templateId);
+  const royalCollectionView = royalCollection
+    ? resolveRoyalCollectionView(chromeBrand)
+    : null;
   const tracking = await resolveWorkspaceTracking(tenancy.workspaceId);
 
   return (
@@ -200,12 +226,19 @@ export default async function MarketingLayout({
           isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}
           templateId={chromeBrand.templateId}
         />
-        <div className="flex min-h-dvh flex-col">
+        <div
+          className={`flex min-h-dvh flex-col${
+            royalCollection ? ` ${royalCollectionFonts} ${royalCollectionStyles.shell}` : ""
+          }`}
+        >
           {chromeBrand.templatePreview?.active ? (
             <OwnerTemplatePreviewBar
               displayLabel={chromeBrand.templatePreview.displayLabel}
               themeId={chromeBrand.templatePreview.themeId}
             />
+          ) : null}
+          {royalCollectionView?.displayFixtureId ? (
+            <RoyalCollectionPreviewGuard />
           ) : null}
           <JsonLd
             data={organizationJsonLdForTenancy(
@@ -226,6 +259,11 @@ export default async function MarketingLayout({
             <MarketingChromeGate>
               {agentSignature && agentSignatureView ? (
                 <AgentSignatureHeader view={agentSignatureView} />
+              ) : royalCollection && royalCollectionView ? (
+                <RoyalCollectionHeader
+                  view={royalCollectionView}
+                  previewBarActive={Boolean(chromeBrand.templatePreview?.active)}
+                />
               ) : teamSignature && teamSignatureView ? (
                 <TeamSignatureHeader
                   view={teamSignatureView}
@@ -246,7 +284,7 @@ export default async function MarketingLayout({
           <Suspense fallback={null}>
             <MarketingChromeGate>
               <RoutePlannerFloatingChip />
-              <CustomerChatFab />
+              {royalCollectionView?.displayFixtureId ? null : <CustomerChatFab />}
               <ScrollToTopButton />
               <MobileBottomNav cities={cities} chromeBrand={chromeBrand} />
             </MarketingChromeGate>

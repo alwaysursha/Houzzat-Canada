@@ -5,7 +5,7 @@
  * Development: optional local query/env tooling (NODE_ENV=development only).
  * Never use ALLOW_TEMPLATE_PREVIEW / HOUZZAT_TEMPLATE_PREVIEW in production.
  */
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import {
   OWNER_TEMPLATE_PREVIEW_COOKIE,
   previewDisplayLabel,
@@ -15,6 +15,7 @@ import {
 import {
   AGENT_SIGNATURE_TEMPLATE_ID,
   DEFAULT_TEMPLATE_ID,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
   getTemplate,
   getThemeById,
@@ -26,6 +27,26 @@ import {
 export const UNSAFE_ALLOW_TEMPLATE_PREVIEW_ENV = "ALLOW_TEMPLATE_PREVIEW";
 /** @deprecated Process-wide override — development only. */
 export const DEV_HOUZZAT_TEMPLATE_PREVIEW_ENV = "HOUZZAT_TEMPLATE_PREVIEW";
+
+/**
+ * Development-only preview of the unassigned Royal Collection foundation.
+ * Owner cookies and production resolution cannot select it.
+ */
+export function resolveDevRoyalCollectionPreviewThemeId(
+  raw: string,
+): string | null {
+  const trimmed = raw.trim();
+  const theme = getTemplate(ROYAL_COLLECTION_ONE_TEMPLATE_ID)?.themes[0];
+  if (!theme) return null;
+  if (
+    trimmed === ROYAL_COLLECTION_ONE_TEMPLATE_ID ||
+    trimmed === theme.id ||
+    trimmed === "royal-collection"
+  ) {
+    return theme.id;
+  }
+  return null;
+}
 
 function normalizeCatalogThemeId(raw: string): string | null {
   const direct = getThemeById(raw);
@@ -64,14 +85,22 @@ export function resolveDevOnlyTemplatePreviewThemeId(
   if (process.env.NODE_ENV === "production") return null;
 
   const envPreview = process.env.HOUZZAT_TEMPLATE_PREVIEW?.trim();
-  if (envPreview) return normalizeCatalogThemeId(envPreview);
+  if (envPreview) {
+    return (
+      resolveDevRoyalCollectionPreviewThemeId(envPreview) ??
+      normalizeCatalogThemeId(envPreview)
+    );
+  }
 
   if (!requestUrl) return null;
   try {
     const url = new URL(requestUrl);
     const raw = url.searchParams.get("previewTemplate")?.trim();
     if (!raw) return null;
-    return normalizeCatalogThemeId(raw);
+    return (
+      resolveDevRoyalCollectionPreviewThemeId(raw) ??
+      normalizeCatalogThemeId(raw)
+    );
   } catch {
     return null;
   }
@@ -113,8 +142,16 @@ export async function resolveActiveTemplatePreviewForWorkspace(
   // Production: no unauthenticated query/env path.
   if (process.env.NODE_ENV === "production") return null;
 
-  const devTheme = resolveDevOnlyTemplatePreviewThemeId(null);
-  // Env-only in this path; query requires URL (dev scripts).
+  let devRequestUrl: string | null = null;
+  try {
+    const headerStore = await headers();
+    const path = headerStore.get("x-houzzat-request-path")?.trim() || "/";
+    const search = headerStore.get("x-houzzat-request-search")?.trim() || "";
+    devRequestUrl = `http://preview.local${path.startsWith("/") ? path : `/${path}`}${search}`;
+  } catch {
+    devRequestUrl = null;
+  }
+  const devTheme = resolveDevOnlyTemplatePreviewThemeId(devRequestUrl);
   if (devTheme) {
     const theme = getThemeById(devTheme);
     if (!theme) return null;
@@ -129,7 +166,9 @@ export async function resolveActiveTemplatePreviewForWorkspace(
           ? "Agent Signature"
           : parsed.templateId === "team-signature"
             ? "Team Signature"
-            : theme.label,
+            : parsed.templateId === ROYAL_COLLECTION_ONE_TEMPLATE_ID
+              ? "Royal Collection — Signature One"
+              : theme.label,
     };
   }
 

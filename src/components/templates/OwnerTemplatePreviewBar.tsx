@@ -61,16 +61,16 @@ export function OwnerTemplatePreviewBar({
       data-owner-preview-bar="true"
       className="sticky top-0 z-[60] border-b border-amber-800/20 bg-amber-50 text-amber-950"
     >
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-10">
-        <p className="text-sm font-medium">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6 lg:px-10">
+        <p className="min-w-0 flex-1 text-sm font-medium leading-snug">
           Previewing: <span className="font-semibold">{displayLabel}</span>
-          <span className="ml-2 text-xs font-normal text-amber-900/70">
+          <span className="mt-0.5 block text-xs font-normal text-amber-900/70">
             {canApply
               ? "Unsaved — other visitors still see your live design"
               : "Design review only — cannot apply to this workspace yet"}
           </span>
         </p>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={busy != null}

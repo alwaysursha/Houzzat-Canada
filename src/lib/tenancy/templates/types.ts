@@ -20,6 +20,8 @@ export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 export const DEFAULT_TEMPLATE_ID = "default-signature" as const;
 export const AGENT_SIGNATURE_TEMPLATE_ID = "agent-signature" as const;
 export const TEAM_SIGNATURE_TEMPLATE_ID = "team-signature" as const;
+/** Local foundation. Not selectable and not presentation-ready, so no tenant receives it. */
+export const ROYAL_COLLECTION_ONE_TEMPLATE_ID = "royal-collection-one" as const;
 
 /**
  * Catalog-implemented templates (have definitions + themes).
@@ -29,6 +31,7 @@ export const IMPLEMENTED_TEMPLATE_IDS = [
   DEFAULT_TEMPLATE_ID,
   AGENT_SIGNATURE_TEMPLATE_ID,
   TEAM_SIGNATURE_TEMPLATE_ID,
+  ROYAL_COLLECTION_ONE_TEMPLATE_ID,
 ] as const;
 
 export type ImplementedTemplateId = (typeof IMPLEMENTED_TEMPLATE_IDS)[number];
@@ -60,6 +63,10 @@ export const AGENT_SIGNATURE_THEME_KEYS = [
   "bronze",
 ] as const;
 export type AgentSignatureThemeKey = (typeof AGENT_SIGNATURE_THEME_KEYS)[number];
+
+export const ROYAL_COLLECTION_ONE_THEME_KEYS = ["signature"] as const;
+export type RoyalCollectionOneThemeKey =
+  (typeof ROYAL_COLLECTION_ONE_THEME_KEYS)[number];
 
 /** Brand color triple written to WorkspaceBranding + consumed by TenantThemeStyle. */
 export type TemplateThemePalette = {
