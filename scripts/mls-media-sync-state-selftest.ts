@@ -318,7 +318,7 @@ function main() {
 
   {
     const gallery = read("src/app/api/listings/[mlsNumber]/gallery/route.ts");
-    const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+    const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
     const lookup = read("src/lib/proptx/on-demand-lookup.ts");
     assert.ok(gallery.includes("await fetchListingPhotosFromPropTx"));
     assert.ok(gallery.includes("photos: photos.map("));

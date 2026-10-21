@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import { resolveNextDistDir } from "./src/lib/next/high-octane-staging-dist-dir";
 
 /**
  * OpenNext Cloudflare wrangler/miniflare wiring for `next dev` only.
@@ -30,6 +31,7 @@ function resolveHouzzatBuildId(): string {
 const houzzatBuildId = resolveHouzzatBuildId();
 
 const nextConfig: NextConfig = {
+  distDir: resolveNextDistDir(),
   // Local tenant browsing uses http://houzzat.com:<dev port>. Next blocks
   // the dev HMR/debug socket unless that host is allowlisted.
   allowedDevOrigins: ["houzzat.com"],

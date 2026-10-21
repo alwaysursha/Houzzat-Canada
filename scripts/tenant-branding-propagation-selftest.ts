@@ -213,7 +213,7 @@ function testNoHouzzatLeakageInTenantFooter() {
 }
 
 function testListingMetadataWiring() {
-  const listing = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const listing = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   assert.ok(listing.includes("buildTenantPublicPageMetadata"));
   assert.ok(listing.includes("resolveMarketingTenancy"));
   assert.ok(!listing.includes("siteName: SITE_NAME"));

@@ -578,7 +578,7 @@ async function main() {
 
   // --- Page + metadata share cached entitlement-aware loader ---
   {
-    const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+    const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
     assert.ok(page.includes("resolveListingEntitlementContextForServerPage"));
     assert.ok(page.includes("resolveListingDetailEntitlementCached"));
     assert.ok(page.includes("loadListingByMlsCached"));

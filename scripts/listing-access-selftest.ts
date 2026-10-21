@@ -292,7 +292,7 @@ function testDoesNotOverwritePendingHighIntent() {
 
 function testWiringLeavesServerListingUntouched() {
   assert.equal(LISTING_ACCESS_STORAGE_KEY, "houzzat:listing-access");
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   const view = read("src/components/listings/ListingDetailView.tsx");
   const gate = read("src/components/listings/ListingAccessGate.tsx");
   const search = read("src/components/listings/SearchExperience.tsx");

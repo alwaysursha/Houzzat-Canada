@@ -2,11 +2,11 @@ import type { Metadata } from "next";
 import { RoyalCollectionSearchDemonstration } from "@/components/templates/royal-collection-one/RoyalCollectionSearchDemonstration";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
-import { isHighOctaneRoyalPreview } from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import { isHighOctaneConceptFixture } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await resolveMarketingPresentationBrand();
-  if (brand && isHighOctaneRoyalPreview(brand)) {
+  if (brand && isHighOctaneConceptFixture(brand)) {
     return {
       title: { absolute: "HIGH OCTANE Real Estate — Design Preview" },
       description: "Local design preview. Actions are disabled.",
@@ -28,7 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function SearchPage() {
   const brand = await resolveMarketingPresentationBrand();
-  if (brand && isHighOctaneRoyalPreview(brand)) {
+  if (brand && isHighOctaneConceptFixture(brand)) {
     return <RoyalCollectionSearchDemonstration />;
   }
 

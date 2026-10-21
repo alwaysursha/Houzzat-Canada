@@ -197,7 +197,7 @@ function main() {
   assert.equal(hasClientAccess(graceUser), true);
   assert.equal(clientProps(graceUser).listing.soldPrice, SOLD_PRICE);
 
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   assert.ok(page.includes("serializeListingDetailClientModel"));
   assert.ok(page.includes("listing={listingForClient}"));
   assert.ok(!page.includes("buildAddressListingHistoryRows({"));

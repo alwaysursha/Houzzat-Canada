@@ -417,7 +417,7 @@ async function main() {
   assert.equal(withoutAgent.publicAgent, null);
   assert.equal(withoutAgent.listing.brokerageName, "MLS Listing Brokerage");
 
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   const panel = read("src/app/api/listings/[mlsNumber]/panel/route.ts");
   const view = read("src/components/listings/ListingDetailView.tsx");
   const mapper = read("src/lib/listings/map-panel-to-detail-view.ts");

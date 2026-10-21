@@ -23,6 +23,16 @@ import {
   resolveRoyalCollectionView,
 } from "../src/lib/tenancy/templates/resolve-royal-collection-view";
 import { takeRoyalFeaturedListings } from "../src/components/templates/royal-collection-one/royal-featured-listings";
+import {
+  LISTING_SOURCE_SWITCH_INVALIDATION,
+  resolveHighOctaneDevelopmentListingSource,
+  resolveTenantListingSourceAssignment,
+} from "../src/lib/tenancy/templates/high-octane-listing-source";
+import {
+  evaluateHighOctaneStagingEnvironment,
+  planHighOctaneStagingWorkspace,
+  resolveHighOctaneStagingTemplateId,
+} from "../src/lib/tenancy/templates/high-octane-staging";
 import type { ListingCard } from "../src/lib/listings/types";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -219,8 +229,15 @@ process.env.NODE_ENV = previousNode;
 
 const layout = read("src/app/(marketing)/layout.tsx");
 assert.ok(layout.includes("HIGH OCTANE Real Estate — Design Preview"));
-assert.ok(layout.includes("isHighOctaneRoyalPreview"));
+assert.ok(layout.includes("isHighOctaneConceptFixture"));
 assert.ok(layout.includes("index: false"));
+const previewJsonLdGate = layout.indexOf(
+  "isHighOctaneConceptFixture(chromeBrand) ? null",
+);
+const organizationJsonLd = layout.indexOf("<JsonLd");
+assert.ok(previewJsonLdGate > 0);
+assert.ok(organizationJsonLd > previewJsonLdGate);
+assert.ok(layout.includes("organizationJsonLdForTenancy"));
 assert.ok(layout.includes("royalCollectionView?.displayFixtureId"));
 assert.ok(layout.includes("<CustomerChatFab />"));
 const guard = read(
@@ -242,7 +259,7 @@ const searchPage = read("src/app/(marketing)/search/page.tsx");
 const searchDemo = read(
   "src/components/templates/royal-collection-one/RoyalCollectionSearchDemonstration.tsx",
 );
-assert.ok(searchPage.includes("isHighOctaneRoyalPreview"));
+assert.ok(searchPage.includes("isHighOctaneConceptFixture"));
 assert.ok(searchPage.includes("<RoyalCollectionSearchDemonstration"));
 assert.equal(searchPage.includes("SearchExperience"), false);
 assert.ok(searchPage.includes('await import("./search-operational")'));
@@ -279,6 +296,229 @@ assert.equal(
     "useRoyalCollectionSearchSkin",
   ),
   false,
+);
+
+const listingPage = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+const listingOperational = read(
+  "src/app/(marketing)/listing/[...parts]/listing-operational.tsx",
+);
+const propertyDemo = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionPropertyDemonstration.tsx",
+);
+assert.ok(listingPage.includes("isHighOctaneConceptFixture"));
+assert.ok(listingPage.includes("<RoyalCollectionPropertyDemonstration"));
+assert.ok(listingPage.includes('await import("./listing-operational")'));
+assert.ok(
+  listingPage.indexOf("isHighOctaneConceptFixture") <
+    listingPage.indexOf('await import("./listing-operational")'),
+);
+assert.equal(listingPage.includes("previewTemplate"), false);
+assert.equal(listingPage.includes("ListingDetailView"), false);
+assert.equal(listingPage.includes("ListingAccessGate"), false);
+assert.equal(listingPage.includes("loadListingForDetailPage"), false);
+assert.equal(listingPage.includes("listingView"), false);
+assert.equal(listingPage.includes("application/ld+json"), false);
+assert.equal(listingPage.includes("/api/listings"), false);
+assert.ok(listingOperational.includes("loadListingForDetailPage"));
+assert.ok(listingOperational.includes("prisma.listingView.create"));
+assert.ok(listingOperational.includes("<ListingDetailView"));
+assert.ok(listingOperational.includes("permanentRedirect"));
+assert.ok(listingOperational.includes("serializeListingDetailClientModel"));
+assert.equal(propertyDemo.includes("Design Concept — Not an MLS Listing"), true);
+assert.ok(propertyDemo.includes("Concept"));
+assert.ok(propertyDemo.includes("ROYAL_COLLECTION_PREVIEW_ACTION_NOTE"));
+assert.ok(propertyDemo.includes("disabled"));
+assert.equal(propertyDemo.includes("data-rc-allow"), false);
+assert.equal(propertyDemo.includes("ListingDetailView"), false);
+assert.equal(propertyDemo.includes("ListingAccessGate"), false);
+assert.equal(propertyDemo.includes("LeadRequestForm"), false);
+assert.equal(propertyDemo.includes("ViewingRequestPanel"), false);
+assert.equal(propertyDemo.includes("ViewingBookingModal"), false);
+assert.equal(propertyDemo.includes("ListingGallery"), false);
+assert.equal(propertyDemo.includes("openAuth"), false);
+assert.equal(propertyDemo.includes("VIEW_LISTING"), false);
+assert.equal(propertyDemo.includes("fetch("), false);
+assert.equal(propertyDemo.includes("/api/listings"), false);
+assert.equal(propertyDemo.includes("/api/leads"), false);
+assert.equal(propertyDemo.includes("application/ld+json"), false);
+assert.equal(propertyDemo.includes("unsplash"), false);
+assert.equal(propertyDemo.includes("wikimedia"), false);
+assert.equal(propertyDemo.includes("$"), false);
+
+const footer = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionFooter.tsx",
+);
+const attribution = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionPlatformAttribution.tsx",
+);
+assert.ok(footer.includes("RoyalCollectionPlatformAttribution"));
+assert.ok(footer.includes("MlsDisclaimer"));
+assert.ok(attribution.includes("Powered by"));
+assert.ok(attribution.includes("https://houzzatpro.com"));
+assert.ok(attribution.includes("HouzzatPRO.com"));
+assert.equal(
+  read("src/components/site/SiteFooter.tsx").includes(
+    "RoyalCollectionPlatformAttribution",
+  ),
+  false,
+);
+assert.ok(guard.includes('href === "https://houzzatpro.com"'));
+
+const houzzatOwner = {
+  nodeEnv: "development",
+  hostIsHouzzatWorkspace: true,
+  hostWorkspaceId: "houzzat-workspace",
+  ownerSessionForHostWorkspace: true,
+  activatedByQueryOrEnvOnly: false,
+};
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource(houzzatOwner).listingSource,
+  "none",
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource(houzzatOwner).reason,
+  "fixture_is_not_a_workspace",
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource(houzzatOwner).sourceWorkspaceId,
+  null,
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource({
+    ...houzzatOwner,
+    nodeEnv: "production",
+  }).reason,
+  "production",
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource({
+    ...houzzatOwner,
+    activatedByQueryOrEnvOnly: true,
+    ownerSessionForHostWorkspace: false,
+  }).reason,
+  "query_or_env_only",
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource({
+    ...houzzatOwner,
+    hostIsHouzzatWorkspace: false,
+  }).reason,
+  "not_houzzat_host",
+);
+assert.equal(
+  resolveHighOctaneDevelopmentListingSource({
+    ...houzzatOwner,
+    ownerSessionForHostWorkspace: false,
+  }).reason,
+  "owner_session_required",
+);
+assert.ok(LISTING_SOURCE_SWITCH_INVALIDATION.length >= 6);
+assert.equal(
+  resolveTenantListingSourceAssignment({
+    tenantWorkspaceId: "high-octane-workspace",
+    sourceWorkspaceId: "houzzat-workspace",
+    authorizedByQuery: false,
+    connectionCount: 1,
+  }).reason,
+  "cross_tenant",
+);
+assert.equal(
+  resolveTenantListingSourceAssignment({
+    tenantWorkspaceId: "high-octane-workspace",
+    sourceWorkspaceId: "high-octane-workspace",
+    authorizedByQuery: true,
+    connectionCount: 1,
+  }).reason,
+  "query_authorization",
+);
+assert.equal(
+  resolveTenantListingSourceAssignment({
+    tenantWorkspaceId: "high-octane-workspace",
+    sourceWorkspaceId: "high-octane-workspace",
+    authorizedByQuery: false,
+    connectionCount: 0,
+  }).reason,
+  "no_connection",
+);
+const ownSource = resolveTenantListingSourceAssignment({
+  tenantWorkspaceId: "high-octane-workspace",
+  sourceWorkspaceId: "high-octane-workspace",
+  authorizedByQuery: false,
+  connectionCount: 1,
+});
+assert.equal(ownSource.listingSource, "workspace_connection");
+assert.equal(ownSource.sourceWorkspaceId, "high-octane-workspace");
+
+const stagingPlan = planHighOctaneStagingWorkspace();
+assert.equal(stagingPlan.displayName, "HIGH OCTANE Real Estate");
+assert.equal(stagingPlan.agentName, "Saad Qureshi");
+assert.equal(stagingPlan.slug, "high-octane-real-estate");
+assert.equal(stagingPlan.provisioned, false);
+assert.equal(stagingPlan.billing, "not_activated");
+assert.equal(stagingPlan.listingSource, "none");
+assert.equal(stagingPlan.selectable, false);
+assert.equal(stagingPlan.presentationReady, false);
+assert.equal(
+  evaluateHighOctaneStagingEnvironment({ NODE_ENV: "development" }).ready,
+  false,
+);
+assert.equal(
+  evaluateHighOctaneStagingEnvironment({
+    NODE_ENV: "production",
+    STAGING_DATABASE_URL: "postgresql://staging.example/neondb",
+    DATABASE_URL: "postgresql://production.example/neondb",
+    HIGH_OCTANE_STAGING: "1",
+    HIGH_OCTANE_STAGING_ACCESS: "authenticated",
+  }).ready,
+  false,
+);
+assert.equal(
+  evaluateHighOctaneStagingEnvironment({
+    NODE_ENV: "development",
+    STAGING_DATABASE_URL: "postgresql://same.example/neondb",
+    DATABASE_URL: "postgresql://same.example/neondb",
+    HIGH_OCTANE_STAGING: "1",
+    HIGH_OCTANE_STAGING_ACCESS: "authenticated",
+  }).ready,
+  false,
+);
+const stagingReady = {
+  NODE_ENV: "development",
+  STAGING_DATABASE_URL: "postgresql://staging.example/neondb",
+  DATABASE_URL: "postgresql://production.example/neondb",
+  HIGH_OCTANE_STAGING: "1",
+  HIGH_OCTANE_STAGING_ACCESS: "authenticated",
+};
+assert.equal(evaluateHighOctaneStagingEnvironment(stagingReady).ready, true);
+assert.equal(
+  resolveHighOctaneStagingTemplateId({
+    workspaceSlug: "houzzat",
+    env: stagingReady,
+  }),
+  null,
+);
+assert.equal(
+  resolveHighOctaneStagingTemplateId({
+    workspaceSlug: stagingPlan.slug,
+    env: stagingReady,
+  }),
+  "royal-collection-one",
+);
+assert.equal(
+  resolveHighOctaneStagingTemplateId({
+    workspaceSlug: stagingPlan.slug,
+    env: { NODE_ENV: "development" },
+  }),
+  null,
+);
+assert.equal(
+  read("src/lib/tenancy/templates/high-octane-staging.ts").includes("prisma"),
+  false,
+);
+assert.ok(
+  read("src/app/(marketing)/listing/[...parts]/page.tsx").includes(
+    "<RoyalCollectionPropertyDemonstration",
+  ),
 );
 
 console.log("royal-collection-signature-one-selftest: ok");

@@ -29,7 +29,7 @@ import {
 } from "@/lib/tenancy/templates";
 import { resolveAgentSignatureView } from "@/lib/tenancy/templates/resolve-agent-signature-view";
 import {
-  isHighOctaneRoyalPreview,
+  isHighOctaneConceptFixture,
   resolveRoyalCollectionView,
 } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { RoyalCollectionPreviewGuard } from "@/components/templates/royal-collection-one/RoyalCollectionPreviewGuard";
@@ -124,7 +124,7 @@ export async function generateMetadata(): Promise<Metadata> {
     return { title: "Not found" };
   }
   const previewBrand = await resolveMarketingPresentationBrand();
-  if (previewBrand && isHighOctaneRoyalPreview(previewBrand)) {
+  if (previewBrand && isHighOctaneConceptFixture(previewBrand)) {
     return {
       title: { absolute: "HIGH OCTANE Real Estate — Design Preview" },
       description: "Local design preview. Actions are disabled.",
@@ -240,13 +240,15 @@ export default async function MarketingLayout({
           {royalCollectionView?.displayFixtureId ? (
             <RoyalCollectionPreviewGuard />
           ) : null}
-          <JsonLd
-            data={organizationJsonLdForTenancy(
-              tenancy,
-              chromeBrand.canonicalOrigin,
-              { telephone: phone },
-            )}
-          />
+          {isHighOctaneConceptFixture(chromeBrand) ? null : (
+            <JsonLd
+              data={organizationJsonLdForTenancy(
+                tenancy,
+                chromeBrand.canonicalOrigin,
+                { telephone: phone },
+              )}
+            />
+          )}
           <AdsTrackingPixels
             ga4MeasurementId={tracking.ga4MeasurementId}
             googleAdsId={tracking.googleAdsId}

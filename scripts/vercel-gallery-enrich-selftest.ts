@@ -58,7 +58,7 @@ async function main() {
   const fetchIdx = live.indexOf("applyLive(fetched.photos)");
   assert.ok(applyIdx > 0 && returnIfRicher > applyIdx && fetchIdx > returnIfRicher);
   assert.ok(!live.includes("applyLive(live);\n          return;"));
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   const vercelGate = page.indexOf("const clientLivePhotosPromise = process.env.VERCEL");
   const propTxFetchIdx = page.indexOf("fetchListingPhotosFromPropTx(");
   assert.ok(vercelGate >= 0);

@@ -19,6 +19,7 @@ import {
   resolveRequestTenancy,
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
+import { resolveHighOctaneStagingTemplateId } from "@/lib/tenancy/templates/high-octane-staging";
 import { resolveActiveTemplatePreviewForWorkspace } from "@/lib/tenancy/template-preview";
 import { resolvePublicTeamRosterForWorkspace } from "@/lib/tenancy/team-roster/public";
 import {
@@ -222,10 +223,15 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   const persistedTemplateId: ImplementedTemplateId =
     resolvePresentedTemplateId(effectiveThemeId, activePreview?.source ?? null);
   const plan = await resolveWorkspacePlanCapabilities(tenancy.workspaceId);
-  const templateId = resolvePublicTemplateIdForPlan(
-    persistedTemplateId,
-    plan.teamRosterEnabled,
-  );
+  const stagingTemplateId = resolveHighOctaneStagingTemplateId({
+    workspaceSlug: tenancy.workspaceSlug,
+  });
+  const templateId =
+    stagingTemplateId ??
+    resolvePublicTemplateIdForPlan(
+      persistedTemplateId,
+      plan.teamRosterEnabled,
+    );
 
   // Preview may swap template colors without writing WorkspaceBranding.
   let presentationTenancy = tenancy;

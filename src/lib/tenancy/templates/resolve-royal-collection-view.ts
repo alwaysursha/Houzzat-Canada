@@ -7,6 +7,7 @@ import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-present
 import type { PublicBrokerageIdentity } from "@/lib/tenancy/professional-identity";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
 import type { RoyalCollectionScene } from "@/lib/tenancy/templates/royal-collection-media";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
 
 export type RoyalCollectionCommunityLink = {
@@ -56,6 +57,19 @@ export type RoyalCollectionView = {
 function firstNameFrom(name: string): string {
   const part = name.trim().split(/\s+/)[0];
   return part || name;
+}
+
+/**
+ * Concept fixture on a host that is not the genuine staging workspace.
+ * The staging workspace, once it exists, uses operational pages.
+ */
+export function isHighOctaneConceptFixture(
+  brand: MarketingPresentationBrand,
+): boolean {
+  return (
+    isHighOctaneRoyalPreview(brand) &&
+    brand.workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+  );
 }
 
 /** Display fixture only. Production and ordinary requests stay on tenant identity. */
@@ -111,7 +125,7 @@ function highOctaneView(): RoyalCollectionView {
 export function resolveRoyalCollectionView(
   brand: MarketingPresentationBrand,
 ): RoyalCollectionView {
-  if (isHighOctaneRoyalPreview(brand)) return highOctaneView();
+  if (isHighOctaneConceptFixture(brand)) return highOctaneView();
 
   const professional = brand.professionalIdentity;
   const agentName =

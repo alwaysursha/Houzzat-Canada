@@ -17,7 +17,9 @@ function isAllowed(target: Element): boolean {
     href.startsWith("#") ||
     href.startsWith("/#") ||
     href.startsWith("tel:") ||
-    href.startsWith("mailto:")
+    href.startsWith("mailto:") ||
+    href === "https://houzzatpro.com" ||
+    href === "https://houzzatpro.com/"
   );
 }
 

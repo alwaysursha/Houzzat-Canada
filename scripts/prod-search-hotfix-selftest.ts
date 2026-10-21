@@ -205,7 +205,7 @@ function testSourceWiring() {
   assert.ok(deferred.includes('cache: "no-store"'));
   assert.ok(deferred.includes("canSeeRestricted"));
 
-  const listingPage = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const listingPage = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   assert.ok(listingPage.includes("session?.user?.id"));
   assert.equal(
     /session\?\.user\?\.email\s*\n\s*\? await prisma\.user/.test(listingPage),

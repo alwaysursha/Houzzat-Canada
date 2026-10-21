@@ -323,7 +323,7 @@ function testBothListingSurfaces() {
   assert.ok(live.includes("ignoreSessionCache: true"));
   assert.ok(live.includes("photos.slice(0, NEON_LISTING_MEDIA_CAP)"));
   assert.ok(live.includes("totalPhotoCount={totalPhotoCount}"));
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   assert.ok(page.includes("verifyLocked ? null : clientLivePhotosPromise"));
   console.log("[6] listing detail lock wiring; Search has no duplicate overlay... PASS");
 }

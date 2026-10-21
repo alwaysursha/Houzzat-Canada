@@ -188,7 +188,7 @@ async function main() {
 }
 
 {
-  const page = read("src/app/(marketing)/listing/[...parts]/page.tsx");
+  const page = read("src/app/(marketing)/listing/[...parts]/listing-operational.tsx");
   const vercelGate = page.indexOf("const clientLivePhotosPromise = process.env.VERCEL");
   const fetchIdx = page.indexOf("fetchListingPhotosFromPropTx(");
   assert.ok(vercelGate >= 0, "Vercel SSR must short-circuit live photos");

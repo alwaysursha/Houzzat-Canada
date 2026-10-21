@@ -1393,7 +1393,7 @@
 }
 
 .footer {
-  background: var(--rc-navy);
+  background: #071629;
   color: #fff;
   padding: 56px clamp(25px, 8.2vw, 158px) 25px;
 }
@@ -1480,6 +1480,30 @@
 .footerBottom em {
   color: var(--rc-gold);
   font-style: normal;
+}
+
+.platformAttribution {
+  margin: 22px 0 0;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.platformAttributionMuted {
+  color: rgb(186 200 211 / 0.78);
+}
+
+.platformAttributionLink {
+  color: #c8a66a;
+  text-decoration: none;
+  transition: color 160ms ease, letter-spacing 160ms ease;
+}
+
+.platformAttributionLink:hover,
+.platformAttributionLink:focus-visible {
+  color: #e4d2a8;
+  letter-spacing: 0.16em;
 }
 
 .footerLegal {
@@ -1829,6 +1853,10 @@
 
   .footerBottom {
     flex-direction: column;
+  }
+
+  .platformAttribution {
+    text-align: left;
   }
 
   .searchFields {
