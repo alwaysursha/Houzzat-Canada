@@ -22,6 +22,8 @@ import {
 import { formatListingSqftLabel } from "@/lib/listings/facts";
 import { syncViewListingGate } from "@/lib/auth/view-listing-intent";
 import { listingPath } from "@/lib/listings/listing-path";
+import { useRoyalCollectionSearchSkin } from "@/components/templates/royal-collection-one/use-royal-search-skin";
+import royalSearchStyles from "@/components/templates/royal-collection-one/royal-search.module.css";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -87,6 +89,123 @@ export function SearchResultCard({
   }
 
   const stackedMobile = mobileFullWidth && !horizontal;
+  const royal = useRoyalCollectionSearchSkin();
+  const statusLabel = showStatus
+    ? listingStatusLabel(listing.status, listing.transactionType)
+    : listing.transactionType === "LEASE"
+      ? "For lease"
+      : "For sale";
+
+  if (royal && !horizontal) {
+    return (
+      <article className={cn(royalSearchStyles.card, royalSearchStyles.liveCard)}>
+        <div className={cn(royalSearchStyles.media, royalSearchStyles.liveMedia)}>
+          <ListingLink
+            href={path}
+            funnelPathClass="search_card"
+            aria-label={`${street}, ${cityLine}`}
+            onMouseEnter={onFocus}
+            onFocus={onFocus}
+            className="absolute inset-0 block"
+          >
+            {listing.primaryImageUrl ? (
+              <ListingPhoto
+                src={listing.primaryImageUrl}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="(max-width: 1023px) 100vw, 28vw"
+              />
+            ) : null}
+          </ListingLink>
+          <span className={royalSearchStyles.badge}>{statusLabel}</span>
+          <button
+            type="button"
+            aria-label={saved ? "Remove saved property" : "Save property"}
+            aria-busy={savePending || !ready}
+            disabled={savePending || !ready}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void toggle({ flyFrom: event.currentTarget });
+            }}
+            className={cn(
+              "absolute right-2 top-2 z-10 inline-flex size-8 items-center justify-center border border-white/80 bg-white/95 text-[#0B1F3A]",
+              saved && "text-[#145A46]",
+            )}
+          >
+            <Heart
+              className={cn("size-3.5", saved && "fill-[#145A46] text-[#145A46]")}
+              strokeWidth={2.25}
+              aria-hidden
+            />
+          </button>
+        </div>
+        <div className={royalSearchStyles.body}>
+          <ListingLink
+            href={path}
+            funnelPathClass="search_card"
+            onMouseEnter={onFocus}
+            onFocus={onFocus}
+            className="block min-w-0"
+          >
+            <p className={royalSearchStyles.meta}>
+              {commercial ? null : (
+                <>
+                  <span>{formatListingBedsLabel(listing)}</span>
+                  <span>{formatStat(listing.baths)} Baths</span>
+                </>
+              )}
+              {sqft ? <span>{sqft}</span> : null}
+            </p>
+            <p className={royalSearchStyles.city}>{cityLine}</p>
+            {lockedPreview ? (
+              <p className={royalSearchStyles.price}>Restricted</p>
+            ) : (
+              <p className={royalSearchStyles.price}>
+                {showClosedPrice ? (
+                  <SoldForPrice
+                    soldPrice={listing.soldPrice}
+                    listPrice={listing.listPrice}
+                    status={listing.status}
+                    transactionType={listing.transactionType}
+                    size="sm"
+                  />
+                ) : (
+                  formatListPrice(listing.listPrice, listing.transactionType)
+                )}
+              </p>
+            )}
+            <p className={royalSearchStyles.address}>{street}</p>
+            <p className={royalSearchStyles.city}>{propertyTypeLabel(listing.propertyType)}</p>
+            {listing.mlsNumber ? (
+              <p className={royalSearchStyles.city}>MLS® {listing.mlsNumber}</p>
+            ) : null}
+          </ListingLink>
+          {lockedPreview ? (
+            <button
+              type="button"
+              onClick={openListingSignIn}
+              className="mt-2 inline-flex h-9 items-center bg-[#0B1F3A] px-3 text-[10px] font-bold tracking-[0.14em] text-[#C8A66A] uppercase"
+            >
+              Sign in required
+            </button>
+          ) : null}
+          <div className="mt-auto px-0 pb-0">
+            <ListingCardActions
+              mlsNumber={listing.mlsNumber}
+              title={shareTitle}
+              listingStatus={listing.status}
+              path={path}
+              quiet
+              omitHeart
+              shareMenuPlacement="up"
+            />
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <article

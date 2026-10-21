@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
@@ -21,6 +22,7 @@ export function RoyalCollectionHeader({
   view: RoyalCollectionView;
   previewBarActive?: boolean;
 }) {
+  const pathname = usePathname();
   const menuId = useId();
   const communitiesId = useId();
   const headerRef = useRef<HTMLElement | null>(null);
@@ -50,6 +52,10 @@ export function RoyalCollectionHeader({
         "--rc-header-offset",
         `${barHeight + headerHeight}px`,
       );
+      document.documentElement.style.setProperty(
+        "--rc-fixed-header",
+        `${headerHeight}px`,
+      );
     };
     apply();
     const observer = new ResizeObserver(apply);
@@ -60,6 +66,7 @@ export function RoyalCollectionHeader({
       header.style.top = "";
       document.documentElement.style.removeProperty("--rc-preview-bar");
       document.documentElement.style.removeProperty("--rc-header-offset");
+      document.documentElement.style.removeProperty("--rc-fixed-header");
     };
   }, [previewBarActive]);
 
@@ -122,7 +129,7 @@ export function RoyalCollectionHeader({
           </RoyalCollectionPreviewLink>
         </div>
       </div>
-      <div className={[styles.mast, solid || mobileOpen ? styles.mastSolid : ""].filter(Boolean).join(" ")}>
+      <div className={[styles.mast, solid || mobileOpen || pathname === "/search" ? styles.mastSolid : ""].filter(Boolean).join(" ")}>
         <Link className={styles.wordmark} href={homeHref} data-rc-allow="" aria-label={`${view.brandName} home`}>
           <span className={styles.wordmarkMark} aria-hidden="true">
             {view.provisionalWordmark ? "H" : (view.brandName.trim()[0] || "H")}

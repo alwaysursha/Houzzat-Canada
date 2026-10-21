@@ -1,10 +1,23 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
-import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
-import { SearchExperience } from "@/components/listings/SearchExperience";
+import { RoyalCollectionSearchDemonstration } from "@/components/templates/royal-collection-one/RoyalCollectionSearchDemonstration";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { isHighOctaneRoyalPreview } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 
 export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMarketingPresentationBrand();
+  if (brand && isHighOctaneRoyalPreview(brand)) {
+    return {
+      title: { absolute: "HIGH OCTANE Real Estate — Design Preview" },
+      description: "Local design preview. Actions are disabled.",
+      robots: {
+        index: false,
+        follow: false,
+        nocache: true,
+        googleBot: { index: false, follow: false, noimageindex: true },
+      },
+    };
+  }
   return buildMarketingPageMetadata({
     title: "Search GTA Homes for Sale",
     description:
@@ -13,23 +26,12 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-export default function SearchPage() {
-  return (
-    <div className="flex h-[calc(100dvh-var(--site-header-stack,4rem)-var(--mobile-bottom-nav,0px))] flex-col overflow-hidden bg-mist">
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-ink/50">
-            Loading search…
-          </div>
-        }
-      >
-        <SearchExperience />
-      </Suspense>
-      <div className="shrink-0 border-t border-line/80 bg-surface px-3 py-1 sm:px-4 sm:py-1.5 [[data-mobile-bottom-nav='0']_&]:pb-[max(0.25rem,env(safe-area-inset-bottom,0px))]">
-        {/* ≤1023: collapsed disclosure (full approved copy on expand). Desktop: full text. */}
-        <MlsDisclaimer compact className="lg:hidden" />
-        <MlsDisclaimer className="hidden text-[10px] leading-snug text-ink/40 lg:block" />
-      </div>
-    </div>
-  );
+export default async function SearchPage() {
+  const brand = await resolveMarketingPresentationBrand();
+  if (brand && isHighOctaneRoyalPreview(brand)) {
+    return <RoyalCollectionSearchDemonstration />;
+  }
+
+  const { OperationalPropertySearch } = await import("./search-operational");
+  return <OperationalPropertySearch />;
 }

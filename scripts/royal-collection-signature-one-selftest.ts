@@ -238,4 +238,47 @@ assert.equal(
   false,
 );
 
+const searchPage = read("src/app/(marketing)/search/page.tsx");
+const searchDemo = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionSearchDemonstration.tsx",
+);
+assert.ok(searchPage.includes("isHighOctaneRoyalPreview"));
+assert.ok(searchPage.includes("<RoyalCollectionSearchDemonstration"));
+assert.equal(searchPage.includes("SearchExperience"), false);
+assert.ok(searchPage.includes('await import("./search-operational")'));
+assert.ok(
+  read("src/app/(marketing)/search/search-operational.tsx").includes(
+    "<SearchExperience",
+  ),
+);
+assert.equal(searchDemo.includes("SearchExperience"), false);
+assert.equal(searchDemo.includes("SearchMap"), false);
+assert.equal(searchDemo.includes("/api/listings"), false);
+assert.equal(searchDemo.includes("fetch("), false);
+assert.ok(searchDemo.includes("Not an MLS listing"));
+assert.ok(searchDemo.includes("Concept"));
+assert.ok(searchDemo.includes("ROYAL_COLLECTION_PREVIEW_ACTION_NOTE"));
+assert.equal(searchDemo.includes("unsplash"), false);
+assert.equal(searchDemo.includes("wikimedia"), false);
+assert.equal(searchDemo.includes("$"), false);
+assert.ok(searchDemo.includes("data-rc-allow"));
+assert.ok(searchDemo.includes("Concept map"));
+assert.ok(
+  read("src/components/listings/SearchExperience.tsx").includes(
+    "useRoyalCollectionSearchSkin",
+  ),
+);
+assert.equal(
+  read("src/app/(admin)/admin/search/page.tsx").includes(
+    "useRoyalCollectionSearchSkin",
+  ),
+  false,
+);
+assert.equal(
+  read("src/app/(agent)/agent/search/page.tsx").includes(
+    "useRoyalCollectionSearchSkin",
+  ),
+  false,
+);
+
 console.log("royal-collection-signature-one-selftest: ok");

@@ -49,6 +49,8 @@ import { SearchDesktopFilterPanel } from "@/components/listings/SearchDesktopFil
 import { SearchFiltersMenu } from "@/components/listings/SearchFiltersMenu";
 import { SearchFiltersSheet } from "@/components/listings/SearchFiltersSheet";
 import { SearchResultsPane } from "@/components/listings/SearchResultsPane";
+import { useRoyalCollectionSearchSkin } from "@/components/templates/royal-collection-one/use-royal-search-skin";
+import royalSearchStyles from "@/components/templates/royal-collection-one/royal-search.module.css";
 import { SearchesDropdown } from "@/components/listings/SearchesDropdown";
 import { mergeParsedSearchIntoCommitted } from "@/lib/listings/merge-parsed-search";
 import { parseSearchQuery } from "@/lib/listings/parse-search-query";
@@ -199,6 +201,7 @@ export function SearchExperience() {
   const citiesQueryParam = structuredCities.join("|");
   const communitiesParam = committed.communities.join("|");
   const qParam = committed.q;
+  const royalSearch = useRoyalCollectionSearchSkin();
   const access = useClientAccess();
   /** Session present — for save/watch CTAs. */
   const signedIn = access.isSignedIn;
@@ -852,12 +855,18 @@ export function SearchExperience() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className={cn(
+        "flex min-h-0 flex-1 flex-col",
+        royalSearch && royalSearchStyles.live,
+      )}
+    >
       <div
         className={cn(
           "relative z-40 shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
           !isNarrow &&
             "bg-surface/95 px-4 py-3 shadow-[0_1px_0_rgba(20,32,28,0.04)] backdrop-blur-[2px] lg:px-5",
+          royalSearch && royalSearchStyles.liveBar,
         )}
       >
         {isNarrow ? (
@@ -1079,6 +1088,7 @@ export function SearchExperience() {
         ref={splitStageRef}
         className={cn(
           "relative min-h-0 flex-1",
+          royalSearch && royalSearchStyles.liveStage,
           view === "split" && "search-split-stage flex flex-col lg:flex-row",
           view === "split" && resultsSheetOpen && "is-sheet-open",
           desktopCardsLayout && "flex flex-row",
