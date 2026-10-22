@@ -30,6 +30,7 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
       ];
   const [index, setIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const [videoMode, setVideoMode] = useState<"pending" | "off" | "desktop" | "mobile">("pending");
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -40,12 +41,38 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
   }, []);
 
   useEffect(() => {
+    const narrow = window.matchMedia("(max-width: 767px)");
+    const apply = () => {
+      const saveData =
+        "connection" in navigator &&
+        (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData ===
+          true;
+      setVideoMode(saveData ? "off" : narrow.matches ? "mobile" : "desktop");
+    };
+    apply();
+    narrow.addEventListener("change", apply);
+    const connection =
+      "connection" in navigator
+        ? (navigator as Navigator & { connection?: EventTarget }).connection
+        : undefined;
+    connection?.addEventListener("change", apply);
+    return () => {
+      narrow.removeEventListener("change", apply);
+      connection?.removeEventListener("change", apply);
+    };
+  }, []);
+
+  const playback = reduceMotion ? "off" : videoMode;
+
+  const holdMs = scenes[index]?.durationMs ?? SCENE_MS;
+
+  useEffect(() => {
     if (reduceMotion || scenes.length < 2) return;
-    const timer = window.setInterval(() => {
+    const timer = window.setTimeout(() => {
       setIndex((current) => (current + 1) % scenes.length);
-    }, SCENE_MS);
-    return () => window.clearInterval(timer);
-  }, [reduceMotion, scenes.length]);
+    }, holdMs);
+    return () => window.clearTimeout(timer);
+  }, [reduceMotion, scenes.length, index, holdMs]);
 
   const kicker = [view.agentName, view.markets[0]].filter(Boolean).join(" · ");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -58,7 +85,12 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
   }
 
   return (
-    <section className={styles.hero} aria-label="Discover Niagara luxury living">
+    <section
+      className={[styles.hero, scenes.some((scene) => scene.src.trim()) ? styles.heroHasVideo : ""]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label="Discover Niagara luxury living"
+    >
       <div className={styles.heroWash} aria-hidden="true" />
       {scenes.map((scene, sceneIndex) => (
         <div
@@ -67,20 +99,25 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
             .filter(Boolean)
             .join(" ")}
           style={
-            scene.conceptStill ? { backgroundImage: `url(${scene.conceptStill})` } : undefined
+            scene.conceptStill || scene.poster
+              ? { backgroundImage: `url(${scene.conceptStill || scene.poster})` }
+              : undefined
           }
           aria-hidden="true"
         />
       ))}
-      {scenes.map((scene, sceneIndex) =>
-        scene.src.trim() && !reduceMotion ? (
-          <HeroSceneVideo
-            key={`${scene.id}-video`}
-            scene={scene}
-            active={sceneIndex === index}
-          />
-        ) : null,
-      )}
+      {playback === "desktop" || playback === "mobile"
+        ? scenes.map((scene, sceneIndex) =>
+            scene.src.trim() ? (
+              <HeroSceneVideo
+                key={`${scene.id}-video`}
+                scene={scene}
+                src={playback === "mobile" && scene.srcMobile ? scene.srcMobile : scene.src}
+                active={sceneIndex === index}
+              />
+            ) : null,
+          )
+        : null}
       <div className={styles.heroOverlay} />
       <div className={styles.heroFine} aria-hidden="true" />
       <div className={styles.heroContent}>
@@ -155,7 +192,7 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
               }}
             >
               {sceneIndex === index && !reduceMotion && scenes.length > 1 ? (
-                <span className={styles.heroProgress} style={{ animationDuration: `${SCENE_MS}ms` }} />
+                <span className={styles.heroProgress} style={{ animationDuration: `${holdMs}ms` }} />
               ) : null}
               <b>{String(sceneIndex + 1).padStart(2, "0")}</b>
               {TAB_LABELS[scene.id] || scene.title}
@@ -175,16 +212,20 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
 
 function HeroSceneVideo({
   scene,
+  src,
   active,
 }: {
   scene: RoyalCollectionScene;
+  src: string;
   active: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [keepFrame, setKeepFrame] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    let cancelled = false;
     const show = () => video.classList.add(styles.heroVideoOn);
     const hide = () => {
       video.pause();
@@ -195,21 +236,34 @@ function HeroSceneVideo({
       return;
     }
     const play = () => {
-      show();
-      void video.play().catch(() => {});
+      if (video.currentTime > 0.05) video.currentTime = 0;
+      void video
+        .play()
+        .then(() => {
+          if (cancelled) return;
+          setKeepFrame(true);
+          show();
+        })
+        .catch(() => {
+          if (!cancelled) hide();
+        });
     };
+    const onError = () => hide();
     if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) play();
     else video.addEventListener("canplay", play, { once: true });
+    video.addEventListener("error", onError);
     const onVisibility = () => {
       if (document.hidden) video.pause();
-      else void video.play().catch(() => {});
+      else void video.play().catch(() => hide());
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      cancelled = true;
       video.removeEventListener("canplay", play);
+      video.removeEventListener("error", onError);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [active]);
+  }, [active, src]);
 
   return (
     <video
@@ -218,11 +272,10 @@ function HeroSceneVideo({
       poster={scene.poster ?? undefined}
       muted
       playsInline
-      loop
       preload={active ? "metadata" : "none"}
       aria-hidden="true"
     >
-      {active ? <source src={scene.src} /> : null}
+      {active || keepFrame ? <source src={src} type="video/mp4" /> : null}
     </video>
   );
 }

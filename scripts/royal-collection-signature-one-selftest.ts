@@ -3,7 +3,7 @@
  * Run: pnpm exec tsx scripts/royal-collection-signature-one-selftest.ts
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { EMPTY_PUBLIC_PROFESSIONAL_IDENTITY } from "../src/lib/tenancy/professional-identity/types";
@@ -206,6 +206,61 @@ assert.equal(fixtureView.posterUrl, null);
 assert.equal(fixtureView.scenes.length, 3);
 assert.ok(fixtureView.scenes.every((scene) => scene.src === "" && scene.poster === null));
 assert.equal(fixtureView.scenes.some((scene) => scene.title === "Niagara Falls"), true);
+assert.equal(
+  fixtureView.scenes.some((scene) => scene.id === "niagara-falls" && scene.conceptStill),
+  true,
+);
+assert.equal(
+  fixtureView.scenes.some((scene) => scene.id === "niagara-on-the-lake" && scene.conceptStill),
+  true,
+);
+const highOctaneWorkspace = resolveRoyalCollectionView({
+  ...tenantBrand,
+  displayName: "HIGH OCTANE Real Estate",
+  workspaceSlug: "high-octane-real-estate",
+  isHouzzatWorkspace: false,
+  templatePreview: null,
+});
+assert.equal(highOctaneWorkspace.displayFixtureId, null);
+assert.equal(highOctaneWorkspace.actionsDisabled, false);
+assert.deepEqual(
+  highOctaneWorkspace.scenes.map((scene) => scene.id),
+  ["niagara-falls", "luxury-exterior", "luxury-interior"],
+);
+assert.equal(
+  highOctaneWorkspace.scenes.some((scene) => scene.id === "niagara-on-the-lake"),
+  false,
+);
+assert.equal(JSON.stringify(highOctaneWorkspace).includes("CityXcape"), false);
+for (const scene of highOctaneWorkspace.scenes) {
+  assert.equal(scene.conceptStill ?? null, null);
+  assert.ok(scene.src.includes("-desktop.mp4"));
+  assert.ok(scene.srcMobile?.includes("-mobile.mp4"));
+  assert.ok(scene.poster?.includes("-poster.jpg"));
+  assert.ok((scene.durationMs ?? 0) >= 9500);
+  assert.ok((scene.durationMs ?? 0) <= 13510);
+  for (const rel of [scene.src, scene.srcMobile, scene.poster]) {
+    const file = rel!.slice(1).split("?")[0] ?? "";
+    assert.equal(existsSync(join(root, "public", file)), true, rel);
+  }
+}
+const houzzatWorkspace = resolveRoyalCollectionView({
+  ...tenantBrand,
+  templatePreview: null,
+});
+assert.equal(houzzatWorkspace.scenes.length, 0);
+assert.equal(
+  read("src/components/templates/royal-collection-one/RoyalCollectionFooter.tsx").includes(
+    "CityXcape",
+  ),
+  false,
+);
+assert.equal(
+  read("src/components/templates/royal-collection-one/RoyalCollectionHero.tsx").includes(
+    "CityXcape",
+  ),
+  false,
+);
 assert.equal(fixtureView.navCommunities.some((place) => place.name === "Niagara-on-the-Lake"), true);
 assert.equal(fixtureView.navCommunities.some((place) => place.name === "Fonthill / Pelham"), true);
 assert.equal(JSON.stringify(fixtureView).includes("Ali Syed"), false);

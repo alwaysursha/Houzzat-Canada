@@ -507,11 +507,31 @@
   opacity: 0.42;
 }
 
+.heroHasVideo .heroSceneOn {
+  opacity: 1;
+}
+
+.heroHasVideo .heroVideoOn {
+  opacity: 1;
+}
+
 .heroOverlay {
   background:
     linear-gradient(90deg, #071629f2 1%, #071629b8 39%, #07162944 85%),
     linear-gradient(0deg, #071629b8, transparent 50%),
     linear-gradient(145deg, #145a463f, transparent 44%);
+}
+
+.heroHasVideo .heroOverlay {
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, #071629f2 0%, #071629cc 35%, #0716294d 65%, #0716291a 100%),
+    linear-gradient(180deg, #07162973 0%, #0716292e 8%, transparent 16%);
+}
+
+.heroHasVideo .heroFine {
+  opacity: 0;
 }
 
 .heroFine {
@@ -622,6 +642,12 @@
   font-size: 9px;
   text-transform: uppercase;
   cursor: pointer;
+}
+
+.heroHasVideo .heroSceneBtn {
+  width: auto;
+  min-width: 112px;
+  padding-right: 18px;
 }
 
 .heroSceneBtnOn {
@@ -1759,6 +1785,24 @@
     width: 31vw;
     max-width: 110px;
     font-size: 8px;
+  }
+
+  .heroHasVideo .heroBottom {
+    padding-right: calc(1rem + 2.75rem + 0.75rem);
+  }
+
+  .heroHasVideo .heroSceneBtn {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
+    padding-right: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .heroHasVideo .heroSceneBtn b {
+    display: block;
+    margin-right: 0;
   }
 
   .searchStrip,

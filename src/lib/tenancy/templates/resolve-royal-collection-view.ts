@@ -5,6 +5,7 @@
  */
 import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import type { PublicBrokerageIdentity } from "@/lib/tenancy/professional-identity";
+import { HIGH_OCTANE_HERO_SCENES } from "@/lib/tenancy/templates/high-octane-hero-media";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
 import type { RoyalCollectionScene } from "@/lib/tenancy/templates/royal-collection-media";
 import {
@@ -215,7 +216,7 @@ export function resolveRoyalCollectionView(
         : markets
       : null,
     posterUrl: null,
-    scenes: [],
+    scenes: stagingWorkspace ? HIGH_OCTANE_HERO_SCENES : [],
     editorialCommunities: stagingDefaultMarket
       ? HIGH_OCTANE_PREVIEW_FIXTURE.editorialCommunities
       : null,

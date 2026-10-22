@@ -13,6 +13,10 @@ export type RoyalCollectionScene = {
    * licensed production asset. Video `src` stays empty until a clip is supplied.
    */
   conceptStill?: string | null;
+  /** Smaller encode for narrow viewports. Absent scenes use `src`. */
+  srcMobile?: string | null;
+  /** Time on this scene before the hero advances. Falls back to the hero default. */
+  durationMs?: number;
 };
 
 /**
