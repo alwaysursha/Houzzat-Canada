@@ -754,7 +754,11 @@
   }
 
   .scroll {
-    padding-bottom: calc(var(--mobile-bottom-nav, 4.75rem) + env(safe-area-inset-bottom, 0px) + 1.5rem);
+    padding-bottom: calc(4.75rem + 2.75rem + 0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .story {
+    padding-right: calc(1rem + 2.75rem + 0.75rem);
   }
 
   .gallery,
@@ -765,7 +769,7 @@
 
   .thumbs {
     margin-top: 6px;
-    margin-right: 3.25rem;
+    margin-right: calc(1rem + 2.75rem + 0.75rem);
   }
 
   .lightbox {
@@ -801,6 +805,16 @@
     gap: 6px;
   }
 
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .story {
+    padding-right: calc(1.5rem + 6.5rem);
+  }
+
+  .thumbs {
+    margin-right: calc(1.5rem + 6.5rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

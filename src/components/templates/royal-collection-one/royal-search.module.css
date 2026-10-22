@@ -647,8 +647,8 @@
 }
 
 @media (max-width: 767px) {
-  .syntheticScroll {
-    padding-bottom: calc(var(--mobile-bottom-nav, 4.75rem) + 4.75rem);
+  .scroll {
+    padding-bottom: calc(4.75rem + 2.75rem + 0.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   .syntheticBar {
@@ -739,7 +739,9 @@
 
 @media (max-width: 700px) {
   .inner {
-    width: min(1500px, calc(100% - 50px));
+    width: calc(100% - 25px - 4.5rem);
+    margin-right: 4.5rem;
+    margin-left: 25px;
     gap: 14px;
     padding-top: 12px;
   }
@@ -786,6 +788,14 @@
 
   .card:hover {
     transform: none;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 767px) {
+  .inner {
+    width: calc(100% - 25px - 8rem);
+    margin-right: 8rem;
+    margin-left: 25px;
   }
 }
 
