@@ -8,6 +8,7 @@ import { ON_MARKET_LISTING_STATUSES } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
 import { toCard } from "@/lib/listings/provider";
 import type { ListingCard } from "@/lib/listings/types";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 const MLS_COMPLETE = /^[A-Z]{1,3}\d{7,8}$/;
 const MLS_PREFIX = /^[A-Z]{1,3}\d{1,10}$/;
@@ -71,7 +72,12 @@ export function preciseAddressWhere(q: string): Prisma.ListingWhereInput | null 
 
 export async function findListingsByMlsPrefix(prefix: string): Promise<ListingCard[]> {
   const rows = await prisma.listing.findMany({
-    where: { mlsNumber: { startsWith: prefix, mode: "insensitive" } },
+    where: {
+      AND: [
+        { mlsNumber: { startsWith: prefix, mode: "insensitive" } },
+        excludeStagingSnapshotWhere(),
+      ],
+    },
     include: LISTING_CARD_INCLUDE,
     orderBy: { mlsNumber: "asc" },
     take: 25,
@@ -115,6 +121,7 @@ export async function findFeedListings(input: {
     serviceAreaCityWhere(input.cities),
     { status: { in: [...ON_MARKET_LISTING_STATUSES] } },
     { segment: { in: ["RESIDENTIAL", "COMMERCIAL"] } },
+    excludeStagingSnapshotWhere(),
   ];
   if (input.transactionType === "SALE" || input.transactionType === "LEASE") {
     and.push({ transactionType: input.transactionType });
@@ -152,6 +159,7 @@ export async function findListingsByPreciseAddress(
   const and: Prisma.ListingWhereInput[] = [
     address,
     { status: { in: [...ON_MARKET_LISTING_STATUSES] } },
+    excludeStagingSnapshotWhere(),
   ];
   if (transactionType === "SALE" || transactionType === "LEASE") {
     and.push({ transactionType });

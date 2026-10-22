@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 
 /** Distinct community names for typeahead (optional city scope). */
 export async function GET(request: Request) {
@@ -12,18 +15,22 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [] as string[] });
   }
 
+  const context = await resolveListingEntitlementContextForRequest(request);
   const rows = await prisma.listing.findMany({
-    where: {
-      community: {
-        not: null,
-        contains: q,
-        mode: "insensitive",
+    where: withStagingSnapshotBoundary(
+      {
+        community: {
+          not: null,
+          contains: q,
+          mode: "insensitive",
+        },
+        ...(city
+          ? { city: { equals: city, mode: "insensitive" as const } }
+          : {}),
+        segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
       },
-      ...(city
-        ? { city: { equals: city, mode: "insensitive" as const } }
-        : {}),
-      segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
-    },
+      stagingSnapshotVisibleFromResolution(context.resolution),
+    ),
     select: { community: true },
     distinct: ["community"],
     take: limit * 3,

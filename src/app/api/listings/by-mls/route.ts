@@ -7,6 +7,11 @@ import {
   buildPrismaEntitledInventoryWhere,
   resolveListingEntitlementContextForRequest,
 } from "@/lib/tenancy/listing-entitlement";
+import {
+  excludeStagingSnapshotWhere,
+  stagingSnapshotInventoryWhere,
+} from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { hasClientAccess } from "@/lib/vow";
 
 /**
@@ -41,8 +46,11 @@ export async function GET(request: Request) {
   }
 
   // Never trust client workspaceId / org / provider / SAK.
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = stagingSnapshotVisibleFromResolution(
+    context.resolution,
+  );
 
   // Mixed-status batch: ACTIVE_LISTINGS vs SOLD branches (no capability union).
   // Empty authorities → FSBO-only branch (zero MLS).
@@ -50,7 +58,7 @@ export async function GET(request: Request) {
     entitlement,
     statuses: null,
   });
-  if (inventory.kind === "empty") {
+  if (inventory.kind === "empty" && !stagingSnapshotVisible) {
     return NextResponse.json({ items: [] });
   }
 
@@ -63,9 +71,21 @@ export async function GET(request: Request) {
     : null;
   const canSeeSold = hasClientAccess(accessUser);
 
+  const requested = { mlsNumber: { in: mlsNumbers } };
+  const inventoryWhere =
+    inventory.kind === "empty"
+      ? stagingSnapshotInventoryWhere()
+      : stagingSnapshotVisible
+        ? {
+            OR: [
+              { AND: [inventory.where, excludeStagingSnapshotWhere()] },
+              stagingSnapshotInventoryWhere(),
+            ],
+          }
+        : { AND: [inventory.where, excludeStagingSnapshotWhere()] };
   const listings = await prisma.listing.findMany({
     where: {
-      AND: [{ mlsNumber: { in: mlsNumbers } }, inventory.where],
+      AND: [requested, inventoryWhere],
     },
     include: { media: true, openHouses: true },
   });

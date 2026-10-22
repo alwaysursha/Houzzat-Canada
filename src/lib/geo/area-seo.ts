@@ -8,6 +8,7 @@ import {
 } from "@/lib/geo/area-paths";
 import { slugifyPlace } from "@/lib/geo/distance";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { absoluteUrl, breadcrumbJsonLd } from "@/lib/seo";
 import type { MarketPulse } from "@/lib/market/pulse";
 
@@ -51,6 +52,7 @@ async function resolveCityName(citySlug: string): Promise<string | null> {
     where: {
       status: "ACTIVE",
       segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+      ...excludeStagingSnapshotWhere(),
     },
   });
   const match = cities.find((row) => slugifySegment(row.city) === citySlug);
@@ -81,6 +83,7 @@ async function resolveCommunityName(
       segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
       city: { equals: city, mode: "insensitive" },
       community: { not: null },
+      ...excludeStagingSnapshotWhere(),
     },
   });
   const match = communities.find(
@@ -110,6 +113,7 @@ async function resolveCoordinates(input: {
   const samples = await prisma.listing.findMany({
     where: {
       status: "ACTIVE",
+      ...excludeStagingSnapshotWhere(),
       city: { equals: input.city, mode: "insensitive" },
       ...(input.community
         ? {

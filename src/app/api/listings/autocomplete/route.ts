@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveClientAccess } from "@/lib/account-access";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 export async function GET(request: Request) {
   const gated = await mlsClientGate();
@@ -39,8 +40,8 @@ export async function GET(request: Request) {
   const lng = lngRaw != null ? Number(lngRaw) : null;
 
   const provider = getListingProvider();
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
   // G.10B3B: web-only force-enable for listing autocomplete (Places/geo unaffected).
   let suggestions = await provider.autocomplete(q, {
     transactionType,
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
     lng: Number.isFinite(lng) ? lng : null,
     entitlement,
     entitlementFilteringEnabled: true,
+    stagingSnapshotVisible: stagingSnapshotVisibleFromResolution(
+      context.resolution,
+    ),
   });
 
   if (!isClient) {

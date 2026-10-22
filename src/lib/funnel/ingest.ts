@@ -4,6 +4,7 @@ import {
   isFunnelEventsEnabled,
   type FunnelEventName,
 } from "@/lib/funnel/constants";
+import { isHighOctaneStagingAnalyticsSuppressed } from "@/lib/tenancy/templates/high-octane-staging-analytics";
 import { buildRegistrationCompletedDedupeKey } from "@/lib/funnel/dedupe";
 import {
   cleanMlsNumber,
@@ -58,6 +59,10 @@ export async function writeFunnelEvent(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<FunnelIngestResult> {
   if (!isFunnelEventsEnabled(env)) {
+    return { ok: true, status: "disabled", id: null };
+  }
+
+  if (isHighOctaneStagingAnalyticsSuppressed({ env })) {
     return { ok: true, status: "disabled", id: null };
   }
 

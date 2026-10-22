@@ -11,6 +11,7 @@ import {
 import { daysOnMarketFromListedAt } from "@/lib/listings/constants";
 import { boundingBox, haversineKm } from "@/lib/geo/distance";
 import { findComps } from "@/lib/market/cma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { monthlyMortgagePayment } from "@/lib/market/affordability";
 import {
   estimateHomeValue,
@@ -476,6 +477,8 @@ export async function buildListingInsights(opts: {
   pois: NearbyPoi[];
   signedIn: boolean;
   entitlement?: WorkspaceListingEntitlement;
+  /** Server staging flag. Omitted means snapshot rows stay out of the nearby count. */
+  includeStagingSnapshot?: boolean;
 }): Promise<ListingInsightsPayload> {
   const { listing, pulse, pois, signedIn, entitlement } = opts;
   const facts = parseListingFacts(listing.facts) ?? {};
@@ -509,19 +512,22 @@ export async function buildListingInsights(opts: {
   const box = boundingBox(listing.lat, listing.lng, radiusKm);
 
   const similarRows = await prisma.listing.findMany({
-    where: {
-      status: "ACTIVE",
-      transactionType: listing.transactionType as "SALE" | "LEASE",
-      propertyType: listing.propertyType as never,
-      mlsNumber: { not: listing.mlsNumber },
-      listPrice: { gte: priceBandLow, lte: priceBandHigh },
-      beds: {
-        gte: Math.max(listing.beds - 1, 0),
-        lte: listing.beds + 1,
+    where: withStagingSnapshotBoundary(
+      {
+        status: "ACTIVE",
+        transactionType: listing.transactionType as "SALE" | "LEASE",
+        propertyType: listing.propertyType as never,
+        mlsNumber: { not: listing.mlsNumber },
+        listPrice: { gte: priceBandLow, lte: priceBandHigh },
+        beds: {
+          gte: Math.max(listing.beds - 1, 0),
+          lte: listing.beds + 1,
+        },
+        lat: { gte: box.south, lte: box.north },
+        lng: { gte: box.west, lte: box.east },
       },
-      lat: { gte: box.south, lte: box.north },
-      lng: { gte: box.west, lte: box.east },
-    },
+      opts.includeStagingSnapshot === true,
+    ),
     select: { lat: true, lng: true },
     take: 80,
   });

@@ -33,6 +33,7 @@ import {
   planHighOctaneStagingWorkspace,
   resolveHighOctaneStagingTemplateId,
 } from "../src/lib/tenancy/templates/high-octane-staging";
+import { highOctaneStagingPropertyConceptAllowed } from "../src/lib/tenancy/templates/high-octane-staging-property-concept";
 import type { ListingCard } from "../src/lib/listings/types";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -344,6 +345,19 @@ assert.equal(propertyDemo.includes("application/ld+json"), false);
 assert.equal(propertyDemo.includes("unsplash"), false);
 assert.equal(propertyDemo.includes("wikimedia"), false);
 assert.equal(propertyDemo.includes("$"), false);
+const propertyGallery = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionPropertyGallery.tsx",
+);
+assert.equal(propertyGallery.includes("/api/listings"), false);
+assert.equal(propertyGallery.includes("fetch("), false);
+assert.equal(propertyGallery.includes("unsplash"), false);
+assert.equal(propertyGallery.includes("X12935628"), false);
+assert.equal(propertyGallery.includes("X13744972"), false);
+assert.ok(propertyGallery.includes("data-rc-allow"));
+assert.ok(propertyDemo.includes("No street address"));
+assert.ok(propertyDemo.includes("Not stated"));
+assert.equal(propertyDemo.includes("saad@highoctaneniagara.ca"), false);
+assert.ok(propertyDemo.includes("fixture.email"));
 
 const footer = read(
   "src/components/templates/royal-collection-one/RoyalCollectionFooter.tsx",
@@ -515,10 +529,80 @@ assert.equal(
   read("src/lib/tenancy/templates/high-octane-staging.ts").includes("prisma"),
   false,
 );
+const royalViewSource = read(
+  "src/lib/tenancy/templates/resolve-royal-collection-view.ts",
+);
+assert.equal(
+  royalViewSource.includes('from "@/lib/tenancy/templates/high-octane-staging"'),
+  false,
+);
+assert.equal(royalViewSource.includes("node:punycode"), false);
+assert.ok(
+  royalViewSource.includes(
+    'from "@/lib/tenancy/templates/high-octane-staging-slug"',
+  ),
+);
+const stagingSlugSource = read(
+  "src/lib/tenancy/templates/high-octane-staging-slug.ts",
+);
+assert.equal(stagingSlugSource.includes("node:punycode"), false);
+assert.equal(stagingSlugSource.includes("DATABASE_URL"), false);
+assert.equal(stagingSlugSource.includes("prisma"), false);
+assert.ok(
+  read("src/lib/tenancy/templates/high-octane-staging.ts").includes(
+    "slugifyWorkspaceName",
+  ),
+);
 assert.ok(
   read("src/app/(marketing)/listing/[...parts]/page.tsx").includes(
     "<RoyalCollectionPropertyDemonstration",
   ),
 );
+
+assert.equal(
+  highOctaneStagingPropertyConceptAllowed({
+    workspaceSlug: stagingPlan.slug,
+    env: stagingReady,
+  }),
+  true,
+);
+assert.equal(
+  highOctaneStagingPropertyConceptAllowed({
+    workspaceSlug: "houzzat",
+    env: stagingReady,
+  }),
+  false,
+);
+assert.equal(
+  highOctaneStagingPropertyConceptAllowed({
+    workspaceSlug: stagingPlan.slug,
+    env: { ...stagingReady, NODE_ENV: "production" },
+  }),
+  false,
+);
+assert.equal(
+  highOctaneStagingPropertyConceptAllowed({
+    workspaceSlug: stagingPlan.slug,
+    env: { ...stagingReady, HIGH_OCTANE_STAGING: undefined },
+  }),
+  false,
+);
+assert.equal(
+  highOctaneStagingPropertyConceptAllowed({
+    workspaceSlug: null,
+    env: stagingReady,
+  }),
+  false,
+);
+const conceptRoute = read("src/app/(marketing)/design/property/page.tsx");
+assert.ok(conceptRoute.includes("highOctaneStagingPropertyConceptAllowed"));
+assert.ok(conceptRoute.includes("RoyalCollectionPropertyDemonstration"));
+assert.ok(conceptRoute.includes("notFound"));
+assert.equal(conceptRoute.includes("searchParams"), false);
+assert.equal(conceptRoute.includes("previewTemplate"), false);
+assert.equal(conceptRoute.includes("loadListingForDetailPage"), false);
+assert.equal(conceptRoute.includes("prisma"), false);
+assert.equal(conceptRoute.includes("/api/listings"), false);
+assert.equal(conceptRoute.includes("/api/leads"), false);
 
 console.log("royal-collection-signature-one-selftest: ok");

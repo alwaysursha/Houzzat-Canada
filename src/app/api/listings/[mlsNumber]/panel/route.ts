@@ -4,6 +4,7 @@ import { buildListingPanelPayload } from "@/lib/listings/build-listing-panel";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
@@ -25,12 +26,15 @@ export async function GET(request: Request, { params }: Params) {
     }
 
     // Never trust client workspaceId / org / provider / SAK.
-    const { entitlement } =
-      await resolveListingEntitlementContextForRequest(request);
+    const context = await resolveListingEntitlementContextForRequest(request);
+    const { entitlement } = context;
 
     const listing = await loadListingForDetailPage(mlsNumber, {
       entitlement,
       entitlementFilteringEnabled: true,
+      stagingSnapshotVisible: stagingSnapshotVisibleFromResolution(
+        context.resolution,
+      ),
     });
     if (!listing) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });

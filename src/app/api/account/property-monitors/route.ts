@@ -14,6 +14,7 @@ import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export async function GET(request: Request) {
   const access = await requireFullCustomerUser();
@@ -31,7 +32,12 @@ export async function GET(request: Request) {
   }
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: items.map((item) => item.mlsNumber) } },
+    where: {
+      AND: [
+        { mlsNumber: { in: items.map((item) => item.mlsNumber) } },
+        excludeStagingSnapshotWhere(),
+      ],
+    },
     select: {
       mlsNumber: true,
       addressLine: true,
@@ -69,8 +75,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid listing." }, { status: 400 });
   }
 
-  const listing = await prisma.listing.findUnique({
-    where: { mlsNumber: parsed.data.mlsNumber },
+  const listing = await prisma.listing.findFirst({
+    where: {
+      AND: [
+        { mlsNumber: parsed.data.mlsNumber },
+        excludeStagingSnapshotWhere(),
+      ],
+    },
     select: {
       mlsNumber: true,
       addressLine: true,

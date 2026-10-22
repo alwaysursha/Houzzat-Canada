@@ -43,6 +43,11 @@ import {
   normalizeListingSearchStatuses,
   type WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement";
+import {
+  combineInventoryWhere,
+  HIGH_OCTANE_STAGING_SNAPSHOT_DATA_SOURCE,
+  searchMayIncludeStagingSnapshot,
+} from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { typesenseAutocomplete } from "@/lib/typesense/autocomplete";
 import {
   typesenseOpenHouses,
@@ -219,9 +224,18 @@ export class DbListingProvider implements ListingProvider {
     dataSource?: ListingSearchParams["dataSource"],
     entitlementCtx?: Pick<
       ListingSearchParams,
-      "entitlement" | "entitlementFilteringEnabled" | "status" | "statuses"
+      | "entitlement"
+      | "entitlementFilteringEnabled"
+      | "status"
+      | "statuses"
+      | "stagingSnapshotVisible"
     >,
   ): Prisma.ListingWhereInput {
+    const includeSnapshot = searchMayIncludeStagingSnapshot({
+      visible: entitlementCtx?.stagingSnapshotVisible === true,
+      status: entitlementCtx?.status,
+      statuses: entitlementCtx?.statuses,
+    });
     const enforce = isListingEntitlementEnforcementEnabled(
       entitlementCtx?.entitlementFilteringEnabled,
     );
@@ -236,9 +250,9 @@ export class DbListingProvider implements ListingProvider {
       });
       if (entitled.kind === "empty") {
         // Impossible match — fail closed for MLS (no OR: []).
-        return { id: "__entitlement_deny__" };
+        return combineInventoryWhere({ id: "__entitlement_deny__" }, includeSnapshot);
       }
-      return entitled.where;
+      return combineInventoryWhere(entitled.where, includeSnapshot);
     }
 
     if (dataSource === "fsbo") {
@@ -258,18 +272,26 @@ export class DbListingProvider implements ListingProvider {
     }
 
     if (dataSource === "mls") {
-      return { dataSource: { not: "fsbo" } };
+      return combineInventoryWhere(
+        { dataSource: { notIn: ["fsbo", HIGH_OCTANE_STAGING_SNAPSHOT_DATA_SOURCE] } },
+        includeSnapshot,
+      );
     }
-    return {
-      OR: [
-        { dataSource: { not: "fsbo" } },
-        { dataSource: "fsbo", ownerStatus: "ACTIVE" },
-      ],
-    };
+    return combineInventoryWhere(
+      {
+        OR: [
+          { dataSource: { notIn: ["fsbo", HIGH_OCTANE_STAGING_SNAPSHOT_DATA_SOURCE] } },
+          { dataSource: "fsbo", ownerStatus: "ACTIVE" },
+        ],
+      },
+      includeSnapshot,
+    );
   }
 
   async search(params: ListingSearchParams): Promise<ListingSearchResult> {
-    const fromTypesense = await typesenseSearch(params, this.name);
+    const fromTypesense = params.stagingSnapshotVisible
+      ? null
+      : await typesenseSearch(params, this.name);
     // Structured city and explicit off-market misses continue to Neon.
     // A text result, including zero, stays the result.
     if (
@@ -543,6 +565,7 @@ export class DbListingProvider implements ListingProvider {
     const inventory = this.inventorySourceFilter(undefined, {
       entitlement: options?.entitlement,
       entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
+      stagingSnapshotVisible: options?.stagingSnapshotVisible,
       // Typed lookup may discover any authorized status. Empty browse stays
       // on-market in emptyAutocomplete.
       status: "ALL",

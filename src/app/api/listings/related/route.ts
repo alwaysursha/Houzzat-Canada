@@ -9,6 +9,11 @@ import {
   evaluateWebListingDetailInventoryAccess,
   resolveListingEntitlementContextForRequest,
 } from "@/lib/tenancy/listing-entitlement";
+import {
+  excludeStagingSnapshotWhere,
+  stagingSnapshotInventoryWhere,
+} from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { hasClientAccess } from "@/lib/vow";
 
 /**
@@ -44,8 +49,11 @@ export async function GET(request: Request) {
   }
 
   // Never trust client workspaceId / org / provider / SAK.
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = stagingSnapshotVisibleFromResolution(
+    context.resolution,
+  );
 
   const subject = await prisma.listing.findUnique({
     where: { mlsNumber },
@@ -76,6 +84,7 @@ export async function GET(request: Request) {
     providerKey: subject.providerKey,
     dataSource: subject.dataSource,
     status: subject.status,
+    stagingSnapshotVisible,
   });
   if (!subjectGate.allowed) {
     return NextResponse.json({ error: "Listing not found." }, { status: 404 });
@@ -88,7 +97,8 @@ export async function GET(request: Request) {
     entitlement,
     statuses: relatedStatuses,
   });
-  if (inventory.kind === "empty") {
+  const includeSnapshot = stagingSnapshotVisible && tab !== "sold";
+  if (inventory.kind === "empty" && !includeSnapshot) {
     return NextResponse.json({
       mode,
       tab,
@@ -124,8 +134,14 @@ export async function GET(request: Request) {
     };
   }
 
+  const inventoryWhere: Prisma.ListingWhereInput =
+    inventory.kind === "empty"
+      ? stagingSnapshotInventoryWhere()
+      : includeSnapshot
+        ? { OR: [inventory.where, stagingSnapshotInventoryWhere()] }
+        : { AND: [inventory.where, excludeStagingSnapshotWhere()] };
   const where: Prisma.ListingWhereInput = {
-    AND: [inventory.where, geo],
+    AND: [inventoryWhere, geo],
   };
 
   const session = await auth();

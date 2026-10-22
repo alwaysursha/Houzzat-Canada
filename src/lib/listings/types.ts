@@ -104,6 +104,11 @@ export type ListingSearchParams = {
    * `true` may force ON while G5 is OFF; `false` NEVER disables when G5 is ON.
    */
   entitlementFilteringEnabled?: boolean;
+  /**
+   * Server-resolved HIGH OCTANE staging snapshot channel.
+   * Routes set this from the workspace slug and staging gate. Query strings cannot.
+   */
+  stagingSnapshotVisible?: boolean;
 };
 
 export type ListingSearchResult = {
@@ -195,6 +200,8 @@ export type AutocompleteOptions = {
   entitlement?: WorkspaceListingEntitlement;
   /** Server-only force-enable (see ListingSearchParams). Never a downgrade switch. */
   entitlementFilteringEnabled?: boolean;
+  /** Server-resolved HIGH OCTANE staging snapshot channel. */
+  stagingSnapshotVisible?: boolean;
 };
 
 export interface ListingProvider {

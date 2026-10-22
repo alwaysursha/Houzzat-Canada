@@ -19,7 +19,12 @@ import {
   resolveRequestTenancy,
   type RequestTenancySuccess,
 } from "@/lib/tenancy/resolve-request-tenancy";
-import { resolveHighOctaneStagingTemplateId } from "@/lib/tenancy/templates/high-octane-staging";
+import { resolveWorkspaceListingEntitlement } from "@/lib/tenancy/listing-entitlement/resolve";
+import {
+  evaluateHighOctaneStagingEnvironment,
+  resolveHighOctaneStagingTemplateId,
+} from "@/lib/tenancy/templates/high-octane-staging";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { resolveActiveTemplatePreviewForWorkspace } from "@/lib/tenancy/template-preview";
 import { resolvePublicTeamRosterForWorkspace } from "@/lib/tenancy/team-roster/public";
 import {
@@ -270,6 +275,15 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   // Stage 6.11D — all templates receive canonical professional identity.
   // Stage 6.11E.7 — Team roster only when Team Signature is active AND the
   // plan includes TEAM_MANAGEMENT. SOLO uses canonical Owner/Agent identity.
+  const authorizedListingSource =
+    tenancy.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+      ? (
+          await resolveWorkspaceListingEntitlement({
+            trustedWorkspaceId: tenancy.workspaceId,
+          })
+        ).authorities.length > 0
+      : undefined;
+
   const [professionalIdentity, agent, teamRoster] = await Promise.all([
     resolvePublicProfessionalIdentity(tenancy.workspaceId),
     templateId !== DEFAULT_TEMPLATE_ID
@@ -293,5 +307,10 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
           source: activePreview.source,
         }
       : null,
+    authorizedListingSource,
+    stagingSnapshotAttribution:
+      tenancy.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+      authorizedListingSource !== true &&
+      evaluateHighOctaneStagingEnvironment().ready,
   });
 }

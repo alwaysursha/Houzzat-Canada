@@ -8,6 +8,7 @@ import {
   FunnelSanitizeError,
 } from "@/lib/funnel";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
+import { isHighOctaneStagingAnalyticsSuppressed } from "@/lib/tenancy/templates/high-octane-staging-analytics";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,12 @@ export async function POST(request: Request) {
   }
 
   const tenancy = await resolveRequestTenancy(request);
+  if (
+    tenancy.ok &&
+    isHighOctaneStagingAnalyticsSuppressed({ workspaceSlug: tenancy.workspaceSlug })
+  ) {
+    return NextResponse.json({ ok: true, suppressed: true });
+  }
   if (!tenancy.ok) {
     return NextResponse.json(
       { error: "Unresolved tenant context", code: "TENANCY_REQUIRED" },

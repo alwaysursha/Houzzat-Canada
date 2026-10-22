@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireFullCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 export async function GET() {
   const access = await requireFullCustomerUser();
@@ -14,7 +16,10 @@ export async function GET() {
   });
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: notes.map((n) => n.mlsNumber) } },
+    where: withStagingSnapshotBoundary(
+      { mlsNumber: { in: notes.map((n) => n.mlsNumber) } },
+      await stagingSnapshotVisibleForServerPage(),
+    ),
     select: {
       mlsNumber: true,
       addressLine: true,

@@ -12,6 +12,7 @@ import {
 import { mlsNumberFromListingPath } from "@/lib/listings/listing-path";
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export const LEAD_PROFILE_EMAIL_LIST_SELECT = {
   id: true,
@@ -280,7 +281,9 @@ export async function enrichWithListingCovers(
   if (!mlsNumbers.length) return items;
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: mlsNumbers } },
+    where: {
+      AND: [{ mlsNumber: { in: mlsNumbers } }, excludeStagingSnapshotWhere()],
+    },
     select: {
       mlsNumber: true,
       addressLine: true,

@@ -24,6 +24,7 @@ import { syncViewListingGate } from "@/lib/auth/view-listing-intent";
 import { listingPath } from "@/lib/listings/listing-path";
 import { useRoyalCollectionSearchSkin } from "@/components/templates/royal-collection-one/use-royal-search-skin";
 import royalSearchStyles from "@/components/templates/royal-collection-one/royal-search.module.css";
+import { royalCollectionSearchCardFacts } from "@/lib/tenancy/templates/royal-collection-search-card";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -90,15 +91,28 @@ export function SearchResultCard({
 
   const stackedMobile = mobileFullWidth && !horizontal;
   const royal = useRoyalCollectionSearchSkin();
+  const royalFacts = royal ? royalCollectionSearchCardFacts(listing) : null;
   const statusLabel = showStatus
     ? listingStatusLabel(listing.status, listing.transactionType)
     : listing.transactionType === "LEASE"
       ? "For lease"
       : "For sale";
 
-  if (royal && !horizontal) {
+  if (royal && royalFacts) {
+    const asking =
+      lockedPreview
+        ? "Restricted"
+        : showClosedPrice
+          ? null
+          : royalFacts.price;
     return (
-      <article className={cn(royalSearchStyles.card, royalSearchStyles.liveCard)}>
+      <article
+        className={cn(
+          royalSearchStyles.card,
+          royalSearchStyles.liveCard,
+          horizontal && royalSearchStyles.liveCardRow,
+        )}
+      >
         <div className={cn(royalSearchStyles.media, royalSearchStyles.liveMedia)}>
           <ListingLink
             href={path}
@@ -108,15 +122,17 @@ export function SearchResultCard({
             onFocus={onFocus}
             className="absolute inset-0 block"
           >
-            {listing.primaryImageUrl ? (
+            {royalFacts.photoUrl ? (
               <ListingPhoto
-                src={listing.primaryImageUrl}
+                src={royalFacts.photoUrl}
                 alt=""
                 fill
                 className="object-cover"
                 sizes="(max-width: 1023px) 100vw, 28vw"
               />
-            ) : null}
+            ) : (
+              <span className={royalSearchStyles.photoFallback}>Photograph not on file</span>
+            )}
           </ListingLink>
           <span className={royalSearchStyles.badge}>{statusLabel}</span>
           <button
@@ -150,34 +166,33 @@ export function SearchResultCard({
             className="block min-w-0"
           >
             <p className={royalSearchStyles.meta}>
-              {commercial ? null : (
-                <>
-                  <span>{formatListingBedsLabel(listing)}</span>
-                  <span>{formatStat(listing.baths)} Baths</span>
-                </>
-              )}
-              {sqft ? <span>{sqft}</span> : null}
+              {royalFacts.beds ? <span>{royalFacts.beds} Beds</span> : null}
+              {royalFacts.baths ? <span>{royalFacts.baths} Baths</span> : null}
+              {royalFacts.sqft ? <span>{royalFacts.sqft}</span> : null}
             </p>
-            <p className={royalSearchStyles.city}>{cityLine}</p>
-            {lockedPreview ? (
-              <p className={royalSearchStyles.price}>Restricted</p>
-            ) : (
+            {royalFacts.city ? <p className={royalSearchStyles.city}>{royalFacts.city}</p> : null}
+            {asking ? <p className={royalSearchStyles.price}>{asking}</p> : null}
+            {showClosedPrice ? (
               <p className={royalSearchStyles.price}>
-                {showClosedPrice ? (
-                  <SoldForPrice
-                    soldPrice={listing.soldPrice}
-                    listPrice={listing.listPrice}
-                    status={listing.status}
-                    transactionType={listing.transactionType}
-                    size="sm"
-                  />
-                ) : (
-                  formatListPrice(listing.listPrice, listing.transactionType)
-                )}
+                <SoldForPrice
+                  soldPrice={listing.soldPrice}
+                  listPrice={listing.listPrice}
+                  status={listing.status}
+                  transactionType={listing.transactionType}
+                  size="sm"
+                />
               </p>
-            )}
-            <p className={royalSearchStyles.address}>{street}</p>
-            <p className={royalSearchStyles.city}>{propertyTypeLabel(listing.propertyType)}</p>
+            ) : null}
+            {!asking && !showClosedPrice && !lockedPreview ? (
+              <p className={royalSearchStyles.price}>Price not on file</p>
+            ) : null}
+            {royalFacts.street ? <p className={royalSearchStyles.address}>{royalFacts.street}</p> : null}
+            {royalFacts.propertyType ? (
+              <p className={royalSearchStyles.city}>{royalFacts.propertyType}</p>
+            ) : null}
+            {royalFacts.brokerage ? (
+              <p className={royalSearchStyles.brokerage}>Listed by {royalFacts.brokerage}</p>
+            ) : null}
             {listing.mlsNumber ? (
               <p className={royalSearchStyles.city}>MLS® {listing.mlsNumber}</p>
             ) : null}

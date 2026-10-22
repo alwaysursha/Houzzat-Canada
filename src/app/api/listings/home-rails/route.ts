@@ -9,6 +9,7 @@ import { getListingProvider } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { typesenseHomeRails } from "@/lib/typesense/search";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -18,8 +19,13 @@ export async function GET(request: Request) {
 
   // G.10B2H/B3B: resolve trusted host → entitlement once for Typesense + Neon fallback.
   // Web-only force-enable; global G5 stays OFF (mobile unaffected).
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = isHighOctaneStagingSnapshotVisible({
+    workspaceSlug: context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null,
+  });
   const entitlementFilteringEnabled = true;
 
   const { searchParams } = new URL(request.url);
@@ -64,16 +70,20 @@ export async function GET(request: Request) {
 
   const provider = getListingProvider();
 
-  const railsPromise = typesenseHomeRails({
-    cities,
-    limit,
-    minPrice,
-    maxPrice,
-    propertyTypes,
-    communities,
-    entitlement,
-    entitlementFilteringEnabled,
-  }).then(async (fromTypesense) => {
+  const railsPromise = (
+    stagingSnapshotVisible
+      ? Promise.resolve(null)
+      : typesenseHomeRails({
+          cities,
+          limit,
+          minPrice,
+          maxPrice,
+          propertyTypes,
+          communities,
+          entitlement,
+          entitlementFilteringEnabled,
+        })
+  ).then(async (fromTypesense) => {
     if (fromTypesense) return fromTypesense;
 
     // Typesense miss/error → same entitlement + force-enable on provider/Neon fallback.
@@ -92,6 +102,7 @@ export async function GET(request: Request) {
           communities,
           entitlement,
           entitlementFilteringEnabled,
+          stagingSnapshotVisible,
         }),
         provider.search({
           status: "SOLD",
@@ -106,6 +117,7 @@ export async function GET(request: Request) {
           communities,
           entitlement,
           entitlementFilteringEnabled,
+          stagingSnapshotVisible,
         }),
         provider.search({
           status: "ACTIVE",
@@ -120,6 +132,7 @@ export async function GET(request: Request) {
           communities,
           entitlement,
           entitlementFilteringEnabled,
+          stagingSnapshotVisible,
         }),
         provider.search({
           status: "ACTIVE",
@@ -134,6 +147,7 @@ export async function GET(request: Request) {
           communities,
           entitlement,
           entitlementFilteringEnabled,
+          stagingSnapshotVisible,
         }),
         provider.openHouses({
           cities,

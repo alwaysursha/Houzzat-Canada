@@ -8,6 +8,7 @@ import { boundingBox, haversineKm } from "@/lib/geo/distance";
 import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import type { ListingSearchParams } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 const PROPERTY_TYPES = new Set<string>([
   "DETACHED",
@@ -109,7 +110,7 @@ export function savedQueryToListingSearchParams(
 function inventorySourceFilter(): Prisma.ListingWhereInput {
   return {
     OR: [
-      { dataSource: { not: "fsbo" } },
+      { AND: [{ dataSource: { not: "fsbo" } }, excludeStagingSnapshotWhere()] },
       { dataSource: "fsbo", ownerStatus: "ACTIVE" },
       {
         dataSource: "fsbo",

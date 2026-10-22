@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type LeadDashboardEngagement = {
   saves: number;
@@ -159,7 +160,9 @@ export async function loadLeadsDashboardEngagement(
     const allMls = [...new Set([...mlsByUser.values()].flat())];
     if (allMls.length > 0) {
       const listings = await prisma.listing.findMany({
-        where: { mlsNumber: { in: allMls } },
+        where: {
+          AND: [{ mlsNumber: { in: allMls } }, excludeStagingSnapshotWhere()],
+        },
         select: {
           mlsNumber: true,
           city: true,

@@ -53,6 +53,16 @@ export type MarketingPresentationBrand = {
     displayLabel: string;
     source: "owner_cookie" | "dev_only";
   } | null;
+  /**
+   * HIGH OCTANE staging only. True when listing entitlement has an authority.
+   * Absent for every other tenant, including Houzzat.
+   */
+  authorizedListingSource?: boolean;
+  /**
+   * HIGH OCTANE staging only, and only while no real listing source is connected.
+   * Selects the snapshot attribution sentence. Never a board or VOW claim.
+   */
+  stagingSnapshotAttribution?: boolean;
 };
 
 export function toMarketingPresentationBrand(
@@ -64,6 +74,8 @@ export function toMarketingPresentationBrand(
     professionalIdentity?: PublicProfessionalIdentity;
     teamRoster?: PublicTeamRosterPresentation | null;
     templatePreview?: MarketingPresentationBrand["templatePreview"];
+    authorizedListingSource?: boolean;
+    stagingSnapshotAttribution?: boolean;
   },
 ): MarketingPresentationBrand {
   const brand = tenancy.brand;
@@ -91,6 +103,8 @@ export function toMarketingPresentationBrand(
       extras?.professionalIdentity ?? EMPTY_PUBLIC_PROFESSIONAL_IDENTITY,
     teamRoster: extras?.teamRoster ?? null,
     templatePreview: extras?.templatePreview ?? null,
+    authorizedListingSource: extras?.authorizedListingSource,
+    stagingSnapshotAttribution: extras?.stagingSnapshotAttribution,
   };
 }
 

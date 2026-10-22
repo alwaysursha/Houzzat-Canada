@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { SITE_URL } from "@/lib/constants";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import {
   buildCustomerPreferenceEmailChrome,
@@ -162,7 +163,9 @@ export async function sendShortlistEmail(
 
   const mlsNumbers = [...new Set(input.mlsNumbers.map((m) => m.trim()))];
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: mlsNumbers } },
+    where: {
+      AND: [{ mlsNumber: { in: mlsNumbers } }, excludeStagingSnapshotWhere()],
+    },
     include: { media: true, openHouses: true },
   });
   const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));

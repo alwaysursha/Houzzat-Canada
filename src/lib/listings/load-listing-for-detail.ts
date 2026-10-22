@@ -36,6 +36,11 @@ export type LoadListingForDetailPageOptions = {
    */
   entitlementFilteringEnabled?: boolean;
   /**
+   * Server-resolved HIGH OCTANE staging snapshot channel.
+   * Snapshot rows stay denied when this is omitted.
+   */
+  stagingSnapshotVisible?: boolean;
+  /**
    * Override capability. When omitted under enforcement, derived from
    * listing status via {@link listingDetailCapabilityForStatus}.
    * On Neon miss PropTx pre-auth, defaults to ACTIVE_LISTINGS.
@@ -127,6 +132,7 @@ function applyDetailEntitlementGate(
   const decision = evaluateWebListingDetailInventoryAccess({
     entitlement: options?.entitlement,
     entitlementFilteringEnabled: options?.entitlementFilteringEnabled,
+    stagingSnapshotVisible: options?.stagingSnapshotVisible,
     organizationId: listing.organizationId,
     providerKey: listing.providerKey,
     dataSource: listing.dataSource,

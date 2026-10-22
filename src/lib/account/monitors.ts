@@ -4,6 +4,7 @@ import type {
   Prisma,
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
 import { loadCategoryEmailEnabled } from "@/lib/communications/category-email-gate";
 import {
@@ -784,7 +785,7 @@ export async function runAreaMonitorChecks(
             ? { transactionType: monitor.transactionType }
             : {}),
           OR: [
-            { dataSource: { not: "fsbo" } },
+            { AND: [{ dataSource: { not: "fsbo" } }, excludeStagingSnapshotWhere()] },
             { dataSource: "fsbo", ownerStatus: "ACTIVE" },
             {
               dataSource: "fsbo",

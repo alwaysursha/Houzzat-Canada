@@ -7,17 +7,26 @@
  */
 import { deriveWorkspaceDisplayName, slugifyWorkspaceName } from "@/lib/platform/provisioning/slug";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG as BROWSER_SAFE_STAGING_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
 
 const fixture = HIGH_OCTANE_PREVIEW_FIXTURE;
 
-export const HIGH_OCTANE_STAGING_WORKSPACE_SLUG = slugifyWorkspaceName(
+const derivedStagingSlug = slugifyWorkspaceName(
   deriveWorkspaceDisplayName({
     planCode: "TEAM",
     businessName: fixture.brandName,
     contactName: fixture.agentName,
   }),
 );
+
+if (derivedStagingSlug !== BROWSER_SAFE_STAGING_SLUG) {
+  throw new Error(
+    "HIGH OCTANE staging slug drifted from the browser-safe constant. Refusing to continue.",
+  );
+}
+
+export const HIGH_OCTANE_STAGING_WORKSPACE_SLUG = BROWSER_SAFE_STAGING_SLUG;
 
 export type HighOctaneStagingWorkspacePlan = {
   displayName: string;

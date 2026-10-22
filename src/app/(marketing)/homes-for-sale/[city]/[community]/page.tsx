@@ -8,6 +8,8 @@ import {
 import { getMarketPulse } from "@/lib/market/pulse";
 import { prisma } from "@/lib/prisma";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 type Params = { params: Promise<{ city: string; community: string }> };
 
@@ -16,17 +18,21 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const place = await resolveHomesForSalePlace({ citySlug, communitySlug });
   if (!place) return { title: "Homes for sale" };
 
+  const stagingSnapshotVisible = await stagingSnapshotVisibleForServerPage();
   const [activeCount, pulse] = await Promise.all([
     prisma.listing.count({
-      where: {
-        status: "ACTIVE",
-        segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
-        city: { equals: place.city, mode: "insensitive" },
-        community: {
-          equals: place.community ?? undefined,
-          mode: "insensitive",
+      where: withStagingSnapshotBoundary(
+        {
+          status: "ACTIVE",
+          segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+          city: { equals: place.city, mode: "insensitive" },
+          community: {
+            equals: place.community ?? undefined,
+            mode: "insensitive",
+          },
         },
-      },
+        stagingSnapshotVisible,
+      ),
     }),
     getMarketPulse({
       city: place.city,

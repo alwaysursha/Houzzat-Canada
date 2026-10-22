@@ -16,6 +16,7 @@ import {
 } from "@/lib/proptx/on-demand-lookup";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { hasClientAccess } from "@/lib/vow";
 
 /** True when a NextAuth / Auth.js session cookie may be present. */
@@ -47,8 +48,13 @@ export async function GET(request: Request) {
   });
   if (gated) return gated;
 
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = isHighOctaneStagingSnapshotVisible({
+    workspaceSlug: context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null,
+  });
 
   const provider = getListingProvider();
   const segmentParam = searchParams.get("segment");
@@ -165,6 +171,7 @@ export async function GET(request: Request) {
     // Never read entitlementFilteringEnabled from the request.
     entitlement,
     entitlementFilteringEnabled: true,
+    stagingSnapshotVisible,
   };
 
   // IDX: start search immediately. Guests skip auth; signed-in access runs in parallel.

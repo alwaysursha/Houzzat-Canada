@@ -1,6 +1,7 @@
 import type { PropertyType } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
 import { propertyTypeLabel } from "@/lib/listings/constants";
+import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 const PROPERTY_TYPES = new Set<string>([
   "DETACHED",
@@ -594,7 +595,9 @@ export async function loadBuyerIntent(input: {
 
   if (sampleMls.length > 0) {
     const listings = await prisma.listing.findMany({
-      where: { mlsNumber: { in: sampleMls } },
+      where: {
+        AND: [{ mlsNumber: { in: sampleMls } }, excludeStagingSnapshotWhere()],
+      },
       select: {
         mlsNumber: true,
         city: true,

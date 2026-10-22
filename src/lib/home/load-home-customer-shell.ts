@@ -9,6 +9,8 @@ import {
 import { getListingProvider, toCard } from "@/lib/listings/provider";
 import type { ListingCard } from "@/lib/listings/types";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -135,7 +137,10 @@ export async function loadHomeCustomerShell(): Promise<HomeCustomerShellPayload>
     recentMls.length === 0
       ? []
       : await prisma.listing.findMany({
-          where: { mlsNumber: { in: recentMls } },
+          where: withStagingSnapshotBoundary(
+            { mlsNumber: { in: recentMls } },
+            await stagingSnapshotVisibleForServerPage(),
+          ),
           include: {
             media: true,
             openHouses: true,

@@ -13,6 +13,7 @@ import {
   type ListingDataCapability,
   type WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement";
+import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type ListingDetailApiListing = {
   id: string;
@@ -85,8 +86,13 @@ export async function loadListingDetailApiAccess(
   }
 
   // Never trust client workspaceId / org / provider / SAK.
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = isHighOctaneStagingSnapshotVisible({
+    workspaceSlug: context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null,
+  });
 
   const listing = await prisma.listing.findUnique({
     where: { mlsNumber },
@@ -114,6 +120,7 @@ export async function loadListingDetailApiAccess(
     providerKey: listing.providerKey,
     dataSource: listing.dataSource,
     status: listing.status,
+    stagingSnapshotVisible,
     additionalCapabilities: options?.additionalCapabilities,
   });
   if (!board.allowed) {

@@ -9,6 +9,7 @@ import {
   type HistoryRow,
 } from "@/lib/listings/history-rows";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type AddressHistoryListing = {
   mlsNumber: string;
@@ -97,6 +98,7 @@ export async function findSiblingListingsAtAddress(
   const candidates = await prisma.listing.findMany({
     where: {
       mlsNumber: { not: subject.mlsNumber },
+      ...excludeStagingSnapshotWhere(),
       city: { equals: subject.city.trim(), mode: "insensitive" },
       ...(numberToken
         ? {

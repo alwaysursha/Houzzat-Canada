@@ -2,11 +2,12 @@ import { cache } from "react";
 import { notFound, permanentRedirect, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { ListingDetailView } from "@/components/listings/ListingDetailView";
+import { RoyalCollectionOperationalProperty } from "@/components/templates/royal-collection-one/RoyalCollectionOperationalProperty";
 import {
   resolveListingDetailAccess,
   serializeListingDetailClientModel,
 } from "@/lib/listings/build-listing-panel";
-import { formatListingAddressOneLine } from "@/lib/listings/constants";
+import { formatListingAddressOneLine, isOnMarketListingStatus } from "@/lib/listings/constants";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
@@ -16,8 +17,12 @@ import { needsEmailVerification } from "@/lib/account-access";
 import {
   resolveListingEntitlementContextForServerPage,
 } from "@/lib/tenancy/listing-entitlement";
-import { resolveMarketingTenancy } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { resolveMarketingTenancy, resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import { buildRoyalCollectionListingModel } from "@/lib/tenancy/templates/royal-collection-property-model";
+import { selectRoyalCollectionOperationalPresentation } from "@/lib/tenancy/templates/royal-collection-operational-listing";
+import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
@@ -62,9 +67,15 @@ function parseListingParts(parts: string[] | undefined): {
  * Never reads client workspaceId / org / provider.
  */
 const resolveListingDetailEntitlementCached = cache(async () => {
-  const { entitlement } =
-    await resolveListingEntitlementContextForServerPage();
-  return entitlement;
+  const context = await resolveListingEntitlementContextForServerPage();
+  return {
+    entitlement: context.entitlement,
+    stagingSnapshotVisible: isHighOctaneStagingSnapshotVisible({
+      workspaceSlug: context.resolution.ok
+        ? context.resolution.host.workspaceSlug
+        : null,
+    }),
+  };
 });
 
 /**
@@ -73,10 +84,11 @@ const resolveListingDetailEntitlementCached = cache(async () => {
  * G.10C1: web force-enable + same entitlement snapshot for both callers.
  */
 const loadListingByMlsCached = cache(async (mlsNumber: string) => {
-  const entitlement = await resolveListingDetailEntitlementCached();
+  const access = await resolveListingDetailEntitlementCached();
   return loadListingForDetailPage(mlsNumber, {
-    entitlement,
+    entitlement: access.entitlement,
     entitlementFilteringEnabled: true,
+    stagingSnapshotVisible: access.stagingSnapshotVisible,
   });
 });
 
@@ -224,11 +236,68 @@ export async function OperationalListingDetail({
   const { listing: listingForClient, listingHistoryRows } =
     serializeListingDetailClientModel(listing, canSeeRestricted);
 
+  scheduleWorkerSideEffect(
+    prisma.listingView.create({
+      data: { userId: user?.id, mlsNumber: listing.mlsNumber },
+    }),
+  );
+
+  const galleryPhotos = resolveListingGalleryPhotos(listing);
+  if (
+    selectRoyalCollectionOperationalPresentation({
+      workspaceSlug: tenancy?.workspaceSlug ?? null,
+      listingFound: true,
+    }) === "royal-collection"
+  ) {
+    const brand = await resolveMarketingPresentationBrand();
+    const royal = brand ? resolveRoyalCollectionView(brand) : null;
+    const model = buildRoyalCollectionListingModel({
+      listing: listingForClient,
+      photos: galleryPhotos.map((photo) => ({ url: photo.url })),
+      viewer: {
+        signedIn: Boolean(user),
+        detailsLocked,
+      },
+      site: {
+        agentName: royal?.agentName ?? "",
+        brandName: royal?.brandName ?? siteName,
+        brokerageName: royal?.brokerage.name ?? "",
+        phone: royal?.phone ?? null,
+        email: royal?.email ?? null,
+      },
+    });
+    const viewing =
+      user && model.kind === "listing"
+        ? {
+            mlsNumber: listingForClient.mlsNumber,
+            callbackPath: canonicalPath,
+            inactive: !isOnMarketListingStatus(listingForClient.status),
+            city: listingForClient.city,
+            community: listingForClient.community,
+            transactionType:
+              listingForClient.transactionType === "LEASE"
+                ? ("LEASE" as const)
+                : ("SALE" as const),
+            segment: listingForClient.segment,
+            signedIn: true,
+            contact: sessionContact,
+          }
+        : null;
+    return (
+      <RoyalCollectionOperationalProperty
+        model={model}
+        signedIn={Boolean(user)}
+        mlsNumber={listingForClient.mlsNumber}
+        canonicalPath={canonicalPath}
+        viewing={viewing}
+      />
+    );
+  }
+
   // Neon-only SSR gallery (≤5). Never await PropTx here.
   // Vercel: do not invoke fetchListingPhotosFromPropTx — client enriches after
   // paint via GET /api/listings/:mls/gallery.
   // Cloudflare: start the fetch in parallel and pass the thenable.
-  const galleryPhotos = resolveListingGalleryPhotos(listing);
   const clientLivePhotosPromise = process.env.VERCEL
     ? null
     : listing.dataSource === "mls" && listing.listingKey
@@ -241,12 +310,6 @@ export async function OperationalListingDetail({
           })),
         )
       : null;
-
-  scheduleWorkerSideEffect(
-    prisma.listingView.create({
-      data: { userId: user?.id, mlsNumber: listing.mlsNumber },
-    }),
-  );
 
   const publicAgent =
     tenancy?.workspaceId && tenancy.workspaceId !== "legacy"

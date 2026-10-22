@@ -8,6 +8,35 @@ import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-orig
 import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import { HOUZZAT_OFFICIAL_LOGO_PATH } from "@/lib/tenancy/legacy-houzzat-brand";
 import { resolveTenantFaviconMetadata } from "@/lib/tenancy/tenant-favicon";
+import {
+  HIGH_OCTANE_STAGING_AREA_SERVED,
+  HIGH_OCTANE_STAGING_SEO_TITLE_SUFFIX,
+  HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+} from "@/lib/tenancy/templates/high-octane-staging-slug";
+
+function isHighOctaneStagingBrand(brand: { workspaceSlug: string }): boolean {
+  return brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+}
+
+function marketingTitle(brand: { workspaceSlug: string; displayName: string }): string {
+  const suffix = isHighOctaneStagingBrand(brand)
+    ? HIGH_OCTANE_STAGING_SEO_TITLE_SUFFIX
+    : "GTA Homes for Sale & Open Houses";
+  return `${brand.displayName} | ${suffix}`;
+}
+
+function marketingAreaServed(brand: { workspaceSlug: string }) {
+  if (isHighOctaneStagingBrand(brand)) {
+    return [
+      { "@type": "AdministrativeArea", name: HIGH_OCTANE_STAGING_AREA_SERVED },
+      { "@type": "AdministrativeArea", name: "Ontario" },
+    ];
+  }
+  return [
+    { "@type": "AdministrativeArea", name: "Greater Toronto Area" },
+    { "@type": "AdministrativeArea", name: "Ontario" },
+  ];
+}
 
 function metadataBase(origin: string): URL {
   return new URL(origin.endsWith("/") ? origin : `${origin}/`);
@@ -42,7 +71,9 @@ function defaultOgImage(brand: MarketingPresentationBrand) {
     url: url ?? imagePath,
     width: 512,
     height: 512,
-    alt: `${brand.displayName} — GTA homes for sale`,
+    alt: isHighOctaneStagingBrand(brand)
+      ? `${brand.displayName} — Niagara homes for sale`
+      : `${brand.displayName} — GTA homes for sale`,
   };
 }
 
@@ -53,7 +84,7 @@ export function buildMarketingRootMetadata(
   const brand = toMarketingPresentationBrand(tenancy, canonicalOrigin);
   const base = metadataBase(canonicalOrigin);
   const homeUrl = absoluteUrlForOrigin(canonicalOrigin, "/") ?? canonicalOrigin;
-  const defaultTitle = `${brand.displayName} | GTA Homes for Sale & Open Houses`;
+  const defaultTitle = marketingTitle(brand);
   const ogImage = defaultOgImage(brand);
 
   return {
@@ -162,10 +193,7 @@ export function organizationJsonLdForTenancy(
     url: home,
     ...(logo ? { logo, image: logo } : {}),
     description: brand.seoDescription,
-    areaServed: [
-      { "@type": "AdministrativeArea", name: "Greater Toronto Area" },
-      { "@type": "AdministrativeArea", name: "Ontario" },
-    ],
+    areaServed: marketingAreaServed(presentation),
     ...(telephone
       ? {
           telephone: telephone.startsWith("+")

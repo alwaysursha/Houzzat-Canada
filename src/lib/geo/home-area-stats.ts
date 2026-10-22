@@ -1,6 +1,7 @@
 import type { ListingSegment, PropertyType } from "@prisma/client";
 import { cityLandmarkImage } from "@/lib/geo/area-images";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 /** Sample size per area — enough for median/cover, light on Neon. */
 export const HOME_AREA_SAMPLE_SIZE = 16;
@@ -45,6 +46,7 @@ export async function loadHomeAreaStats(): Promise<HomeAreaCardData[]> {
             in: ["RESIDENTIAL", "COMMERCIAL"] satisfies ListingSegment[],
           },
           city: { equals: place.city, mode: "insensitive" },
+          ...excludeStagingSnapshotWhere(),
           ...(place.community
             ? {
                 community: {

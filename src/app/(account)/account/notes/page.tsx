@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 export const metadata = { title: "Your notes" };
 
@@ -15,7 +17,10 @@ export default async function AccountNotesPage() {
   });
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: notes.map((n) => n.mlsNumber) } },
+    where: withStagingSnapshotBoundary(
+      { mlsNumber: { in: notes.map((n) => n.mlsNumber) } },
+      await stagingSnapshotVisibleForServerPage(),
+    ),
     select: {
       mlsNumber: true,
       addressLine: true,

@@ -10,6 +10,7 @@ import {
 import { emailEnv } from "@/lib/email/env";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { verifyCustomerEmailFromLeadEmailOpen } from "@/lib/auth/email-open-verification";
 import { authorizeStaffRecipientForLead } from "@/lib/workspace-notification-recipients";
 
@@ -71,7 +72,9 @@ async function propertyAddressForEmailMls(
   const mls = mlsNumber?.trim();
   if (!mls) return null;
   const listing = await prisma.listing.findFirst({
-    where: { mlsNumber: mls },
+    where: {
+      AND: [{ mlsNumber: mls }, excludeStagingSnapshotWhere()],
+    },
     select: { addressLine: true },
   });
   const line = listing?.addressLine?.trim();

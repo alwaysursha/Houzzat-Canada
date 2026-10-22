@@ -23,6 +23,8 @@ import { listingPath } from "@/lib/listings/listing-path";
 import { getMarketPulse } from "@/lib/market/pulse";
 import { findNearbyPois, summarizePoiCounts } from "@/lib/poi/nearby";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { resolveClientAccess } from "@/lib/account-access";
 
 const LISTING_PREVIEW_LIMIT = 24;
@@ -32,19 +34,23 @@ type Props = {
 };
 
 export async function AreaSeoPage({ place }: Props) {
-  const listingWhere = {
-    status: "ACTIVE" as const,
-    segment: { in: ["RESIDENTIAL" as const, "COMMERCIAL" as const] },
-    city: { equals: place.city, mode: "insensitive" as const },
-    ...(place.community
-      ? {
-          community: {
-            equals: place.community,
-            mode: "insensitive" as const,
-          },
-        }
-      : {}),
-  };
+  const stagingSnapshotVisible = await stagingSnapshotVisibleForServerPage();
+  const listingWhere = withStagingSnapshotBoundary(
+    {
+      status: "ACTIVE" as const,
+      segment: { in: ["RESIDENTIAL" as const, "COMMERCIAL" as const] },
+      city: { equals: place.city, mode: "insensitive" as const },
+      ...(place.community
+        ? {
+            community: {
+              equals: place.community,
+              mode: "insensitive" as const,
+            },
+          }
+        : {}),
+    },
+    stagingSnapshotVisible,
+  );
 
   const [activeCount, listings, session] = await Promise.all([
     prisma.listing.count({ where: listingWhere }),

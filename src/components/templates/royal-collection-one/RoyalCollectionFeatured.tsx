@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingLink } from "@/components/listings/ListingLink";
 import { citiesQueryParam } from "@/lib/geo/regions";
@@ -14,6 +15,7 @@ import {
 import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
+import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import { takeRoyalFeaturedListings } from "./royal-featured-listings";
@@ -117,7 +119,13 @@ export function RoyalCollectionFeatured({
         <div className={styles.featureGrid}>
           {showSamples
             ? SAMPLE_CARDS.map((card) => (
-                <article key={card.place} className={styles.featureCard}>
+                <Link
+                  key={card.place}
+                  href={`/listing/concept?previewTemplate=${ROYAL_COLLECTION_ONE_TEMPLATE_ID}`}
+                  className={styles.featureLink}
+                  data-rc-allow=""
+                >
+                <article className={styles.featureCard}>
                   <LuxuryCardFace
                     badge="Concept"
                     imageUrl={
@@ -131,6 +139,7 @@ export function RoyalCollectionFeatured({
                     address="Not an MLS listing"
                   />
                 </article>
+                </Link>
               ))
             : null}
           {showSamples

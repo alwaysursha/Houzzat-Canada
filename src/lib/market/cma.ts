@@ -1,6 +1,7 @@
 import { haversineKm } from "@/lib/geo/distance";
 import { formatBedsPlusLabel, parseListingFacts } from "@/lib/listings/facts";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type CmaComp = {
   mlsNumber: string;
@@ -49,6 +50,7 @@ export async function findComps(opts: {
 
   const rows = await prisma.listing.findMany({
     where: {
+      ...excludeStagingSnapshotWhere(),
       status: { in: [...statuses] },
       transactionType: "SALE",
       segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },

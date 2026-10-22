@@ -4,13 +4,19 @@ import { homesForSalePath } from "@/lib/geo/area-seo";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+
+/** Snapshot rows are never sitemap entries, including on the staging host. */
+const PUBLIC_SITEMAP_LISTING_WHERE = {
+  AND: [{ status: "ACTIVE" as const }, excludeStagingSnapshotWhere()],
+};
 
 /** Google allows 50k URLs/file; keep headroom for static + area rows. */
 const LISTING_CHUNK = 4_000;
 
 export async function generateSitemaps() {
   try {
-    const count = await prisma.listing.count({ where: { status: "ACTIVE" } });
+    const count = await prisma.listing.count({ where: PUBLIC_SITEMAP_LISTING_WHERE });
     const chunks = Math.max(1, Math.ceil(count / LISTING_CHUNK));
     return Array.from({ length: chunks }, (_, id) => ({ id }));
   } catch (error) {
@@ -31,7 +37,7 @@ export default async function sitemap(props: {
   try {
     const [listings, areas, landings] = await Promise.all([
       prisma.listing.findMany({
-        where: { status: "ACTIVE" },
+        where: PUBLIC_SITEMAP_LISTING_WHERE,
         select: {
           mlsNumber: true,
           addressLine: true,

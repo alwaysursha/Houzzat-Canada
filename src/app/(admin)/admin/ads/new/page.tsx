@@ -1,13 +1,18 @@
 import { AdStudioCreateClient } from "@/components/admin/AdStudioCreateClient";
 import { formatPrice } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export const metadata = { title: "New ad campaign" };
 
 export default async function AdminAdsNewPage() {
   const [listings, landings, areas] = await Promise.all([
     prisma.listing.findMany({
-      where: { status: "ACTIVE", segment: { in: ["RESIDENTIAL", "COMMERCIAL"] } },
+      where: {
+        status: "ACTIVE",
+        segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+        ...excludeStagingSnapshotWhere(),
+      },
       orderBy: { listPrice: "asc" },
       take: 40,
       select: {

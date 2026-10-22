@@ -10,6 +10,7 @@ import {
   buildPrismaEntitledInventoryWhere,
   type WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type NeighbourhoodInsightsScope = "community" | "municipality";
 
@@ -99,6 +100,7 @@ async function queryEntitledActiveResidentialSales(input: {
   const where: Prisma.ListingWhereInput = {
     AND: [
       inventory.where,
+      excludeStagingSnapshotWhere(),
       {
         transactionType: "SALE",
         segment: "RESIDENTIAL",

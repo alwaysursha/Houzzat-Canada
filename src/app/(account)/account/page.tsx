@@ -11,6 +11,8 @@ import {
 } from "@/lib/account/customer-workspace-scope";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { hasVowAccess } from "@/lib/vow";
 
 export const metadata = { title: "Your Houzzat" };
@@ -141,9 +143,10 @@ export default async function AccountPage() {
   if (recentNotes.length > 0) {
     try {
       const noteListings = await prisma.listing.findMany({
-        where: {
-          mlsNumber: { in: recentNotes.map((n) => n.mlsNumber) },
-        },
+        where: withStagingSnapshotBoundary(
+          { mlsNumber: { in: recentNotes.map((n) => n.mlsNumber) } },
+          await stagingSnapshotVisibleForServerPage(),
+        ),
         select: {
           mlsNumber: true,
           addressLine: true,

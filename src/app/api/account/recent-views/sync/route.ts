@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 const schema = z.object({
   mlsNumbers: z.array(z.string().trim().min(3).max(32)).max(40),
@@ -26,8 +29,12 @@ export async function POST(request: Request) {
 
   // Insert oldest → newest so createdAt order matches browse order.
   const chronological = [...unique].reverse();
+  const context = await resolveListingEntitlementContextForRequest(request);
   const existing = await prisma.listing.findMany({
-    where: { mlsNumber: { in: chronological } },
+    where: withStagingSnapshotBoundary(
+      { mlsNumber: { in: chronological } },
+      stagingSnapshotVisibleFromResolution(context.resolution),
+    ),
     select: { mlsNumber: true },
   });
   const valid = new Set(existing.map((row) => row.mlsNumber));

@@ -24,6 +24,10 @@ import type {
   ListingDataCapability,
   WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement/types";
+import {
+  isHighOctaneStagingSnapshotDataSource,
+  snapshotDetailAllows,
+} from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 /** Marker: G.10C0 foundation module is present (regression lock). */
 export const G10C0_DETAIL_ENTITLEMENT_FOUNDATION = true as const;
@@ -244,6 +248,11 @@ export type EvaluateWebListingDetailInventoryAccessInput = {
    * on the same exact authority pair. Never checked without base body cap.
    */
   additionalCapabilities?: readonly ListingDataCapability[];
+  /**
+   * Server-resolved HIGH OCTANE staging snapshot channel.
+   * Snapshot rows stay denied unless this is true and the listing is ACTIVE.
+   */
+  stagingSnapshotVisible?: boolean;
 };
 
 export type EvaluateWebListingDetailInventoryAccessResult =
@@ -272,7 +281,9 @@ export type EvaluateWebListingDetailInventoryAccessResult =
  * - MLS → base capability (status or override) + every additionalCapability
  *   must pass {@link decideMlsListingDetailEntitlement} on the exact pair
  *
- * When enforcement OFF → allowed (mobile / legacy).
+ * When enforcement OFF → allowed (mobile / legacy), except a staging-snapshot
+ * row, which stays denied unless the server snapshot flag is set and the
+ * listing is ACTIVE without sold or history capabilities.
  */
 export function evaluateWebListingDetailInventoryAccess(
   input: EvaluateWebListingDetailInventoryAccessInput,
@@ -281,6 +292,18 @@ export function evaluateWebListingDetailInventoryAccess(
   const enforce = isWebListingDetailEntitlementEnforcementEnabled(
     input.entitlementFilteringEnabled,
   );
+  if (isHighOctaneStagingSnapshotDataSource(input.dataSource)) {
+    const allowed = snapshotDetailAllows({
+      dataSource: input.dataSource,
+      status: input.status,
+      visible: input.stagingSnapshotVisible === true,
+      additionalCapabilities: input.additionalCapabilities,
+    });
+    if (allowed) {
+      return { allowed: true, channel: "other", baseCapability: null };
+    }
+    return { allowed: false, reason: "non_mls_channel", channel: "other" };
+  }
   if (!enforce) {
     return { allowed: true, channel, baseCapability: null };
   }

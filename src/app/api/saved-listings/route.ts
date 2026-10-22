@@ -5,6 +5,9 @@ import { recordActivityEvent } from "@/lib/analytics/record-activity";
 import { scheduleRegistrationEngaged } from "@/lib/funnel/phase2c";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
+import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 function normalizeMlsNumber(raw: string): string {
   return raw.trim().toUpperCase();
@@ -44,8 +47,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: saved });
   }
 
+  const context = await resolveListingEntitlementContextForRequest(request);
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: saved.map((s) => s.mlsNumber) } },
+    where: withStagingSnapshotBoundary(
+      { mlsNumber: { in: saved.map((s) => s.mlsNumber) } },
+      stagingSnapshotVisibleFromResolution(context.resolution),
+    ),
     select: {
       mlsNumber: true,
       addressLine: true,

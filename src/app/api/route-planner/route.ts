@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireFullCustomerUser } from "@/lib/account";
 import { appendGuestStopsInOrder } from "@/lib/route-planner/merge-guest-stops";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import {
   enrichTourStops,
   getOrCreateActiveTour,
@@ -57,8 +58,10 @@ export async function PATCH(request: Request) {
         listActiveMls: async (mlsNumbers) => {
           const listings = await prisma.listing.findMany({
             where: {
-              mlsNumber: { in: mlsNumbers },
-              status: "ACTIVE",
+              AND: [
+                { mlsNumber: { in: mlsNumbers }, status: "ACTIVE" },
+                excludeStagingSnapshotWhere(),
+              ],
             },
             select: { mlsNumber: true },
           });

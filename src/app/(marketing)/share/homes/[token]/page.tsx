@@ -5,6 +5,7 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { noIndexMetadata } from "@/lib/seo";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 
@@ -69,7 +70,9 @@ export default async function ListingSharePage({ params }: Params) {
   const siteName = brand?.displayName ?? "Real Estate";
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: payload.mls } },
+    where: {
+      AND: [{ mlsNumber: { in: payload.mls } }, excludeStagingSnapshotWhere()],
+    },
     include: { media: true, openHouses: true },
   });
   const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));

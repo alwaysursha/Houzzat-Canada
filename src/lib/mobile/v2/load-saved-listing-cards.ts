@@ -6,6 +6,7 @@
 import { enrichListingCardForMobile } from "@/lib/mobile/v2/build-property-detail";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type SavedListingCardRow = {
   mlsNumber: string;
@@ -53,7 +54,9 @@ export async function loadSavedListingCardsForUser(
   }
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: mlsNumbers } },
+    where: {
+      AND: [{ mlsNumber: { in: mlsNumbers } }, excludeStagingSnapshotWhere()],
+    },
     include: {
       media: { orderBy: { sortOrder: "asc" } },
       openHouses: { orderBy: { startsAt: "asc" } },

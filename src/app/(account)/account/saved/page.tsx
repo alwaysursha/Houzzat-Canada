@@ -4,6 +4,8 @@ import { ListingCard } from "@/components/listings/ListingCard";
 import { requireCustomerUser } from "@/lib/account";
 import { toCard } from "@/lib/listings/provider";
 import { prisma } from "@/lib/prisma";
+import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 export const metadata = { title: "Saved homes" };
 
@@ -17,7 +19,10 @@ export default async function SavedHomesPage() {
   });
 
   const listings = await prisma.listing.findMany({
-    where: { mlsNumber: { in: saved.map((s) => s.mlsNumber) } },
+    where: withStagingSnapshotBoundary(
+      { mlsNumber: { in: saved.map((s) => s.mlsNumber) } },
+      await stagingSnapshotVisibleForServerPage(),
+    ),
     include: {
       media: { orderBy: { sortOrder: "asc" } },
       openHouses: { orderBy: { startsAt: "asc" } },

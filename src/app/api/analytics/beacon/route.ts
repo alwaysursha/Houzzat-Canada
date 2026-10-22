@@ -3,6 +3,8 @@ import { ingestActivityBeacon, type BeaconPayload } from "@/lib/admin/activity";
 import { auth } from "@/lib/auth";
 import { scheduleNotifyCustomerCameOnline } from "@/lib/notifications/staff-events";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
+import { evaluateHighOctaneStagingEnvironment } from "@/lib/tenancy/templates/high-octane-staging";
+import { isHighOctaneStagingAnalyticsSuppressed } from "@/lib/tenancy/templates/high-octane-staging-analytics";
 
 export const runtime = "nodejs";
 
@@ -23,6 +25,17 @@ export async function POST(req: Request) {
 
   const session = await auth();
   const userAgent = req.headers.get("user-agent");
+
+  if (evaluateHighOctaneStagingEnvironment().ready) {
+    const tenancy = await resolveRequestTenancy(req);
+    if (
+      isHighOctaneStagingAnalyticsSuppressed({
+        workspaceSlug: tenancy.ok ? tenancy.workspaceSlug : null,
+      })
+    ) {
+      return NextResponse.json({ ok: true, suppressed: true });
+    }
+  }
 
   try {
     const result = await ingestActivityBeacon(body, {

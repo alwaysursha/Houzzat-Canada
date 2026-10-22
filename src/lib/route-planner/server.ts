@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { toCard } from "@/lib/listings/provider";
 import type { ListingCard } from "@/lib/listings/types";
 import {
@@ -76,7 +77,9 @@ export async function enrichTourStops(
 ): Promise<Map<string, EnrichedStopListing>> {
   if (mlsNumbers.length === 0) return new Map();
   const rows = await prisma.listing.findMany({
-    where: { mlsNumber: { in: mlsNumbers } },
+    where: {
+      AND: [{ mlsNumber: { in: mlsNumbers } }, excludeStagingSnapshotWhere()],
+    },
     include: { media: true, openHouses: true },
   });
   const map = new Map<string, EnrichedStopListing>();

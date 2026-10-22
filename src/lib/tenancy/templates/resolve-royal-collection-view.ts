@@ -7,7 +7,12 @@ import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-present
 import type { PublicBrokerageIdentity } from "@/lib/tenancy/professional-identity";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
 import type { RoyalCollectionScene } from "@/lib/tenancy/templates/royal-collection-media";
-import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging";
+import {
+  HIGH_OCTANE_STAGING_FEATURED_CITIES,
+  HIGH_OCTANE_STAGING_MARKET_LABEL,
+  HIGH_OCTANE_STAGING_OWNER_EMAIL,
+  HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+} from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
 
 export type RoyalCollectionCommunityLink = {
@@ -23,6 +28,13 @@ export type RoyalCollectionCollectionCard = {
   caption: string;
   imageUrl: string | null;
 };
+
+/** Board copy only when this tenant has an authorized listing source. */
+export type RoyalCollectionListingDisclosure =
+  | "preview"
+  | "unconnected"
+  | "snapshot"
+  | "authorized";
 
 export type RoyalCollectionView = {
   brandName: string;
@@ -44,6 +56,7 @@ export type RoyalCollectionView = {
   markets: string[];
   brokerage: PublicBrokerageIdentity;
   footerLegalText: string | null;
+  listingDisclosure: RoyalCollectionListingDisclosure;
   searchHeading: string;
   valuationHeading: string;
   featuredCities: string[] | null;
@@ -111,6 +124,7 @@ function highOctaneView(): RoyalCollectionView {
       logoUrl: null,
     },
     footerLegalText: null,
+    listingDisclosure: "preview",
     searchHeading: fixture.searchHeading,
     valuationHeading: fixture.valuationHeading,
     featuredCities: [...fixture.featuredCities],
@@ -122,12 +136,42 @@ function highOctaneView(): RoyalCollectionView {
   };
 }
 
+function persistedMarkets(brand: MarketingPresentationBrand): string[] {
+  return (brand.agent?.markets ?? []).map((market) => market.trim()).filter(Boolean);
+}
+
+/**
+ * Workspace branding is the public address. The staging owner login is never shown.
+ */
+export function royalCollectionPublicEmail(
+  brand: MarketingPresentationBrand,
+): string | null {
+  const contact = brand.contact.email?.trim() || null;
+  const login = brand.agent?.email?.trim() || null;
+  const preferred = contact || login;
+  if (!preferred) return null;
+  if (preferred.toLowerCase() === HIGH_OCTANE_STAGING_OWNER_EMAIL) return null;
+  return preferred;
+}
+
+function listingDisclosureFor(
+  brand: MarketingPresentationBrand,
+): RoyalCollectionListingDisclosure {
+  if (brand.workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return "authorized";
+  if (brand.authorizedListingSource === true) return "authorized";
+  if (brand.stagingSnapshotAttribution === true) return "snapshot";
+  return "unconnected";
+}
+
 export function resolveRoyalCollectionView(
   brand: MarketingPresentationBrand,
 ): RoyalCollectionView {
   if (isHighOctaneConceptFixture(brand)) return highOctaneView();
 
   const professional = brand.professionalIdentity;
+  const markets = persistedMarkets(brand);
+  const stagingWorkspace = brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+  const stagingDefaultMarket = stagingWorkspace && markets.length === 0;
   const agentName =
     professional.agent.name?.trim() || brand.agent?.name?.trim() || null;
   const brandName = brand.displayName?.trim() || agentName || "Real Estate";
@@ -154,19 +198,30 @@ export function resolveRoyalCollectionView(
     bio: brand.agent?.bio?.trim() || null,
     photoUrl: professional.agent.photoUrl ?? null,
     phone: professional.agent.cellPhone ?? brand.agent?.phone ?? null,
-    email: brand.agent?.email ?? brand.contact.email,
-    markets: brand.agent?.markets ?? [],
+    email: royalCollectionPublicEmail(brand),
+    markets: stagingDefaultMarket ? [HIGH_OCTANE_STAGING_MARKET_LABEL] : markets,
     brokerage,
     footerLegalText: brand.footerLegalText,
-    searchHeading: "Find a home",
-    valuationHeading: "Discover your home's value",
-    featuredCities: null,
+    listingDisclosure: listingDisclosureFor(brand),
+    searchHeading: stagingDefaultMarket
+      ? HIGH_OCTANE_PREVIEW_FIXTURE.searchHeading
+      : "Find a home",
+    valuationHeading: stagingDefaultMarket
+      ? HIGH_OCTANE_PREVIEW_FIXTURE.valuationHeading
+      : "Discover your home's value",
+    featuredCities: stagingWorkspace
+      ? stagingDefaultMarket
+        ? [...HIGH_OCTANE_STAGING_FEATURED_CITIES]
+        : markets
+      : null,
     posterUrl: null,
     scenes: [],
-    editorialCommunities: null,
-    navCommunities: [
-      { name: "Explore communities", city: "", href: "/areas" },
-    ],
+    editorialCommunities: stagingDefaultMarket
+      ? HIGH_OCTANE_PREVIEW_FIXTURE.editorialCommunities
+      : null,
+    navCommunities: stagingDefaultMarket
+      ? HIGH_OCTANE_PREVIEW_FIXTURE.navCommunities
+      : [{ name: "Explore communities", city: "", href: "/areas" }],
     collectionCards: null,
   };
 }

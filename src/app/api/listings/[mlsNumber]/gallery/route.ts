@@ -6,6 +6,7 @@ import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { prisma } from "@/lib/prisma";
 import { classifyListingInventoryChannel } from "@/lib/tenancy/listing-entitlement";
+import { isHighOctaneStagingSnapshotDataSource } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -43,6 +44,7 @@ export async function GET(request: Request, { params }: Params) {
   const channel = classifyListingInventoryChannel(listing.dataSource);
   const orgId = listing.organizationId?.trim() ?? "";
   const mayPropTx =
+    !isHighOctaneStagingSnapshotDataSource(listing.dataSource) &&
     Boolean(listing.listingKey) &&
     (channel !== "mls" ||
       (Boolean(orgId) &&
@@ -95,6 +97,13 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   if (!listing.listingKey) {
+    if (isHighOctaneStagingSnapshotDataSource(listing.dataSource)) {
+      return NextResponse.json({
+        photos: neonPhotos,
+        neonMediaCount: neonPhotos.length,
+        galleryCapped: true,
+      });
+    }
     return NextResponse.json({ photos: [] as const });
   }
 

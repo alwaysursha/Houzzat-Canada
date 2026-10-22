@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export type MarketPulse = {
   city: string;
@@ -43,12 +44,17 @@ export async function getMarketPulse(opts: {
 
   const [active, sold] = await Promise.all([
     prisma.listing.findMany({
-      where: { ...placeFilter, status: "ACTIVE" },
+      where: { ...placeFilter, status: "ACTIVE", ...excludeStagingSnapshotWhere() },
       select: { listPrice: true, daysOnMarket: true },
     }),
     opts.includeSold
       ? prisma.listing.findMany({
-          where: { ...placeFilter, status: "SOLD", soldPrice: { not: null } },
+          where: {
+            ...placeFilter,
+            status: "SOLD",
+            soldPrice: { not: null },
+            ...excludeStagingSnapshotWhere(),
+          },
           select: { listPrice: true, soldPrice: true, daysOnMarket: true },
         })
       : Promise.resolve([]),

@@ -1,12 +1,17 @@
 import { CmaClient } from "@/components/agent/CmaClient";
 import { formatPrice } from "@/lib/listings/constants";
 import { prisma } from "@/lib/prisma";
+import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 export const metadata = { title: "CMA drafts" };
 
 export default async function AgentCmaPage() {
   const listings = await prisma.listing.findMany({
-    where: { status: "ACTIVE", segment: { in: ["RESIDENTIAL", "COMMERCIAL"] } },
+    where: {
+      status: "ACTIVE",
+      segment: { in: ["RESIDENTIAL", "COMMERCIAL"] },
+      ...excludeStagingSnapshotWhere(),
+    },
     orderBy: { listPrice: "asc" },
     take: 40,
   });

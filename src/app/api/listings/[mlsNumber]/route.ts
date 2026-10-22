@@ -13,6 +13,7 @@ import {
   evaluateWebListingDetailInventoryAccess,
   resolveListingEntitlementContextForRequest,
 } from "@/lib/tenancy/listing-entitlement";
+import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -33,8 +34,11 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   // Never trust client workspaceId / org / provider / SAK.
-  const { entitlement } =
-    await resolveListingEntitlementContextForRequest(request);
+  const context = await resolveListingEntitlementContextForRequest(request);
+  const { entitlement } = context;
+  const stagingSnapshotVisible = stagingSnapshotVisibleFromResolution(
+    context.resolution,
+  );
 
   const provider = getListingProvider();
   const listing = await provider.getByMls(mlsNumber);
@@ -50,6 +54,7 @@ export async function GET(request: Request, { params }: Params) {
     providerKey: listing.providerKey,
     dataSource: listing.dataSource,
     status: listing.status,
+    stagingSnapshotVisible,
   });
   if (!board.allowed) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
@@ -62,6 +67,7 @@ export async function GET(request: Request, { params }: Params) {
     providerKey: listing.providerKey,
     dataSource: listing.dataSource,
     status: listing.status,
+    stagingSnapshotVisible,
     additionalCapabilities: ["MEDIA"],
   }).allowed;
 
@@ -72,6 +78,7 @@ export async function GET(request: Request, { params }: Params) {
     providerKey: listing.providerKey,
     dataSource: listing.dataSource,
     status: listing.status,
+    stagingSnapshotVisible,
     additionalCapabilities: ["HISTORY"],
   }).allowed;
 
