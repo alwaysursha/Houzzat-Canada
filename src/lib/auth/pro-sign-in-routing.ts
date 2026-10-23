@@ -16,6 +16,10 @@ import { isPlatformMobileBootstrapHost } from "@/lib/mobile/platform-bootstrap";
 import { isStaffWorkspaceMemberRole } from "@/lib/mobile/workspace-destination";
 import { isAdminRole, isAgentRole, isStaffRole } from "@/lib/roles";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
+import {
+  highOctanePreviewProcessReady,
+  isApprovedHighOctanePreviewHostname,
+} from "@/lib/tenancy/templates/high-octane-staging-preview";
 
 /** Reject open redirects; keep internal app paths only. */
 export function sanitizeStaffCallbackPath(
@@ -236,6 +240,7 @@ export function shouldDeferStaffWebRoleToHostnameMembership(
   if (!host) return false;
   if (host === "houzzatpro.com" || host === "www.houzzatpro.com") return false;
   if (isPlatformMobileBootstrapHost(host)) return false;
+  if (isApprovedHighOctanePreviewHostname(host) && highOctanePreviewProcessReady()) return true;
   return isTenantDomainScopeWorkspace();
 }
 

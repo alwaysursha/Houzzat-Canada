@@ -7,6 +7,10 @@
  */
 import { deriveWorkspaceDisplayName, slugifyWorkspaceName } from "@/lib/platform/provisioning/slug";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
+import {
+  evaluateHighOctanePreviewEnvironment,
+  type HighOctanePreviewGateOptions,
+} from "@/lib/tenancy/templates/high-octane-staging-preview";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG as BROWSER_SAFE_STAGING_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
 
@@ -81,11 +85,28 @@ function databaseHost(value: string | undefined): string | null {
 }
 
 /**
- * Fail closed. A preview URL, production Node, or the application database
- * cannot open this path. A ready environment still does not create a workspace.
+ * Fail closed. Localhost staging keeps its current rules.
+ * Vercel Preview opens only through the separate preview gate.
+ * A ready environment still does not create a workspace.
  */
 export function evaluateHighOctaneStagingEnvironment(
   env: NodeJS.ProcessEnv = process.env,
+  options?: HighOctanePreviewGateOptions,
+): HighOctaneStagingEnvironment {
+  if (env.VERCEL_ENV === "production") {
+    return {
+      ready: false,
+      prerequisite: "Refusing HIGH OCTANE staging on a production Vercel deployment.",
+    };
+  }
+  if (env.VERCEL_ENV === "preview") {
+    return evaluateHighOctanePreviewEnvironment(env, options);
+  }
+  return evaluateLocalhostStagingEnvironment(env);
+}
+
+function evaluateLocalhostStagingEnvironment(
+  env: NodeJS.ProcessEnv,
 ): HighOctaneStagingEnvironment {
   if (env.NODE_ENV === "production") {
     return {
@@ -131,8 +152,17 @@ export function evaluateHighOctaneStagingEnvironment(
 export function resolveHighOctaneStagingTemplateId(input: {
   workspaceSlug: string | null | undefined;
   env?: NodeJS.ProcessEnv;
+  hostname?: string | null;
+  branchId?: string | null;
 }): typeof ROYAL_COLLECTION_ONE_TEMPLATE_ID | null {
   if (input.workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return null;
-  if (!evaluateHighOctaneStagingEnvironment(input.env ?? process.env).ready) return null;
+  if (
+    !evaluateHighOctaneStagingEnvironment(input.env ?? process.env, {
+      hostname: input.hostname,
+      branchId: input.branchId,
+    }).ready
+  ) {
+    return null;
+  }
   return ROYAL_COLLECTION_ONE_TEMPLATE_ID;
 }

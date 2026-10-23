@@ -16,6 +16,7 @@ async function harnessAllowed(): Promise<boolean> {
   if (!tenancy) return false;
   return highOctaneStagingPropertyConceptAllowed({
     workspaceSlug: tenancy.workspaceSlug,
+    hostname: tenancy.hostname,
   });
 }
 

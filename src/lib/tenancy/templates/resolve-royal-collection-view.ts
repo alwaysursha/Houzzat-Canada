@@ -223,12 +223,27 @@ export function royalCollectionPublicEmail(
   return preferred;
 }
 
+/**
+ * HIGH OCTANE photography belongs to that workspace slug.
+ * Another assigned Royal Collection tenant does not receive it.
+ * Staging flags, database hosts, and preview hostnames are not consulted.
+ */
+export function usesHighOctaneRoyalCollectionMedia(
+  workspaceSlug: string | null | undefined,
+): boolean {
+  return workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+}
+
 function listingDisclosureFor(
   brand: MarketingPresentationBrand,
 ): RoyalCollectionListingDisclosure {
-  if (brand.workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return "authorized";
   if (brand.authorizedListingSource === true) return "authorized";
-  if (brand.stagingSnapshotAttribution === true) return "snapshot";
+  if (
+    brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+    brand.stagingSnapshotAttribution === true
+  ) {
+    return "snapshot";
+  }
   return "unconnected";
 }
 
@@ -239,7 +254,7 @@ export function resolveRoyalCollectionView(
 
   const professional = brand.professionalIdentity;
   const markets = persistedMarkets(brand);
-  const stagingWorkspace = brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+  const stagingWorkspace = usesHighOctaneRoyalCollectionMedia(brand.workspaceSlug);
   const stagingDefaultMarket = stagingWorkspace && markets.length === 0;
   const agentName =
     professional.agent.name?.trim() || brand.agent?.name?.trim() || null;

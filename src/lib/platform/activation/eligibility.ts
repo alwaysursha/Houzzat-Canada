@@ -37,6 +37,13 @@ export async function evaluateOwnerActivationEligibility(input: {
       name: true,
       status: true,
       currentSubscriptionId: true,
+      currentSubscription: {
+        select: {
+          source: true,
+          status: true,
+          stripeSubscriptionId: true,
+        },
+      },
       billingOwnerUserId: true,
       members: {
         where: { role: "OWNER", status: "ACTIVE" },
@@ -101,7 +108,13 @@ export async function evaluateOwnerActivationEligibility(input: {
     };
   }
 
-  if (workspace.provisioningRuns.length === 0) {
+  const subscription = workspace.currentSubscription;
+  const complimentary =
+    subscription?.source === "INTERNAL" &&
+    subscription.status === "ACTIVE" &&
+    subscription.stripeSubscriptionId == null;
+
+  if (!complimentary && workspace.provisioningRuns.length === 0) {
     return {
       eligible: false,
       reason: "PROVISIONING_NOT_SUCCEEDED",

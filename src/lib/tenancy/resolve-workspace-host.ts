@@ -1,11 +1,7 @@
 /**
  * Stage 3K.3 — trusted hostname → workspace resolver (fail-closed in workspace scope).
  */
-import type {
-  PrismaClient,
-  WorkspaceDomainKind,
-  WorkspaceDomainRole,
-} from "@prisma/client";
+import type { WorkspaceDomainKind, WorkspaceDomainRole } from "@prisma/client";
 import { HOUZZAT_WORKSPACE_SLUG } from "@/lib/crm-ownership";
 import {
   clearHostResolutionCacheForTests,
@@ -21,6 +17,11 @@ import { blocksTenantHostnameResolution } from "@/lib/tenancy/reserved-domains";
 import { isTenantDomainScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import { lookupActiveWorkspaceDomainRow } from "@/lib/tenancy/workspace-domain-probe";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
+import {
+  highOctanePreviewProcessReady,
+  isApprovedHighOctanePreviewHostname,
+} from "@/lib/tenancy/templates/high-octane-staging-preview";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 export type DomainLookupRow = {
@@ -33,6 +34,11 @@ export type DomainLookupRow = {
   workspaceStatus: "ACTIVE" | "TRIAL" | "SUSPENDED" | "CANCELLED";
 };
 
+export type HighOctaneStagingWorkspaceLookup = {
+  workspaceId: string;
+  workspaceSlug: string;
+};
+
 export type HostResolutionDeps = {
   lookupActiveDomain: (
     hostname: string,
@@ -41,6 +47,11 @@ export type HostResolutionDeps = {
     workspaceId: string;
     workspaceSlug: string;
   } | null>;
+  /**
+   * Used only for the one approved HIGH OCTANE preview hostname.
+   * Tests supply this so the resolver does not open a database connection.
+   */
+  lookupHighOctaneStagingWorkspace?: () => Promise<HighOctaneStagingWorkspaceLookup | null>;
 };
 
 function deny(
@@ -70,6 +81,16 @@ async function defaultLookupActiveDomain(
     domainStatus: row.status,
     workspaceStatus: row.workspaceStatus,
   };
+}
+
+async function defaultLookupHighOctaneStagingWorkspace(): Promise<HighOctaneStagingWorkspaceLookup | null> {
+  const workspace = await defaultPrisma.workspace.findUnique({
+    where: { slug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG },
+    select: { id: true, slug: true, status: true },
+  });
+  if (!workspace || workspace.status !== "ACTIVE") return null;
+  if (workspace.slug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return null;
+  return { workspaceId: workspace.id, workspaceSlug: workspace.slug };
 }
 
 async function defaultLegacyHouzzatWorkspace(): Promise<{
@@ -143,6 +164,29 @@ export async function resolveWorkspaceFromHostname(
   }
 
   const hostname = normalized.hostname;
+  if (isApprovedHighOctanePreviewHostname(hostname) && highOctanePreviewProcessReady()) {
+    const cachedPreview = readHostResolutionCache("workspace", hostname);
+    if (cachedPreview) return cachedPreview;
+    const lookup = deps.lookupHighOctaneStagingWorkspace ?? defaultLookupHighOctaneStagingWorkspace;
+    const workspace = await lookup();
+    // Allowlist verification for the one preview hostname. This does not insert a domain row.
+    const result: ResolvedWorkspaceHost =
+      workspace && workspace.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+        ? {
+            ok: true,
+            mode: "workspace",
+            workspaceId: workspace.workspaceId,
+            workspaceSlug: workspace.workspaceSlug,
+            normalizedHostname: hostname,
+            domainKind: "CUSTOM",
+            domainRole: "PRIMARY",
+            verifiedHostname: true,
+          }
+        : deny(hostname, "domain_not_found");
+    writeHostResolutionCache("workspace", hostname, result);
+    return result;
+  }
+
   const cached = readHostResolutionCache(scopeMode, hostname);
   if (cached) return cached;
 

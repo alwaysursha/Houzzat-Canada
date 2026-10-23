@@ -20,7 +20,7 @@ export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 export const DEFAULT_TEMPLATE_ID = "default-signature" as const;
 export const AGENT_SIGNATURE_TEMPLATE_ID = "agent-signature" as const;
 export const TEAM_SIGNATURE_TEMPLATE_ID = "team-signature" as const;
-/** Local foundation. Not selectable and not presentation-ready, so no tenant receives it. */
+/** Assigned by a trusted operator. Hidden from the owner catalog until approved. */
 export const ROYAL_COLLECTION_ONE_TEMPLATE_ID = "royal-collection-one" as const;
 
 /**
@@ -99,8 +99,9 @@ export type TemplateDefinition = {
    */
   selectable: boolean;
   /**
-   * When false, resolveTemplateIdFromThemeId falls back to Default layout
-   * so unfinished templates cannot activate publicly.
+   * When false, resolveTemplateIdFromThemeId falls back to Default.
+   * An explicitly stored Royal Collection theme still renders through
+   * resolvePersistedPublicTemplateId.
    */
   presentationReady: boolean;
   themes: readonly TemplateThemeDefinition[];

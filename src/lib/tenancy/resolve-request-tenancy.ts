@@ -19,6 +19,7 @@ import {
 } from "@/lib/tenancy/resolve-workspace-host";
 import type { HostResolutionDenyReason } from "@/lib/tenancy/host-resolution-types";
 import { resolveWorkspaceBrand } from "@/lib/tenancy/resolve-workspace-brand";
+import { shouldUseHighOctanePreviewWorkspaceBrand } from "@/lib/tenancy/templates/high-octane-staging-preview";
 import { isTenantBrandingScopeWorkspace } from "@/lib/tenancy/tenant-scope-flags";
 import type { TenantScopeMode } from "@/lib/tenancy/tenant-scope-flags";
 
@@ -70,6 +71,20 @@ async function resolveBrandForTenancy(
   return toWorkspaceBrandPublic(brand);
 }
 
+async function resolveTenancyBrand(
+  workspaceId: string,
+  deps: RequestTenancyDeps | undefined,
+  usePreviewWorkspaceBrand: boolean,
+): Promise<WorkspaceBrandPublic> {
+  if (!usePreviewWorkspaceBrand) {
+    return resolveBrandForTenancy(workspaceId, deps ?? ({} as RequestTenancyDeps));
+  }
+  const resolveBrand =
+    deps?.resolveBrand ??
+    ((id: string) => resolveWorkspaceBrand(id, { scope: "workspace" }));
+  return toWorkspaceBrandPublic(await resolveBrand(workspaceId));
+}
+
 /**
  * Single canonical entry: trusted hostname → workspace → public brand DTO.
  * Request-scoped — no global mutable tenant state.
@@ -100,9 +115,13 @@ export async function resolveRequestTenancy(
     };
   }
 
-  const brand = await resolveBrandForTenancy(
+  const brand = await resolveTenancyBrand(
     hostResult.workspaceId,
-    deps ?? ({} as RequestTenancyDeps),
+    deps,
+    shouldUseHighOctanePreviewWorkspaceBrand({
+      workspaceSlug: hostResult.workspaceSlug,
+      hostname: hostResult.normalizedHostname,
+    }),
   );
 
   return {

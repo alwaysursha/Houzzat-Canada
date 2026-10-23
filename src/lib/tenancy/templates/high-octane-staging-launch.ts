@@ -4,16 +4,21 @@
  */
 import { evaluateHighOctaneStagingEnvironment } from "@/lib/tenancy/templates/high-octane-staging";
 import {
+  HIGH_OCTANE_STAGING_BRANCH_ID,
+  HIGH_OCTANE_STAGING_DIRECT_HOST,
+  HIGH_OCTANE_STAGING_POOLED_HOST,
+} from "@/lib/tenancy/templates/high-octane-staging-preview";
+import {
   DEFAULT_NEXT_DIST_DIR,
   HIGH_OCTANE_STAGING_NEXT_DIST_DIR,
   resolveNextDistDir,
 } from "@/lib/next/high-octane-staging-dist-dir";
 
-export const HIGH_OCTANE_STAGING_DIRECT_HOST =
-  "ep-red-credit-axp65p8a.c-4.us-east-2.aws.neon.tech";
-export const HIGH_OCTANE_STAGING_POOLED_HOST =
-  "ep-red-credit-axp65p8a-pooler.c-4.us-east-2.aws.neon.tech";
-export const HIGH_OCTANE_STAGING_BRANCH_ID = "br-dark-surf-axbepvr1";
+export {
+  HIGH_OCTANE_STAGING_BRANCH_ID,
+  HIGH_OCTANE_STAGING_DIRECT_HOST,
+  HIGH_OCTANE_STAGING_POOLED_HOST,
+};
 export const HIGH_OCTANE_STAGING_ORIGIN = "http://localhost:3010";
 export const HIGH_OCTANE_STAGING_HOSTNAME = "localhost";
 export const HIGH_OCTANE_STAGING_PORT = "3010";

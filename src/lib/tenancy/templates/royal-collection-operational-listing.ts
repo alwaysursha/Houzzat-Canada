@@ -13,12 +13,19 @@ export type RoyalCollectionOperationalPresentation =
 export function selectRoyalCollectionOperationalPresentation(input: {
   workspaceSlug: string | null | undefined;
   listingFound: boolean;
+  hostname?: string | null;
+  /** Template already chosen from the persisted workspace theme. */
+  assignedTemplateId?: string | null;
   env?: NodeJS.ProcessEnv;
+  branchId?: string | null;
 }): RoyalCollectionOperationalPresentation {
   if (!input.listingFound) return "not-found";
+  if (input.assignedTemplateId === ROYAL_COLLECTION_ONE_TEMPLATE_ID) return "royal-collection";
   const templateId = resolveHighOctaneStagingTemplateId({
     workspaceSlug: input.workspaceSlug,
+    hostname: input.hostname,
     env: input.env,
+    branchId: input.branchId,
   });
   if (templateId === ROYAL_COLLECTION_ONE_TEMPLATE_ID) return "royal-collection";
   return "standard";

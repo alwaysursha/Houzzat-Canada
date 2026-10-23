@@ -7,8 +7,13 @@ import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high
 
 export function highOctaneStagingPropertyConceptAllowed(input: {
   workspaceSlug: string | null | undefined;
+  hostname?: string | null;
   env?: NodeJS.ProcessEnv;
+  branchId?: string | null;
 }): boolean {
   if (input.workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return false;
-  return evaluateHighOctaneStagingEnvironment(input.env).ready;
+  return evaluateHighOctaneStagingEnvironment(input.env, {
+    hostname: input.hostname,
+    branchId: input.branchId,
+  }).ready;
 }

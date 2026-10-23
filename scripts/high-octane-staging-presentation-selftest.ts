@@ -202,7 +202,7 @@ assert.equal(
       stagingSnapshotAttribution: true,
     }),
   ).listingDisclosure,
-  "authorized",
+  "unconnected",
 );
 
 const houzzat = resolveRoyalCollectionView(
@@ -229,7 +229,7 @@ const houzzat = resolveRoyalCollectionView(
   }),
 );
 assert.equal(houzzat.email, "hello@houzzat.com");
-assert.equal(houzzat.listingDisclosure, "authorized");
+assert.equal(houzzat.listingDisclosure, "unconnected");
 assert.equal(houzzat.featuredCities, null);
 assert.equal(houzzat.collectionCards, null);
 assert.equal(houzzat.storyMainUrl, null);

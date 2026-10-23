@@ -94,8 +94,12 @@ export function workspaceBrandingRowToBrand(
  */
 export async function resolveWorkspaceBrand(
   workspaceId: string,
+  options?: { scope?: "legacy" | "workspace" },
 ): Promise<WorkspaceBrandInternal> {
-  if (!isTenantBrandingScopeWorkspace()) {
+  const workspaceScope =
+    options?.scope === "workspace" ||
+    (options?.scope !== "legacy" && isTenantBrandingScopeWorkspace());
+  if (!workspaceScope) {
     return applyPlatformFooterInvariant(buildLegacyHouzzatBrand(workspaceId));
   }
 

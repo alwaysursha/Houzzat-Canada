@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { scheduleNotifyCustomerCameOnline } from "@/lib/notifications/staff-events";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 import { evaluateHighOctaneStagingEnvironment } from "@/lib/tenancy/templates/high-octane-staging";
+import { highOctanePreviewProcessReady } from "@/lib/tenancy/templates/high-octane-staging-preview";
 import { isHighOctaneStagingAnalyticsSuppressed } from "@/lib/tenancy/templates/high-octane-staging-analytics";
 
 export const runtime = "nodejs";
@@ -26,11 +27,12 @@ export async function POST(req: Request) {
   const session = await auth();
   const userAgent = req.headers.get("user-agent");
 
-  if (evaluateHighOctaneStagingEnvironment().ready) {
+  if (evaluateHighOctaneStagingEnvironment().ready || highOctanePreviewProcessReady()) {
     const tenancy = await resolveRequestTenancy(req);
     if (
       isHighOctaneStagingAnalyticsSuppressed({
         workspaceSlug: tenancy.ok ? tenancy.workspaceSlug : null,
+        hostname: tenancy.ok ? tenancy.hostname : null,
       })
     ) {
       return NextResponse.json({ ok: true, suppressed: true });

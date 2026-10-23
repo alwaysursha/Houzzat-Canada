@@ -33,8 +33,8 @@ import {
   isRoyalCollectionOneTemplateId,
   isTeamSignatureTemplateId,
   parseThemeId,
+  resolvePersistedPublicTemplateId,
   resolvePublicTemplateIdForPlan,
-  resolveTemplateIdFromThemeId,
   resolveThemePalette,
   type ImplementedTemplateId,
 } from "@/lib/tenancy/templates";
@@ -196,10 +196,11 @@ function resolvePresentedTemplateId(
       if (template) return template.id;
     }
   }
-  return resolveTemplateIdFromThemeId(themeId);
+  return resolvePersistedPublicTemplateId(themeId);
 }
 
-export async function resolveMarketingPresentationBrand(): Promise<MarketingPresentationBrand | null> {
+export const resolveMarketingPresentationBrand = cache(
+  async (): Promise<MarketingPresentationBrand | null> => {
   const tenancy = await resolveMarketingTenancy();
   if (!tenancy) return null;
   const canonicalOrigin = await resolveCanonicalPublicOrigin(
@@ -230,6 +231,7 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   const plan = await resolveWorkspacePlanCapabilities(tenancy.workspaceId);
   const stagingTemplateId = resolveHighOctaneStagingTemplateId({
     workspaceSlug: tenancy.workspaceSlug,
+    hostname: tenancy.hostname,
   });
   const templateId =
     stagingTemplateId ??
@@ -275,14 +277,13 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
   // Stage 6.11D — all templates receive canonical professional identity.
   // Stage 6.11E.7 — Team roster only when Team Signature is active AND the
   // plan includes TEAM_MANAGEMENT. SOLO uses canonical Owner/Agent identity.
-  const authorizedListingSource =
-    tenancy.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
-      ? (
-          await resolveWorkspaceListingEntitlement({
-            trustedWorkspaceId: tenancy.workspaceId,
-          })
-        ).authorities.length > 0
-      : undefined;
+  const authorizedListingSource = isRoyalCollectionOneTemplateId(templateId)
+    ? (
+        await resolveWorkspaceListingEntitlement({
+          trustedWorkspaceId: tenancy.workspaceId,
+        })
+      ).authorities.length > 0
+    : undefined;
 
   const [professionalIdentity, agent, teamRoster] = await Promise.all([
     resolvePublicProfessionalIdentity(tenancy.workspaceId),
@@ -311,6 +312,7 @@ export async function resolveMarketingPresentationBrand(): Promise<MarketingPres
     stagingSnapshotAttribution:
       tenancy.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
       authorizedListingSource !== true &&
-      evaluateHighOctaneStagingEnvironment().ready,
+      evaluateHighOctaneStagingEnvironment(process.env, { hostname: tenancy.hostname }).ready,
   });
-}
+  },
+);

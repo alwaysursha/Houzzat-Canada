@@ -243,13 +243,16 @@ export async function OperationalListingDetail({
   );
 
   const galleryPhotos = resolveListingGalleryPhotos(listing);
+  const presentationBrand = await resolveMarketingPresentationBrand();
   if (
     selectRoyalCollectionOperationalPresentation({
-      workspaceSlug: tenancy?.workspaceSlug ?? null,
+      workspaceSlug: tenancy?.workspaceSlug ?? presentationBrand?.workspaceSlug ?? null,
+      hostname: tenancy?.hostname ?? null,
       listingFound: true,
+      assignedTemplateId: presentationBrand?.templateId ?? null,
     }) === "royal-collection"
   ) {
-    const brand = await resolveMarketingPresentationBrand();
+    const brand = presentationBrand;
     const royal = brand ? resolveRoyalCollectionView(brand) : null;
     const model = buildRoyalCollectionListingModel({
       listing: listingForClient,

@@ -74,8 +74,8 @@ const AGENT_SIGNATURE_TEMPLATE: TemplateDefinition = {
 };
 
 /**
- * Local luxury foundation. Not selectable and not presentation-ready,
- * so onboarding and public theme resolution cannot assign it.
+ * Luxury template. Hidden from the owner catalog until approved.
+ * A workspace renders it only when its saved theme is the signature theme.
  */
 const ROYAL_COLLECTION_ONE_TEMPLATE: TemplateDefinition = {
   id: ROYAL_COLLECTION_ONE_TEMPLATE_ID,
@@ -83,7 +83,7 @@ const ROYAL_COLLECTION_ONE_TEMPLATE: TemplateDefinition = {
   categoryLabel: "Agent Branded",
   label: "Royal Collection — Signature One",
   description:
-    "Personal luxury homepage foundation. Development preview only until it is explicitly released.",
+    "Personal luxury homepage. Available after a workspace is explicitly assigned this theme.",
   selectable: false,
   presentationReady: false,
   themes: ROYAL_COLLECTION_ONE_THEMES,
@@ -163,9 +163,10 @@ export function resolveThemePalette(
 }
 
 /**
- * Template id from persisted themeId for public layout switching.
+ * Template id from persisted themeId for generic catalog resolution.
  * null/unknown → Default.
- * Templates with presentationReady=false → Default (unfinished must not activate).
+ * Templates with presentationReady=false → Default.
+ * An assigned Royal Collection theme uses resolvePersistedPublicTemplateId.
  */
 export function resolveTemplateIdFromThemeId(
   themeId: string | null | undefined,
@@ -174,6 +175,25 @@ export function resolveTemplateIdFromThemeId(
   if (!parsed) return DEFAULT_TEMPLATE_ID;
   const template = getTemplate(parsed.templateId);
   if (!template || !template.presentationReady) return DEFAULT_TEMPLATE_ID;
+  return template.id;
+}
+
+/**
+ * Public layout for a theme already stored on the workspace.
+ * Royal Collection stays out of the owner catalog, and renders only when
+ * `royal-collection-one:signature` was explicitly assigned.
+ */
+export function resolvePersistedPublicTemplateId(
+  themeId: string | null | undefined,
+): ImplementedTemplateId {
+  const parsed = parseThemeId(themeId);
+  if (!parsed) return DEFAULT_TEMPLATE_ID;
+  const template = getTemplate(parsed.templateId);
+  if (!template) return DEFAULT_TEMPLATE_ID;
+  if (template.presentationReady) return template.id;
+  if (template.id !== ROYAL_COLLECTION_ONE_TEMPLATE_ID) return DEFAULT_TEMPLATE_ID;
+  const exactId = `${parsed.templateId}:${parsed.themeKey}`;
+  if (!template.themes.some((theme) => theme.id === exactId)) return DEFAULT_TEMPLATE_ID;
   return template.id;
 }
 
@@ -368,6 +388,33 @@ export function requireValidSelectableThemeId(raw: unknown): string {
  */
 export function requireValidOwnerPersistableThemeId(raw: unknown): string {
   return requireValidSelectableThemeId(raw);
+}
+
+/**
+ * Unpublished catalog themes a Master Admin may store on WorkspaceBranding.
+ * Owners cannot select these. A later public release sets selectable and
+ * presentationReady, and this gate stops accepting that theme.
+ */
+export function requireMasterAdminAssignableThemeId(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const theme = getThemeById(raw);
+  if (!theme) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const parsed = parseThemeId(theme.id);
+  if (!parsed) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  const template = getTemplate(parsed.templateId);
+  if (!template || template.selectable || template.presentationReady) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  if (!template.themes.some((entry) => entry.id === theme.id)) {
+    throw new Error("INVALID_THEME_ID");
+  }
+  return theme.id;
 }
 
 /** True when OWNER Apply may persist this themeId (UI hint). */
