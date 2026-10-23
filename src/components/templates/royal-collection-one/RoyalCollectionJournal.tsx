@@ -8,12 +8,12 @@ export function RoyalCollectionJournal({ view }: { view: RoyalCollectionView }) 
     ? [
         { n: "01", title: "Buying a home in Niagara", href: "/search?transactionType=SALE" },
         { n: "02", title: "Preparing to sell with confidence", href: "/home-valuation" },
-        { n: "03", title: "Discovering Niagara neighbourhoods", href: "/areas" },
+        { n: "03", title: "Discovering Niagara neighbourhoods", href: "/communities" },
       ]
     : [
         { n: "01", title: "Buying a home", href: "/search?transactionType=SALE" },
         { n: "02", title: "Preparing to sell with confidence", href: "/home-valuation" },
-        { n: "03", title: "Discovering neighbourhoods", href: "/areas" },
+        { n: "03", title: "Discovering neighbourhoods", href: "/communities" },
       ];
 
   return (

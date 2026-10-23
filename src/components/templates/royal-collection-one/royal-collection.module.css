@@ -1,15 +1,15 @@
 .shell,
 .root {
-  --rc-navy: #0b1f3a;
+  --rc-navy: #071629;
   --rc-midnight: #071629;
   --rc-emerald: #145a46;
   --rc-green: #1c7658;
   --rc-gold: #c8a66a;
-  --rc-paper: #f6f8f7;
-  --rc-white: #fff;
-  --rc-slate: #64748b;
-  --rc-ink: #1f2937;
-  --rc-line: #e2e8e7;
+  --rc-paper: #f6f1e8;
+  --rc-white: #fffdf8;
+  --rc-slate: #6d6458;
+  --rc-ink: #1c1915;
+  --rc-line: #e6dccb;
   --rc-serif: var(--font-rc-serif), Georgia, serif;
   --rc-sans: var(--font-rc-sans), Arial, sans-serif;
   font-family: var(--rc-sans);
@@ -184,8 +184,13 @@
 }
 
 .navButton:hover::after,
-.navLink:hover::after {
+.navLink:hover::after,
+.navLinkOn::after {
   right: 0;
+}
+
+.navLinkOn {
+  color: #f6e7c8;
 }
 
 .chevron {
@@ -215,21 +220,32 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 17px;
+  gap: 12px;
+  min-height: 48px;
   border: 1px solid transparent;
-  padding: 17px 23px;
-  font-size: 10px;
+  padding: 0 22px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform 0.3s, background 0.3s, border-color 0.3s, color 0.3s;
+  transition: transform 0.35s ease, background 0.35s ease, border-color 0.35s ease, color 0.35s ease;
 }
 
 .button:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
+}
+
+.button:focus-visible,
+.navLink:focus-visible,
+.navButton:focus-visible,
+.menuButton:focus-visible,
+.utilityLink:focus-visible,
+.utilityLogin:focus-visible {
+  outline: 2px solid var(--rc-gold);
+  outline-offset: 3px;
 }
 
 .buttonGold {
@@ -440,13 +456,15 @@
 
 .drawer a,
 .drawer button {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
+  min-height: 48px;
   border: 0;
   border-bottom: 1px solid rgb(255 255 255 / 0.12);
   background: none;
   color: inherit;
-  padding: 0.95rem 0;
+  padding: 0.85rem 0;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -486,8 +504,8 @@
   background-position: center;
   background-size: cover;
   opacity: 0;
-  transform: scale(1.055);
-  transition: opacity 1.7s ease, transform 13s ease;
+  transform: scale(1.04);
+  transition: opacity 1.6s ease, transform 14s ease;
 }
 
 .heroSceneOn {
@@ -500,7 +518,7 @@
   height: 100%;
   object-fit: cover;
   opacity: 0;
-  transition: opacity 900ms ease;
+  transition: opacity 1.45s ease;
 }
 
 .heroVideoOn {
@@ -859,6 +877,7 @@
   grid-template-columns: 1fr 1fr;
   align-items: center;
   gap: clamp(50px, 7vw, 140px);
+  overflow-x: clip;
   background: var(--rc-paper);
 }
 
@@ -973,8 +992,8 @@
 }
 
 .collectionCard:hover .collectionImage {
-  transform: scale(1.075);
-  filter: saturate(1.1);
+  transform: scale(1.035);
+  filter: saturate(1);
 }
 
 .collectionCard::after {
@@ -2031,6 +2050,138 @@
     transform: translate3d(-2%, -1%, 0) scale(1);
   }
   to {
-    transform: translate3d(2%, 1%, 0) scale(1.06);
+    transform: translate3d(2%, 1%, 0) scale(1.04);
+  }
+}
+
+.page {
+  background: var(--rc-paper);
+  color: var(--rc-ink);
+  padding: calc(var(--rc-header-offset, 168px) + 8px) 0 24px;
+}
+
+.page .section {
+  padding-top: 28px;
+}
+
+.pageKicker {
+  margin: 0;
+  padding: 8px clamp(22px, 6vw, 104px) 0;
+  color: var(--rc-gold);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.pageLead {
+  max-width: 40rem;
+  margin: 0;
+  padding: 0 clamp(22px, 6vw, 104px);
+  color: #5c564c;
+  font-size: 16px;
+  line-height: 1.8;
+}
+
+.page h1 {
+  margin: 10px 0 16px;
+  padding: 0 clamp(22px, 6vw, 104px);
+  color: var(--rc-midnight);
+  font-family: var(--rc-serif);
+  font-size: clamp(46px, 6vw, 84px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.page h1 em {
+  font-style: italic;
+  color: #8d7040;
+}
+
+.placeFrame {
+  margin: 28px clamp(22px, 6vw, 104px) 0;
+  min-height: 420px;
+  background-color: var(--rc-midnight);
+  background-position: center;
+  background-size: cover;
+}
+
+.placeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 28px clamp(22px, 6vw, 104px) 0;
+}
+
+.contactGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 28px;
+  margin: 28px clamp(22px, 6vw, 104px) 48px;
+}
+
+.contactPanel {
+  border: 1px solid var(--rc-line);
+  background: var(--rc-white);
+  padding: 28px;
+}
+
+.contactPanel p {
+  margin: 0 0 16px;
+  color: #5c564c;
+  line-height: 1.75;
+}
+
+.contactPanel a {
+  color: var(--rc-midnight);
+}
+
+@media (max-width: 800px) {
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .placeFrame {
+    min-height: 280px;
+  }
+}
+
+@media (max-width: 430px) {
+  .utility {
+    padding-inline: 16px;
+  }
+
+  .utilityLink,
+  .utilityLogin {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .heroTitle {
+    font-size: clamp(46px, 12.4vw, 64px);
+  }
+
+  .heroActions .button {
+    width: 100%;
+  }
+
+  .wordmarkTop {
+    letter-spacing: 0.12em;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .heroTitle {
+    font-size: clamp(62px, 8vw, 92px);
+  }
+
+  .collectionCards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .collectionCard:first-child {
+    grid-column: span 2;
   }
 }

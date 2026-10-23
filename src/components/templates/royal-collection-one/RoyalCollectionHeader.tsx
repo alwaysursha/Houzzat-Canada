@@ -36,6 +36,14 @@ export function RoyalCollectionHeader({
     ? `/?previewTemplate=${ROYAL_COLLECTION_ONE_TEMPLATE_ID}`
     : "/";
   const meetLabel = view.agentName ? `Meet ${view.agentName}` : "Meet the agent";
+  const aboutHref = "/about";
+  const sellHref = onHomepage ? "#rc-valuation" : "/home-valuation";
+  const aboutActive = pathname === "/about";
+  const communitiesActive =
+    pathname.startsWith("/communities") ||
+    pathname.startsWith("/homes-for-sale") ||
+    pathname.startsWith("/areas");
+  const searchActive = pathname.startsWith("/search");
   const still = view.scenes.find((scene) => scene.conceptStill)?.conceptStill;
 
   useLayoutEffect(() => {
@@ -70,6 +78,15 @@ export function RoyalCollectionHeader({
       document.documentElement.style.removeProperty("--rc-fixed-header");
     };
   }, [previewBarActive]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const onScroll = () => setSolid(window.scrollY > 50);
@@ -150,7 +167,9 @@ export function RoyalCollectionHeader({
         <nav className={styles.nav} aria-label="Primary">
           <button
             type="button"
-            className={styles.navButton}
+            className={[styles.navButton, searchActive ? styles.navLinkOn : ""]
+              .filter(Boolean)
+              .join(" ")}
             aria-expanded={discoverOpen}
             aria-controls={menuId}
             data-rc-allow=""
@@ -168,7 +187,9 @@ export function RoyalCollectionHeader({
           >
             <button
               type="button"
-              className={styles.navButton}
+              className={[styles.navButton, communitiesActive ? styles.navLinkOn : ""]
+                .filter(Boolean)
+                .join(" ")}
               aria-expanded={communitiesOpen}
               aria-controls={communitiesId}
               data-rc-allow=""
@@ -198,10 +219,21 @@ export function RoyalCollectionHeader({
               ))}
             </div>
           </div>
-          <Link className={styles.navLink} href="/#about-the-agent" data-rc-allow="">
+          <Link
+            className={[styles.navLink, aboutActive ? styles.navLinkOn : ""].filter(Boolean).join(" ")}
+            href={aboutHref}
+            data-rc-allow=""
+            aria-current={aboutActive ? "page" : undefined}
+          >
             {view.agentName ? `About ${view.firstName}` : "About"}
           </Link>
-          <Link className={styles.navLink} href="#rc-valuation" data-rc-allow="">
+          <Link
+            className={[styles.navLink, pathname.startsWith("/home-valuation") ? styles.navLinkOn : ""]
+              .filter(Boolean)
+              .join(" ")}
+            href={sellHref}
+            data-rc-allow=""
+          >
             Sell With Us
           </Link>
         </nav>
@@ -244,7 +276,18 @@ export function RoyalCollectionHeader({
           <div className={styles.megaList}>
             {DISCOVER.map((item) =>
               "hash" in item && item.hash ? (
-                <Link key={item.href} href={item.href} data-rc-allow="" onClick={closeMenus}>
+                <Link
+                  key={item.href}
+                  href={
+                    item.href === "#rc-communities" && !onHomepage
+                      ? "/communities"
+                      : item.href === "/#about-the-agent"
+                        ? aboutHref
+                        : item.href
+                  }
+                  data-rc-allow=""
+                  onClick={closeMenus}
+                >
                   {item.label === "Meet the agent" ? meetLabel : item.label} <span>↗</span>
                 </Link>
               ) : (
@@ -275,7 +318,18 @@ export function RoyalCollectionHeader({
         <div className={styles.drawerInner}>
           {DISCOVER.map((item) =>
             "hash" in item && item.hash ? (
-              <Link key={item.href} href={item.href} data-rc-allow="" onClick={closeMenus}>
+              <Link
+                key={item.href}
+                href={
+                  item.href === "#rc-communities" && !onHomepage
+                    ? "/communities"
+                    : item.href === "/#about-the-agent"
+                      ? aboutHref
+                      : item.href
+                }
+                data-rc-allow=""
+                onClick={closeMenus}
+              >
                 {item.label === "Meet the agent" ? meetLabel : item.label}
               </Link>
             ) : (
@@ -310,10 +364,10 @@ export function RoyalCollectionHeader({
                 </RoyalCollectionPreviewLink>
               ))
             : null}
-          <Link href="/#about-the-agent" data-rc-allow="" onClick={closeMenus}>
+          <Link href={aboutHref} data-rc-allow="" onClick={closeMenus}>
             {view.agentName ? `About ${view.agentName}` : "About"}
           </Link>
-          <Link href="#rc-valuation" data-rc-allow="" onClick={closeMenus}>
+          <Link href={sellHref} data-rc-allow="" onClick={closeMenus}>
             Sell With Us
           </Link>
         </div>

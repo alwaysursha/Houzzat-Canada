@@ -3,6 +3,15 @@ import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import styles from "./royal-collection.module.css";
 
+function placeSlug(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 export function RoyalCollectionCommunities({ view }: { view: RoyalCollectionView }) {
   const cards =
     view.collectionCards ??
@@ -45,7 +54,7 @@ export function RoyalCollectionCommunities({ view }: { view: RoyalCollectionView
         {cards.map((card) => (
           <RoyalCollectionPreviewLink
             key={card.name}
-            href={card.href}
+            href={`/communities/${placeSlug(card.name)}`}
             className={styles.collectionCard}
             disabled={view.actionsDisabled}
           >

@@ -4,7 +4,7 @@
   --rc-emerald: #145a46;
   --rc-green: #1c7658;
   --rc-gold: #c8a66a;
-  --rc-paper: #f6f8f7;
+  --rc-paper: #f6f1e8;
   --rc-slate: #64748b;
   --rc-ink: #1f2937;
   --rc-line: #e2e8e7;
@@ -551,8 +551,8 @@
 }
 
 .liveCard:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgb(7 22 41 / 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgb(7 22 41 / 0.08);
 }
 
 .liveMedia {
@@ -570,7 +570,7 @@
   height: 100%;
   min-height: 0;
   object-fit: cover;
-  object-position: right center;
+  object-position: center;
 }
 
 .ghost:disabled {

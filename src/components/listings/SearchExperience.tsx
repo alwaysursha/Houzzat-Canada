@@ -1311,6 +1311,7 @@ export function SearchExperience() {
                   </select>
                 </label>
               }
+              emptyPresentation={royalSearch ? "royal" : "default"}
               emptyHint={
                 polygon
                   ? "Clear the draw or expand it."

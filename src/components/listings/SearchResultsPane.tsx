@@ -28,6 +28,7 @@ export function SearchResultsPane({
   wideGrid = false,
   emptyHint,
   emptyActions,
+  emptyPresentation = "default",
   headingTrailing,
   /** Reserve space so the fixed Chat FAB does not cover actions on narrow search. */
   mobileChatClearance = false,
@@ -53,6 +54,8 @@ export function SearchResultsPane({
   emptyHint: string;
   /** Existing filter-adjustment actions when the result set is empty. */
   emptyActions?: SearchEmptyAction[];
+  /** Royal Collection empty state. The default presentation is unchanged. */
+  emptyPresentation?: "default" | "royal";
   /** Desktop sort (and related) controls in the results heading. */
   headingTrailing?: ReactNode;
   mobileChatClearance?: boolean;
@@ -115,12 +118,38 @@ export function SearchResultsPane({
           />
         ))}
         {items.length === 0 && !pending ? (
-          <div className="col-span-full mx-auto max-w-md px-3 py-8 text-center sm:py-10">
-            <p className="text-base font-semibold tracking-tight text-ink/80">
-              No listings match this search.
+          <div
+            className={cn(
+              "col-span-full mx-auto max-w-md px-3 py-8 text-center sm:py-10",
+              emptyPresentation === "royal" &&
+                "max-w-lg border border-[#e6dccb] bg-[#fffdf8] px-6 py-12",
+            )}
+          >
+            <p
+              className={cn(
+                "text-base font-semibold tracking-tight text-ink/80",
+                emptyPresentation === "royal" &&
+                  "text-3xl font-normal tracking-[-0.03em] text-[#071629]",
+              )}
+              style={
+                emptyPresentation === "royal"
+                  ? { fontFamily: "var(--font-rc-serif), Georgia, serif" }
+                  : undefined
+              }
+            >
+              {emptyPresentation === "royal"
+                ? "The collection is quiet."
+                : "No listings match this search."}
             </p>
-            <p className="mt-1.5 text-sm leading-relaxed text-ink/45">
-              {emptyHint}
+            <p
+              className={cn(
+                "mt-1.5 text-sm leading-relaxed text-ink/45",
+                emptyPresentation === "royal" && "mt-3 text-[15px] leading-7 text-[#6d6458]",
+              )}
+            >
+              {emptyPresentation === "royal"
+                ? "No homes are published for this search yet. Listing inventory appears only after an authorized source is connected."
+                : emptyHint}
             </p>
             {emptyActions && emptyActions.length > 0 ? (
               <div
@@ -141,9 +170,15 @@ export function SearchResultsPane({
                     onClick={action.onClick}
                     className={cn(
                       "inline-flex h-10 items-center justify-center rounded-full px-3.5 text-xs font-semibold transition sm:h-9",
+                      emptyPresentation === "royal" &&
+                        "h-12 rounded-none px-4 text-[11px] uppercase tracking-[0.14em]",
                       action.tone === "primary"
-                        ? "bg-canopy text-white shadow-sm hover:bg-canopy/90"
-                        : "border border-line/90 bg-surface text-ink/70 hover:border-canopy/35 hover:text-ink",
+                        ? emptyPresentation === "royal"
+                          ? "bg-[#071629] text-[#c8a66a] hover:bg-[#0b1f3a]"
+                          : "bg-canopy text-white shadow-sm hover:bg-canopy/90"
+                        : emptyPresentation === "royal"
+                          ? "border border-[#e6dccb] bg-white text-[#071629] hover:border-[#c8a66a]"
+                          : "border border-line/90 bg-surface text-ink/70 hover:border-canopy/35 hover:text-ink",
                     )}
                   >
                     {action.label}

@@ -10,10 +10,14 @@ import {
 } from "./unconnected-disclosure";
 import styles from "./royal-collection.module.css";
 
-const LINKS = [
+const EXPLORE = [
   { href: "/search", label: "Explore homes" },
-  { href: "/areas", label: "Communities" },
+  { href: "/communities", label: "Communities" },
+  { href: "/contact", label: "Contact" },
   { href: "/home-valuation", label: "Home value" },
+] as const;
+
+const LEGAL = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
 ] as const;
@@ -82,10 +86,10 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
       <nav className={styles.footerLinks} aria-label="Footer">
         <div>
           <small>EXPLORE</small>
-          <Link href="/#about-the-agent" data-rc-allow="">
+          <Link href="/about" data-rc-allow="">
             {aboutLabel}
           </Link>
-          {LINKS.slice(0, 3).map((link) => (
+          {EXPLORE.map((link) => (
             <RoyalCollectionPreviewLink key={link.href} href={link.href} disabled={view.actionsDisabled}>
               {link.label}
             </RoyalCollectionPreviewLink>
@@ -93,7 +97,7 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
         </div>
         <div>
           <small>LEGAL</small>
-          {LINKS.slice(3).map((link) => (
+          {LEGAL.map((link) => (
             <RoyalCollectionPreviewLink key={link.href} href={link.href} disabled={view.actionsDisabled}>
               {link.label}
             </RoyalCollectionPreviewLink>

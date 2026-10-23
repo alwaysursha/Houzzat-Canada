@@ -232,8 +232,14 @@ function HeroSceneVideo({
       video.classList.remove(styles.heroVideoOn);
     };
     if (!active) {
-      hide();
-      return;
+      video.classList.remove(styles.heroVideoOn);
+      const timer = window.setTimeout(() => {
+        if (!cancelled) video.pause();
+      }, 1450);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
     }
     const play = () => {
       if (video.currentTime > 0.05) video.currentTime = 0;
