@@ -203,6 +203,12 @@ assert.equal(fixtureView.bio, null);
 assert.equal(fixtureView.logoUrl, null);
 assert.equal(fixtureView.footerLegalText, null);
 assert.equal(fixtureView.posterUrl, null);
+assert.ok(fixtureView.storyMainUrl);
+assert.ok(fixtureView.storyInsetUrl);
+assert.equal(
+  String(fixtureView.storyMainUrl).includes("/media/royal-collection/high-octane/"),
+  false,
+);
 assert.equal(fixtureView.scenes.length, 3);
 assert.ok(fixtureView.scenes.every((scene) => scene.src === "" && scene.poster === null));
 assert.equal(fixtureView.scenes.some((scene) => scene.title === "Niagara Falls"), true);
@@ -223,6 +229,22 @@ const highOctaneWorkspace = resolveRoyalCollectionView({
 });
 assert.equal(highOctaneWorkspace.displayFixtureId, null);
 assert.equal(highOctaneWorkspace.actionsDisabled, false);
+assert.equal(
+  highOctaneWorkspace.storyMainUrl,
+  "/media/royal-collection/high-octane/notl-house.webp",
+);
+assert.equal(
+  highOctaneWorkspace.storyInsetUrl,
+  "/media/royal-collection/high-octane/niagara-falls-inset.webp",
+);
+assert.equal(highOctaneWorkspace.collectionCards, null);
+for (const rel of [
+  highOctaneWorkspace.storyMainUrl,
+  highOctaneWorkspace.storyInsetUrl,
+]) {
+  const file = rel.slice(1);
+  assert.equal(existsSync(join(root, "public", file)), true, rel);
+}
 assert.deepEqual(
   highOctaneWorkspace.scenes.map((scene) => scene.id),
   ["niagara-falls", "luxury-exterior", "luxury-interior"],
@@ -249,6 +271,9 @@ const houzzatWorkspace = resolveRoyalCollectionView({
   templatePreview: null,
 });
 assert.equal(houzzatWorkspace.scenes.length, 0);
+assert.equal(houzzatWorkspace.storyMainUrl, null);
+assert.equal(houzzatWorkspace.storyInsetUrl, null);
+assert.equal(houzzatWorkspace.collectionCards, null);
 assert.equal(
   read("src/components/templates/royal-collection-one/RoyalCollectionFooter.tsx").includes(
     "CityXcape",
@@ -279,7 +304,16 @@ const ordinary = resolveRoyalCollectionView({
   templatePreview: null,
 });
 assert.equal(ordinary.agentName, "Ali Syed");
+assert.equal(ordinary.storyMainUrl, null);
+assert.equal(ordinary.storyInsetUrl, null);
+assert.equal(ordinary.collectionCards, null);
 assert.equal(isHighOctaneRoyalPreview({ ...tenantBrand, templatePreview: null }), false);
+assert.equal(
+  read("src/components/templates/royal-collection-one/RoyalCollectionStory.tsx").includes(
+    "niagara-on-the-lake",
+  ),
+  false,
+);
 assert.equal(ordinary.actionsDisabled, false);
 process.env.NODE_ENV = previousNode;
 

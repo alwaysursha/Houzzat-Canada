@@ -113,7 +113,43 @@ assert.equal(stagingView.featuredCities?.includes("Mississauga"), false);
 assert.deepEqual(stagingView.featuredCities, [...HIGH_OCTANE_STAGING_FEATURED_CITIES]);
 assert.equal(stagingView.markets[0], "Niagara Region");
 assert.equal(stagingView.navCommunities.some((place) => place.name === "Niagara-on-the-Lake"), true);
-assert.equal(stagingView.collectionCards, null);
+assert.equal(stagingView.photoUrl, null);
+assert.equal(
+  stagingView.storyMainUrl,
+  "/media/royal-collection/high-octane/notl-house.webp",
+);
+assert.equal(
+  stagingView.storyInsetUrl,
+  "/media/royal-collection/high-octane/niagara-falls-inset.webp",
+);
+assert.deepEqual(
+  stagingView.collectionCards?.map((card) => ({
+    name: card.name,
+    kicker: card.kicker,
+    caption: card.caption,
+    imageUrl: card.imageUrl,
+  })),
+  [
+    {
+      name: "Niagara Falls",
+      kicker: "01",
+      caption: "",
+      imageUrl: "/media/royal-collection/high-octane/niagara-falls-community.webp",
+    },
+    {
+      name: "Niagara-on-the-Lake",
+      kicker: "02",
+      caption: "",
+      imageUrl: "/media/royal-collection/high-octane/notl-hotel.webp",
+    },
+    {
+      name: "St. Catharines",
+      kicker: "03",
+      caption: "",
+      imageUrl: "/media/royal-collection/high-octane/port-dalhousie-lighthouse.webp",
+    },
+  ],
+);
 
 const persistedMarket = resolveRoyalCollectionView(
   brand({
@@ -125,6 +161,15 @@ const persistedMarket = resolveRoyalCollectionView(
 );
 assert.deepEqual(persistedMarket.featuredCities, ["Welland"]);
 assert.deepEqual(persistedMarket.markets, ["Welland"]);
+assert.equal(persistedMarket.collectionCards, null);
+assert.equal(
+  persistedMarket.storyMainUrl,
+  "/media/royal-collection/high-octane/notl-house.webp",
+);
+assert.equal(
+  persistedMarket.storyInsetUrl,
+  "/media/royal-collection/high-octane/niagara-falls-inset.webp",
+);
 
 const loginOnly = resolveRoyalCollectionView(
   brand({ contact: { email: null, phone: "289-501-7755" } }),
@@ -186,7 +231,23 @@ const houzzat = resolveRoyalCollectionView(
 assert.equal(houzzat.email, "hello@houzzat.com");
 assert.equal(houzzat.listingDisclosure, "authorized");
 assert.equal(houzzat.featuredCities, null);
+assert.equal(houzzat.collectionCards, null);
+assert.equal(houzzat.storyMainUrl, null);
+assert.equal(houzzat.storyInsetUrl, null);
 assert.equal(JSON.stringify(houzzat.markets), JSON.stringify(["Mississauga"]));
+assert.equal(JSON.stringify(houzzat).includes("/media/royal-collection/high-octane/"), false);
+assert.equal(
+  read("src/components/templates/royal-collection-one/RoyalCollectionAbout.tsx").includes(
+    "Portrait placeholder",
+  ),
+  false,
+);
+assert.equal(
+  read("src/components/templates/royal-collection-one/RoyalCollectionStory.tsx").includes(
+    "conceptStill",
+  ),
+  false,
+);
 
 const disclosure = royalCollectionUnconnectedDisclosure("Right at Home Realty Brokerage");
 assert.match(disclosure, /Right at Home Realty Brokerage/);

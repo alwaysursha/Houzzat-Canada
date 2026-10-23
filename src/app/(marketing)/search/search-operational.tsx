@@ -5,7 +5,14 @@ import { SearchExperience } from "@/components/listings/SearchExperience";
 /** Live property search. Not imported by the HIGH OCTANE design preview. */
 export function OperationalPropertySearch() {
   return (
-    <div className="flex h-[calc(100dvh-var(--site-header-stack,4rem)-var(--mobile-bottom-nav,0px))] flex-col overflow-hidden bg-mist">
+    <div
+      className="flex flex-col overflow-hidden bg-mist"
+      style={{
+        marginTop: "var(--rc-fixed-header, 0px)",
+        height:
+          "calc(100dvh - var(--rc-fixed-header, var(--site-header-stack, 4rem)) - var(--mobile-bottom-nav, 0px))",
+      }}
+    >
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-ink/50">

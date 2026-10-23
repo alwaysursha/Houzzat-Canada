@@ -1912,6 +1912,41 @@
   }
 }
 
+/* Homepage story: the collage is absolute, so a 1fr column has no min-content and collapses. */
+@media (max-width: 700px) {
+  .story {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 32px;
+    overflow-x: clip;
+  }
+
+  .storyCollage {
+    width: 100%;
+    min-height: 0;
+    aspect-ratio: 4 / 5;
+  }
+
+  .storyStamp {
+    left: 0;
+    top: 16px;
+    padding: 14px 12px;
+  }
+
+  .storyCopy {
+    min-width: 0;
+  }
+
+  .storyCopy p {
+    max-width: none;
+  }
+
+  .storyDots {
+    flex-wrap: wrap;
+    row-gap: 16px;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .heroWash {
     animation: rcWash 18s ease-in-out infinite alternate;

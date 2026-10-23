@@ -29,9 +29,7 @@ export function RoyalCollectionAbout({ view }: { view: RoyalCollectionView }) {
             {initials(name)}
           </div>
         )}
-        <span className={styles.aboutPortrait}>
-          {view.photoUrl ? name : `Portrait placeholder · ${name}`}
-        </span>
+        <span className={styles.aboutPortrait}>{name}</span>
       </RoyalCollectionReveal>
       <RoyalCollectionReveal className={styles.aboutCopy}>
         <div className={styles.sectionMeta}>The person behind the brand</div>

@@ -3,8 +3,8 @@ import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import styles from "./royal-collection.module.css";
 
 export function RoyalCollectionStory({ view }: { view: RoyalCollectionView }) {
-  const vines = view.scenes.find((scene) => scene.id === "niagara-on-the-lake")?.conceptStill;
-  const falls = view.scenes.find((scene) => scene.id === "niagara-falls")?.conceptStill;
+  const vines = view.storyMainUrl?.trim() || null;
+  const falls = view.storyInsetUrl?.trim() || null;
   const niagara = Boolean(view.displayFixtureId);
 
   return (

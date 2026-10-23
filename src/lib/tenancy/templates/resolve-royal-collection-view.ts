@@ -63,9 +63,73 @@ export type RoyalCollectionView = {
   featuredCities: string[] | null;
   posterUrl: string | null;
   scenes: readonly RoyalCollectionScene[];
+  /**
+   * Story collage stills. Independent of hero scenes and `conceptStill`.
+   * Null keeps the colour empty state until a licensed file is selected.
+   */
+  storyMainUrl: string | null;
+  storyInsetUrl: string | null;
   editorialCommunities: readonly RoyalCollectionCommunityLink[] | null;
   navCommunities: readonly RoyalCollectionCommunityLink[];
   collectionCards: readonly RoyalCollectionCollectionCard[] | null;
+};
+
+/**
+ * Licensed place photography for the genuine HIGH OCTANE workspace only.
+ * Unpublished: the page does not render photographer credits.
+ * Unsplash License and Pexels License both allow commercial website use.
+ */
+const HIGH_OCTANE_PLACE_PHOTOGRAPHY = {
+  storyMain: {
+    file: "/media/royal-collection/high-octane/notl-house.webp",
+    photographer: "Ed Vázquez",
+    sourceUrl: "https://unsplash.com/photos/brown-and-white-roof-during-daytime-nrhF_gi8E2Q",
+    license: "Unsplash License",
+    licenseUrl: "https://unsplash.com/license",
+  },
+  storyInset: {
+    file: "/media/royal-collection/high-octane/niagara-falls-inset.webp",
+    photographer: "Hashim Gaad",
+    sourceUrl: "https://www.pexels.com/photo/niagara-falls-ontario-canada-14436921/",
+    license: "Pexels License",
+    licenseUrl: "https://www.pexels.com/license/",
+  },
+  niagaraFalls: {
+    file: "/media/royal-collection/high-octane/niagara-falls-community.webp",
+    photographer: "Eva Bronzini",
+    sourceUrl: "https://www.pexels.com/photo/a-view-of-the-niagara-falls-6076099/",
+    license: "Pexels License",
+    licenseUrl: "https://www.pexels.com/license/",
+  },
+  niagaraOnTheLake: {
+    file: "/media/royal-collection/high-octane/notl-hotel.webp",
+    photographer: "Juju",
+    subject: "Prince of Wales Hotel",
+    sourceUrl: "https://www.pexels.com/photo/charming-historic-hotel-in-niagara-on-the-lake-39337955/",
+    license: "Pexels License",
+    licenseUrl: "https://www.pexels.com/license/",
+  },
+  stCatharines: {
+    file: "/media/royal-collection/high-octane/port-dalhousie-lighthouse.webp",
+    photographer: "Shilpa Gujaran",
+    subject: "Port Dalhousie Lighthouse",
+    sourceUrl: "https://www.pexels.com/photo/port-dalhousie-lighthouse-with-blue-sky-34247050/",
+    license: "Pexels License",
+    licenseUrl: "https://www.pexels.com/license/",
+  },
+} as const;
+
+/** Story collage stills. Independent of hero scenes. */
+const HIGH_OCTANE_STORY_IMAGES = {
+  mainUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.storyMain.file,
+  insetUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.storyInset.file,
+};
+
+/** Covers for the three staging community cards. */
+const HIGH_OCTANE_COMMUNITY_IMAGES: Record<string, string | null> = {
+  "Niagara Falls": HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraFalls.file,
+  "Niagara-on-the-Lake": HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraOnTheLake.file,
+  "St. Catharines": HIGH_OCTANE_PLACE_PHOTOGRAPHY.stCatharines.file,
 };
 
 function firstNameFrom(name: string): string {
@@ -131,6 +195,10 @@ function highOctaneView(): RoyalCollectionView {
     featuredCities: [...fixture.featuredCities],
     posterUrl: null,
     scenes: fixture.scenes,
+    storyMainUrl:
+      fixture.scenes.find((scene) => scene.id === "niagara-on-the-lake")?.conceptStill ?? null,
+    storyInsetUrl:
+      fixture.scenes.find((scene) => scene.id === "niagara-falls")?.conceptStill ?? null,
     editorialCommunities: fixture.editorialCommunities,
     navCommunities: fixture.navCommunities,
     collectionCards: fixture.collectionCards,
@@ -217,12 +285,22 @@ export function resolveRoyalCollectionView(
       : null,
     posterUrl: null,
     scenes: stagingWorkspace ? HIGH_OCTANE_HERO_SCENES : [],
+    storyMainUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.mainUrl : null,
+    storyInsetUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.insetUrl : null,
     editorialCommunities: stagingDefaultMarket
       ? HIGH_OCTANE_PREVIEW_FIXTURE.editorialCommunities
       : null,
     navCommunities: stagingDefaultMarket
       ? HIGH_OCTANE_PREVIEW_FIXTURE.navCommunities
       : [{ name: "Explore communities", city: "", href: "/areas" }],
-    collectionCards: null,
+    collectionCards: stagingDefaultMarket
+      ? HIGH_OCTANE_PREVIEW_FIXTURE.editorialCommunities.slice(0, 3).map((place, index) => ({
+          name: place.name,
+          href: place.href,
+          kicker: String(index + 1).padStart(2, "0"),
+          caption: "",
+          imageUrl: HIGH_OCTANE_COMMUNITY_IMAGES[place.name] ?? null,
+        }))
+      : null,
   };
 }

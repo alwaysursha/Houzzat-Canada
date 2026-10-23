@@ -863,7 +863,8 @@ export function SearchExperience() {
     >
       <div
         className={cn(
-          "relative z-40 shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
+          "relative shrink-0 border-b border-line/70 bg-surface px-3 py-2 sm:px-4 sm:py-2.5",
+          royalSearch ? "z-30" : "z-40",
           !isNarrow &&
             "bg-surface/95 px-4 py-3 shadow-[0_1px_0_rgba(20,32,28,0.04)] backdrop-blur-[2px] lg:px-5",
           royalSearch && royalSearchStyles.liveBar,

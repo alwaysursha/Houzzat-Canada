@@ -31,6 +31,7 @@ export function RoyalCollectionHeader({
   const [communitiesOpen, setCommunitiesOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mobileCommunitiesOpen, setMobileCommunitiesOpen] = useState(false);
+  const onHomepage = pathname === "/";
   const homeHref = view.actionsDisabled
     ? `/?previewTemplate=${ROYAL_COLLECTION_ONE_TEMPLATE_ID}`
     : "/";
@@ -129,7 +130,14 @@ export function RoyalCollectionHeader({
           </RoyalCollectionPreviewLink>
         </div>
       </div>
-      <div className={[styles.mast, solid || mobileOpen || pathname === "/search" ? styles.mastSolid : ""].filter(Boolean).join(" ")}>
+      <div
+        className={[
+          styles.mast,
+          !onHomepage || solid || mobileOpen ? styles.mastSolid : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <Link className={styles.wordmark} href={homeHref} data-rc-allow="" aria-label={`${view.brandName} home`}>
           <span className={styles.wordmarkMark} aria-hidden="true">
             {view.provisionalWordmark ? "H" : (view.brandName.trim()[0] || "H")}
