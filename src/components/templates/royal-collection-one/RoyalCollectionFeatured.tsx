@@ -19,6 +19,7 @@ import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types"
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import { takeRoyalFeaturedListings } from "./royal-featured-listings";
+import { HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } from "@/lib/tenancy/templates/high-octane-development-listings";
 import styles from "./royal-collection.module.css";
 
 /**
@@ -57,9 +58,11 @@ async function fetchNewListings(params: URLSearchParams, signal: AbortSignal) {
 export function RoyalCollectionFeatured({
   cities,
   actionsDisabled = false,
+  preserveEmpty = false,
 }: {
   cities: string[];
   actionsDisabled?: boolean;
+  preserveEmpty?: boolean;
 }) {
   const [items, setItems] = useState<ListingCardData[] | null>(
     actionsDisabled ? [] : null,
@@ -93,7 +96,7 @@ export function RoyalCollectionFeatured({
   }, [actionsDisabled, cities]);
 
   const showSamples = actionsDisabled;
-  if (!showSamples && items != null && items.length === 0) return null;
+  if (!showSamples && items != null && items.length === 0 && !preserveEmpty) return null;
 
   return (
     <section className={`${styles.section} ${styles.collection}`} aria-labelledby="rc-featured-heading">
@@ -114,8 +117,11 @@ export function RoyalCollectionFeatured({
         <p className={styles.sectionLead}>
           {showSamples
             ? "Concept previews only. These cards are not listings, and the photographs are not properties for sale."
-            : "Homes selected for this practice."}
+            : items != null && items.length === 0
+              ? "Listings will appear here when this practice has its own listing source."
+              : "Homes selected for this practice."}
         </p>
+        {showSamples || items == null || items.length > 0 ? (
         <div className={styles.featureGrid}>
           {showSamples
             ? SAMPLE_CARDS.map((card) => (
@@ -157,6 +163,11 @@ export function RoyalCollectionFeatured({
                 ),
               )}
         </div>
+        ) : (
+          <div className={styles.featureEmpty}>
+            <p>No listings are published on this site yet.</p>
+          </div>
+        )}
       </RoyalCollectionReveal>
     </section>
   );
@@ -171,7 +182,11 @@ function LiveFeaturedCard({ listing }: { listing: ListingCardData }) {
   ].filter((part): part is string => Boolean(part));
   const face = (
     <LuxuryCardFace
-      badge={listingStatusLabel(listing.status, listing.transactionType)}
+      badge={
+        listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
+          ? "Development"
+          : listingStatusLabel(listing.status, listing.transactionType)
+      }
       imageUrl={listing.primaryImageUrl}
       imageAlt={listing.addressLine}
       meta={meta}

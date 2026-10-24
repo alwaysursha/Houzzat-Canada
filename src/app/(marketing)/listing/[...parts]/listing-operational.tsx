@@ -23,6 +23,12 @@ import { buildRoyalCollectionListingModel } from "@/lib/tenancy/templates/royal-
 import { selectRoyalCollectionOperationalPresentation } from "@/lib/tenancy/templates/royal-collection-operational-listing";
 import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { loadHighOctaneDevelopmentListingAccess } from "@/lib/tenancy/templates/high-octane-development-listing-access";
+import {
+  HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE,
+  highOctaneDevelopmentListingDetail,
+  isHighOctaneDevelopmentListingMls,
+} from "@/lib/tenancy/templates/high-octane-development-listings";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
@@ -70,6 +76,9 @@ const resolveListingDetailEntitlementCached = cache(async () => {
   const context = await resolveListingEntitlementContextForServerPage();
   return {
     entitlement: context.entitlement,
+    workspaceSlug: context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null,
     stagingSnapshotVisible: isHighOctaneStagingSnapshotVisible({
       workspaceSlug: context.resolution.ok
         ? context.resolution.host.workspaceSlug
@@ -85,11 +94,19 @@ const resolveListingDetailEntitlementCached = cache(async () => {
  */
 const loadListingByMlsCached = cache(async (mlsNumber: string) => {
   const access = await resolveListingDetailEntitlementCached();
-  return loadListingForDetailPage(mlsNumber, {
+  const listing = await loadListingForDetailPage(mlsNumber, {
     entitlement: access.entitlement,
     entitlementFilteringEnabled: true,
     stagingSnapshotVisible: access.stagingSnapshotVisible,
   });
+  if (listing || !isHighOctaneDevelopmentListingMls(mlsNumber)) return listing;
+  const session = await auth();
+  const development = await loadHighOctaneDevelopmentListingAccess({
+    workspaceSlug: access.workspaceSlug,
+    userId: session?.user?.id ?? null,
+  });
+  if (!development.serveFixtures) return null;
+  return highOctaneDevelopmentListingDetail(mlsNumber);
 });
 
 function loadListingByMls(mlsNumber: string) {
@@ -217,7 +234,9 @@ export async function OperationalListingDetail({
   // Board entitlement already applied in loadListingByMls (G.10C1).
   // VOW/session access is a second layer — never substitutes for board rights.
   const panelAccess = resolveListingDetailAccess(user, listing);
-  if (panelAccess.vowBlocked) {
+  const developmentFixture =
+    listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE;
+  if (panelAccess.vowBlocked && !developmentFixture) {
     if (needsEmailVerification(user)) {
       redirect(
         `/auth/verify-email?callbackUrl=${encodeURIComponent(canonicalPath)}`,

@@ -1,6 +1,7 @@
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { RoyalCollectionAbout } from "./RoyalCollectionAbout";
 import { RoyalCollectionCommunities } from "./RoyalCollectionCommunities";
 import { RoyalCollectionFeatured } from "./RoyalCollectionFeatured";
@@ -34,6 +35,10 @@ export function RoyalCollectionHome({
       <RoyalCollectionFeatured
         cities={cities}
         actionsDisabled={view.actionsDisabled}
+        preserveEmpty={
+          brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+          view.displayFixtureId == null
+        }
       />
       <RoyalCollectionStory view={view} />
       <RoyalCollectionCommunities view={view} />

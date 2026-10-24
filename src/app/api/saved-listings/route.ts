@@ -8,6 +8,11 @@ import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
+import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
+import {
+  decideHighOctaneDevelopmentListingSave,
+  highOctaneDevelopmentListingCards,
+} from "@/lib/tenancy/templates/high-octane-development-listings";
 
 function normalizeMlsNumber(raw: string): string {
   return raw.trim().toUpperCase();
@@ -63,6 +68,24 @@ export async function GET(request: Request) {
     },
   });
   const byMls = new Map(listings.map((l) => [l.mlsNumber, l]));
+  const development = await loadHighOctaneDevelopmentListingAccessForRequest(
+    request,
+    context.resolution.ok ? context.resolution.host.workspaceSlug : null,
+  );
+  if (development.serveFixtures) {
+    for (const card of highOctaneDevelopmentListingCards()) {
+      if (!byMls.has(card.mlsNumber)) {
+        byMls.set(card.mlsNumber, {
+          mlsNumber: card.mlsNumber,
+          addressLine: card.addressLine,
+          unitNumber: card.unitNumber,
+          city: card.city,
+          listPrice: card.listPrice,
+          transactionType: card.transactionType,
+        });
+      }
+    }
+  }
 
   return NextResponse.json({
     items: saved.map((row) => {
@@ -112,7 +135,25 @@ export async function POST(request: Request) {
     },
   });
   if (!listing) {
-    return NextResponse.json({ error: "Listing not found." }, { status: 404 });
+    const context = await resolveListingEntitlementContextForRequest(request);
+    const development = await loadHighOctaneDevelopmentListingAccessForRequest(
+      request,
+      context.resolution.ok ? context.resolution.host.workspaceSlug : null,
+    );
+    const saveDecision = decideHighOctaneDevelopmentListingSave({
+      fullCustomer: true,
+      serveFixtures: development.serveFixtures,
+      mlsNumber,
+    });
+    if (saveDecision !== "save-fixture") {
+      return NextResponse.json({ error: "Listing not found." }, { status: 404 });
+    }
+    const item = await prisma.savedListing.upsert({
+      where: { userId_mlsNumber: { userId: user.id, mlsNumber } },
+      update: { mlsNumber },
+      create: { userId: user.id, mlsNumber },
+    });
+    return NextResponse.json({ ok: true, item });
   }
 
   // Do not use `update: {}` — PrismaNeonHttp on Workers has failed those no-op

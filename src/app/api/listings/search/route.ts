@@ -17,6 +17,9 @@ import {
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
+import { searchHighOctaneDevelopmentListings } from "@/lib/tenancy/templates/high-octane-development-listings";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { hasClientAccess } from "@/lib/vow";
 
 /** True when a NextAuth / Auth.js session cookie may be present. */
@@ -174,6 +177,24 @@ export async function GET(request: Request) {
     stagingSnapshotVisible,
   };
 
+  const developmentAccess = await loadHighOctaneDevelopmentListingAccessForRequest(
+    request,
+    context.resolution.ok ? context.resolution.host.workspaceSlug : null,
+  );
+  if (developmentAccess.serveFixtures) {
+    const items = searchHighOctaneDevelopmentListings(searchParamsBody);
+    return NextResponse.json(
+      {
+        items,
+        nextCursor: null,
+        total: items.length,
+        provider: "mock",
+        requiresAuth: false,
+      },
+      { headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } },
+    );
+  }
+
   // IDX: start search immediately. Guests skip auth; signed-in access runs in parallel.
   const searchPromise = provider.search(searchParamsBody);
   const accessPromise = mayHaveSessionCookie(request)
@@ -203,7 +224,17 @@ export async function GET(request: Request) {
     searchParamsBody.west == null &&
     !searchParamsBody.cursor;
 
-  if (result.items.length === 0 && q?.trim() && lightFilters) {
+  const highOctaneWithoutOwnEntitlement =
+    context.resolution.ok &&
+    context.resolution.host.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+    entitlement.authorities.length === 0;
+
+  if (
+    !highOctaneWithoutOwnEntitlement &&
+    result.items.length === 0 &&
+    q?.trim() &&
+    lightFilters
+  ) {
     const pulled = await lookupPropTxOnDemand(q, {
       clientIp: clientIpFromRequest(request),
     });

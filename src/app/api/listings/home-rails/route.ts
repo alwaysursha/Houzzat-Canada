@@ -10,6 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { mlsClientGate } from "@/lib/proptx/mls-gate";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
+import { searchHighOctaneDevelopmentListings } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { typesenseHomeRails } from "@/lib/typesense/search";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -59,6 +61,29 @@ export async function GET(request: Request) {
   const limit = searchParams.get("limit")
     ? Number(searchParams.get("limit"))
     : 12;
+
+  const developmentAccess = await loadHighOctaneDevelopmentListingAccessForRequest(
+    request,
+    context.resolution.ok ? context.resolution.host.workspaceSlug : null,
+  );
+  if (developmentAccess.serveFixtures) {
+    return NextResponse.json(
+      {
+        newListings: searchHighOctaneDevelopmentListings({
+          cities,
+          minPrice,
+          maxPrice,
+          limit,
+          sort: "newest",
+        }),
+        openHouses: [],
+        sold: [],
+        forLease: [],
+        commercial: [],
+      },
+      { headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } },
+    );
+  }
 
   const sessionPromise = auth().then(async (session) => {
     if (!session?.user?.email) return null;
