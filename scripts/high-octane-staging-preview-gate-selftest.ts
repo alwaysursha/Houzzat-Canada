@@ -76,7 +76,7 @@ function documentedPreviewHostname(): string {
   const deploymentName = `${project}-git-${branchSlug}-${org}`;
   const hash = createHash("sha256").update(`git-${branch}${project}`).digest("hex").slice(0, 6);
   const suffix = `${hash}-${org}`;
-  const truncated = deploymentName.slice(0, 61 - suffix.length);
+  const truncated = deploymentName.slice(0, 63 - suffix.length - 1);
   return `${truncated}-${suffix}.vercel.app`;
 }
 

@@ -13,11 +13,11 @@ export const HIGH_OCTANE_STAGING_BRANCH_ID = "br-dark-surf-axbepvr1";
 /**
  * Stable Git-branch Preview hostname for project `high-octane-staging`,
  * branch `feature/high-octane-royal-collection`, team `houzzat`.
- * The untruncated label is 68 characters, so the documented Vercel truncation
- * keeps a six-character hash and the team slug inside the 63-character DNS limit.
+ * The untruncated label is 68 characters. Vercel keeps a six-character hash
+ * and the team slug, and the joining hyphen counts toward the 63-character DNS limit.
  */
 export const HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME =
-  "high-octane-staging-git-feature-high-octane-roy-f9a2c5-houzzat.vercel.app";
+  "high-octane-staging-git-feature-high-octane-roya-f9a2c5-houzzat.vercel.app";
 
 const APPROVED_STAGING_HOSTS = new Set([
   HIGH_OCTANE_STAGING_DIRECT_HOST,
