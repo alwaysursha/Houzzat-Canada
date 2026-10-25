@@ -20,6 +20,7 @@ import {
 import {
   selectItsoListingSource,
   type ItsoLiveSourceInput,
+  type ItsoSourceRequest,
 } from "@/lib/listings/itso/itso-sources";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
@@ -67,14 +68,25 @@ export function highOctaneDevelopmentListingsEnabled(
   );
 }
 
+export function highOctaneDevelopmentListingBadge(
+  dataSource: string | null | undefined,
+): "DEMO PROPERTY" | null {
+  return dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE ? "DEMO PROPERTY" : null;
+}
+
 export function decideHighOctaneDevelopmentListingAccess(input: {
   env?: NodeJS.ProcessEnv;
   workspaceSlug: string | null;
   actor: HighOctaneDevelopmentListingActor | null;
   live?: ItsoLiveSourceInput;
+  requested?: ItsoSourceRequest | null;
 }): HighOctaneDevelopmentListingDecision {
   const modeEnabled = highOctaneDevelopmentListingsEnabled(input.env);
-  const selected = selectItsoListingSource({ demoEnabled: modeEnabled, live: input.live });
+  const selected = selectItsoListingSource({
+    demoEnabled: modeEnabled,
+    live: input.live,
+    requested: input.requested,
+  });
   const host = input.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
   const email = input.actor?.email?.trim().toLowerCase() ?? "";
   const saad =

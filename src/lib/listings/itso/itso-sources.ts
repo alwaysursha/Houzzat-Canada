@@ -83,25 +83,110 @@ export function evaluateItsoLiveSource(input: ItsoLiveSourceInput): ItsoSourceAv
 
 export type ItsoSelectedSource = "demo" | "live" | "none";
 
+/** Master Admin choice. Demo is development-only. Live never opens a feed by itself. */
+export type ItsoSourceRequest = "demo" | "live" | "disabled";
+
+export function itsoLiveInputFromConnection(
+  input: {
+    credentialRef: string | null;
+    status: ItsoConnectionStatus | null;
+    feedType: ItsoFeedType | null;
+    entitlementActive: boolean;
+    metadataConfirmed: boolean;
+  } | null,
+): ItsoLiveSourceInput {
+  if (!input) return ITSO_LIVE_SOURCE_UNAVAILABLE;
+  return {
+    credentialRef: input.credentialRef,
+    feedType: input.feedType,
+    connectionStatus: input.status,
+    entitlementActive: input.entitlementActive,
+    metadataConfirmed: input.metadataConfirmed,
+  };
+}
+
 export function selectItsoListingSource(input: {
   demoEnabled: boolean;
   live?: ItsoLiveSourceInput;
+  requested?: ItsoSourceRequest | null;
 }): ItsoSelectedSource {
   const live = evaluateItsoLiveSource(input.live ?? ITSO_LIVE_SOURCE_UNAVAILABLE);
-  if (live.available) return "live";
-  if (input.demoEnabled) return "demo";
-  return "none";
+  switch (input.requested) {
+    case "disabled":
+      return "none";
+    case "live":
+      return live.available ? "live" : "none";
+    case "demo":
+      return input.demoEnabled ? "demo" : "none";
+    case null:
+    case undefined:
+      if (live.available) return "live";
+      if (input.demoEnabled) return "demo";
+      return "none";
+    default: {
+      const _exhaustive: never = input.requested;
+      void _exhaustive;
+      return "none";
+    }
+  }
 }
 
-export function describeItsoListingSources(demoEnabled: boolean): {
+export type ItsoSourceActivation = {
+  accepted: boolean;
   selected: ItsoSelectedSource;
+  blockers: string[];
+};
+
+/** Rejects a live or demo activation that the existing checks do not allow. */
+export function activateItsoSourceRequest(input: {
+  requested: ItsoSourceRequest;
+  demoEnabled: boolean;
+  live?: ItsoLiveSourceInput;
+}): ItsoSourceActivation {
+  const liveInput = input.live ?? ITSO_LIVE_SOURCE_UNAVAILABLE;
+  switch (input.requested) {
+    case "disabled":
+      return { accepted: true, selected: "none", blockers: [] };
+    case "demo": {
+      const demo = evaluateItsoDemoSource(input.demoEnabled);
+      return {
+        accepted: demo.available,
+        selected: demo.available ? "demo" : "none",
+        blockers: demo.blockers,
+      };
+    }
+    case "live": {
+      const live = evaluateItsoLiveSource(liveInput);
+      return {
+        accepted: live.available,
+        selected: live.available ? "live" : "none",
+        blockers: live.blockers,
+      };
+    }
+    default: {
+      const _exhaustive: never = input.requested;
+      void _exhaustive;
+      return { accepted: false, selected: "none", blockers: ["Unknown ITSO source request."] };
+    }
+  }
+}
+
+export function describeItsoListingSources(
+  demoEnabled: boolean,
+  options?: { requested?: ItsoSourceRequest | null; live?: ItsoLiveSourceInput },
+): {
+  selected: ItsoSelectedSource;
+  requested: ItsoSourceRequest | null;
   demo: ItsoSourceAvailability;
   live: ItsoSourceAvailability;
 } {
-  const live = evaluateItsoLiveSource(ITSO_LIVE_SOURCE_UNAVAILABLE);
+  const liveInput = options?.live ?? ITSO_LIVE_SOURCE_UNAVAILABLE;
+  const requested = options?.requested ?? null;
+  const live = evaluateItsoLiveSource(liveInput);
   const demo = evaluateItsoDemoSource(demoEnabled);
   return {
-    selected: selectItsoListingSource({ demoEnabled, live: ITSO_LIVE_SOURCE_UNAVAILABLE }),
+    selected: selectItsoListingSource({ demoEnabled, live: liveInput, requested }),
+    requested,
     demo,
     live,
   };

@@ -61,6 +61,7 @@ import type { HistoryRow } from "@/lib/listings/history-rows";
 import type { GalleryMedia } from "@/lib/listings/resolve-gallery";
 import type { ListingDetail } from "@/lib/listings/types";
 import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
+import { highOctaneDevelopmentListingBadge } from "@/lib/tenancy/templates/high-octane-development-listings";
 import {
   homesForSaleCityPath,
   homesForSaleCommunityPath,
@@ -174,10 +175,9 @@ export function ListingDetailView({
   }
   crumbs.push({ label: streetLine });
 
-  const coverTagLabel = listingStatusLabel(
-    listing.status,
-    listing.transactionType,
-  );
+  const coverTagLabel =
+    highOctaneDevelopmentListingBadge(listing.dataSource) ??
+    listingStatusLabel(listing.status, listing.transactionType);
   const segmentTagMeta = {
     label: segmentLabel(listing.segment),
     tone:

@@ -17,6 +17,7 @@ import {
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import { listingPath } from "@/lib/listings/listing-path";
+import { highOctaneDevelopmentListingBadge } from "@/lib/tenancy/templates/high-octane-development-listings";
 import type { ListingCard } from "@/lib/listings/types";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { cn } from "@/lib/utils";
@@ -126,10 +127,10 @@ function CompactMapCard({
   if (!listing) return null;
   const [street, cityLine] = formatListingAddress(listing);
   const isClosed = isClosedListingStatus(listing.status);
-  const statusLabel = listingStatusLabel(
-    listing.status,
-    listing.transactionType,
-  );
+  const demoLabel = highOctaneDevelopmentListingBadge(listing.dataSource);
+  const statusLabel =
+    demoLabel ??
+    listingStatusLabel(listing.status, listing.transactionType);
   const isUnavailable =
     listing.status === "SUSPENDED" ||
     listing.status === "TERMINATED" ||
@@ -150,7 +151,7 @@ function CompactMapCard({
             sizes="280px"
           />
         ) : null}
-        {(isClosed || isUnavailable) ? (
+        {(demoLabel || isClosed || isUnavailable) ? (
           <span
             className={cn(
               "absolute left-2.5 top-2.5 rounded-md px-2.5 py-1 text-[11px] font-bold tracking-wide text-white shadow-md",

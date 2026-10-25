@@ -128,7 +128,10 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
           />
         </PlatformPanel>
 
-        <PlatformItsoListingSources slug={str(workspace.slug)} />
+        <PlatformItsoListingSources
+          slug={str(workspace.slug)}
+          workspaceId={typeof workspace.id === "string" ? workspace.id : ""}
+        />
 
         <PlatformPanel title="Subscription">
           {subscription ? (

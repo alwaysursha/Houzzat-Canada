@@ -5,11 +5,36 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  readItsoLiveSourceInput,
+  readItsoSourceRequest,
+} from "@/lib/listings/itso/itso-source-preference";
+import type { ItsoLiveSourceInput, ItsoSourceRequest } from "@/lib/listings/itso/itso-sources";
+import {
   decideHighOctaneDevelopmentListingAccess,
   highOctaneDevelopmentListingsEnabled,
   type HighOctaneDevelopmentListingDecision,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
+
+async function readSavedItsoSource(
+  workspaceSlug: string | null,
+): Promise<{ requested: ItsoSourceRequest | null; live?: ItsoLiveSourceInput }> {
+  if (workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return { requested: null };
+  try {
+    const workspace = await prisma.workspace.findUnique({
+      where: { slug: workspaceSlug },
+      select: { id: true },
+    });
+    if (!workspace) return { requested: null };
+    const [requested, live] = await Promise.all([
+      readItsoSourceRequest(workspace.id),
+      readItsoLiveSourceInput(workspace.id),
+    ]);
+    return { requested, live };
+  } catch {
+    return { requested: null };
+  }
+}
 
 export async function loadHighOctaneDevelopmentListingAccess(input: {
   workspaceSlug: string | null;
@@ -18,11 +43,14 @@ export async function loadHighOctaneDevelopmentListingAccess(input: {
 }): Promise<HighOctaneDevelopmentListingDecision> {
   const env = input.env ?? process.env;
   const host = input.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+  const saved = await readSavedItsoSource(input.workspaceSlug);
   if (!highOctaneDevelopmentListingsEnabled(env) || !host || !input.userId) {
     return decideHighOctaneDevelopmentListingAccess({
       env,
       workspaceSlug: input.workspaceSlug,
       actor: null,
+      requested: saved.requested,
+      live: saved.live,
     });
   }
 
@@ -48,6 +76,8 @@ export async function loadHighOctaneDevelopmentListingAccess(input: {
   return decideHighOctaneDevelopmentListingAccess({
     env,
     workspaceSlug: input.workspaceSlug,
+    requested: saved.requested,
+    live: saved.live,
     actor: {
       email: user?.email ?? null,
       masterAdminActive:
@@ -62,16 +92,13 @@ export async function loadHighOctaneDevelopmentListingAccessForRequest(
   workspaceSlug: string | null,
 ): Promise<HighOctaneDevelopmentListingDecision> {
   void request;
-  if (
-    !highOctaneDevelopmentListingsEnabled() ||
-    workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG
-  ) {
+  if (workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) {
     return decideHighOctaneDevelopmentListingAccess({
       workspaceSlug,
       actor: null,
     });
   }
-  const session = await auth();
+  const session = highOctaneDevelopmentListingsEnabled() ? await auth() : null;
   return loadHighOctaneDevelopmentListingAccess({
     workspaceSlug,
     userId: session?.user?.id ?? null,

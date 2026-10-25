@@ -25,6 +25,7 @@ import { listingPath } from "@/lib/listings/listing-path";
 import { useRoyalCollectionSearchSkin } from "@/components/templates/royal-collection-one/use-royal-search-skin";
 import royalSearchStyles from "@/components/templates/royal-collection-one/royal-search.module.css";
 import { royalCollectionSearchCardFacts } from "@/lib/tenancy/templates/royal-collection-search-card";
+import { highOctaneDevelopmentListingBadge } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { cn } from "@/lib/utils";
 
 function formatStat(value: number) {
@@ -92,11 +93,13 @@ export function SearchResultCard({
   const stackedMobile = mobileFullWidth && !horizontal;
   const royal = useRoyalCollectionSearchSkin();
   const royalFacts = royal ? royalCollectionSearchCardFacts(listing) : null;
-  const statusLabel = showStatus
-    ? listingStatusLabel(listing.status, listing.transactionType)
-    : listing.transactionType === "LEASE"
-      ? "For lease"
-      : "For sale";
+  const statusLabel =
+    highOctaneDevelopmentListingBadge(listing.dataSource) ??
+    (showStatus
+      ? listingStatusLabel(listing.status, listing.transactionType)
+      : listing.transactionType === "LEASE"
+        ? "For lease"
+        : "For sale");
 
   if (royal && royalFacts) {
     const asking =
@@ -409,7 +412,7 @@ export function SearchResultCard({
                   listingStatusBadgeClass(listing.status),
                 )}
               >
-                {listingStatusLabel(listing.status, listing.transactionType)}
+                {statusLabel}
               </span>
             </p>
           ) : null}

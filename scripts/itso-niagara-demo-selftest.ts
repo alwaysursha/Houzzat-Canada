@@ -116,6 +116,36 @@ assert.equal(
 );
 assert.equal(selectItsoListingSource({ demoEnabled: true }), "demo");
 assert.equal(selectItsoListingSource({ demoEnabled: false }), "none");
+assert.equal(
+  selectItsoListingSource({ demoEnabled: true, requested: "disabled" }),
+  "none",
+);
+assert.equal(
+  selectItsoListingSource({ demoEnabled: true, requested: "live" }),
+  "none",
+);
+assert.equal(
+  selectItsoListingSource({ demoEnabled: true, requested: "live", live: readyLive }),
+  "live",
+);
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
+    env: { NODE_ENV: "development", HIGH_OCTANE_DEVELOPMENT_LISTINGS: "on" },
+    workspaceSlug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+    actor: { email: "teamalisyed@gmail.com", masterAdminActive: true, highOctaneMembershipActive: false },
+    requested: "disabled",
+  }).serveFixtures,
+  false,
+);
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
+    env: { NODE_ENV: "production", HIGH_OCTANE_DEVELOPMENT_LISTINGS: "on" },
+    workspaceSlug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+    actor: { email: "teamalisyed@gmail.com", masterAdminActive: true, highOctaneMembershipActive: false },
+    requested: "demo",
+  }).serveFixtures,
+  false,
+);
 const blocked = evaluateItsoLiveSource(ITSO_LIVE_SOURCE_UNAVAILABLE);
 assert.equal(blocked.available, false);
 assert.equal(blocked.trrebBorrowAuthorized, false);
@@ -127,6 +157,31 @@ const featured = readFileSync(
   "utf8",
 );
 assert.equal(featured.includes("DEMO PROPERTY"), true);
+for (const file of [
+  "src/components/listings/SearchResultCard.tsx",
+  "src/components/listings/ListingDetailView.tsx",
+  "src/components/listings/ListingMapView.tsx",
+]) {
+  assert.equal(
+    readFileSync(join(root, file), "utf8").includes("highOctaneDevelopmentListingBadge"),
+    true,
+    file,
+  );
+}
+assert.equal(
+  readFileSync(
+    join(root, "src/components/platform/PlatformItsoListingSources.tsx"),
+    "utf8",
+  ).includes("ITSO Live"),
+  true,
+);
+assert.equal(
+  readFileSync(
+    join(root, "src/components/platform/PlatformItsoListingSources.tsx"),
+    "utf8",
+  ).includes("Disabled"),
+  true,
+);
 assert.equal(
   readFileSync(join(root, "src/lib/listings/itso/itso-sources.ts"), "utf8").includes("proptx"),
   false,
