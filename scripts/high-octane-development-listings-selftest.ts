@@ -51,6 +51,18 @@ assert.equal(
 );
 assert.equal(
   decideHighOctaneDevelopmentListingAccess({
+    env: {
+      NODE_ENV: "production",
+      VERCEL_ENV: "preview",
+      HIGH_OCTANE_DEVELOPMENT_LISTINGS: "on",
+    },
+    workspaceSlug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+    actor: master,
+  }).serveFixtures,
+  true,
+);
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
     env: { NODE_ENV: "development", VERCEL_ENV: "production", HIGH_OCTANE_DEVELOPMENT_LISTINGS: "on" },
     workspaceSlug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
     actor: master,

@@ -7,7 +7,8 @@
  * existing search, detail, and featured-listing responses.
  *
  * Disable development mode by unsetting HIGH_OCTANE_DEVELOPMENT_LISTINGS.
- * Production always stays off. When Niagara is connected, leave the switch
+ * Vercel production stays off. A Preview deployment runs with NODE_ENV=production,
+ * so that value alone must not turn the staging switch off. When Niagara is connected, leave the switch
  * unset and give this workspace its own listing entitlement. The existing
  * screens already follow that hostname entitlement.
  */
@@ -61,7 +62,8 @@ export type HighOctaneDevelopmentListingDecision = {
 export function highOctaneDevelopmentListingsEnabled(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  if (env.NODE_ENV === "production" || env.VERCEL_ENV === "production") return false;
+  if (env.VERCEL_ENV === "production") return false;
+  if (env.NODE_ENV === "production" && env.VERCEL_ENV !== "preview") return false;
   return (
     env[HIGH_OCTANE_DEVELOPMENT_LISTINGS_SWITCH]?.trim().toLowerCase() ===
     HIGH_OCTANE_DEVELOPMENT_LISTINGS_ENABLED_VALUE
