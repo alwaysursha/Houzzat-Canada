@@ -35,7 +35,9 @@
     "**/*.d.ts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    ".next-high-octane-staging/types/**/*.ts",
+    ".next-high-octane-staging/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",
