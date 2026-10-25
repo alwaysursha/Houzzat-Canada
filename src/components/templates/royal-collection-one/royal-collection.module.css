@@ -1824,6 +1824,7 @@
 @media (max-width: 600px) {
   .featureGrid {
     grid-template-columns: 1fr;
+    gap: 28px;
   }
 
   .mast {

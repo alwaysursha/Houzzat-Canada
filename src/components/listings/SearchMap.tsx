@@ -53,9 +53,20 @@ function pillToneFromListingStatus(
 function pricePillClass(
   active: boolean,
   tone: "canopy" | "amber" | "danger" | "muted",
+  appearance: "default" | "royal" = "default",
 ) {
   const base =
-    "rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-semibold shadow-md transition-colors ";
+    appearance === "royal"
+      ? "rounded-full border-2 border-[#C8A66A] bg-[#0B1F3A] px-2.5 py-1 text-xs font-semibold text-[#F7F4EE] shadow-md transition-colors "
+      : "rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-semibold shadow-md transition-colors ";
+  if (appearance === "royal" && tone === "canopy") {
+    return (
+      base +
+      (active
+        ? "ring-2 ring-[#C8A66A]"
+        : "hover:bg-[#071629]")
+    );
+  }
   if (tone === "danger") {
     return (
       base +
@@ -124,6 +135,8 @@ export function SearchMap({
   searchThisAreaVisible = false,
   onSearchThisArea,
   mapFrame,
+  openingCamera,
+  markerAppearance = "default",
   initialCameraRef,
   framedTokenRef,
   onCamera,
@@ -160,6 +173,13 @@ export function SearchMap({
         maxZoom: number;
       }
   )) | null;
+  /**
+   * Camera used only when this map has no remembered view.
+   * Omit it to keep the GTA opening frame.
+   */
+  openingCamera?: { lat: number; lng: number; zoom: number };
+  /** Royal Collection price pills. Other tenants keep the default pills. */
+  markerAppearance?: "default" | "royal";
   /** Last camera, used when the map is created again after Cards mode. */
   initialCameraRef?: MutableRefObject<{
     lat: number;
@@ -181,6 +201,8 @@ export function SearchMap({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const openingCameraRef = useRef(openingCamera);
+  openingCameraRef.current = openingCamera;
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const popupRef = useRef<HTMLDivElement>(null);
   const onCameraRef = useRef(onCamera);
@@ -226,7 +248,7 @@ export function SearchMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const camera = initialCameraRef?.current;
+    const camera = initialCameraRef?.current ?? openingCameraRef.current;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: OSM_STYLE,
@@ -414,6 +436,7 @@ export function SearchMap({
       pill.className = pricePillClass(
         false,
         pillToneFromListingStatus(listing.status),
+        markerAppearance,
       );
       pill.textContent = formatListPrice(
         listing.listPrice,
@@ -441,10 +464,10 @@ export function SearchMap({
       const tone = pillToneFromListingStatus(
         root.dataset.listingStatus ?? "ACTIVE",
       );
-      pill.className = pricePillClass(isActive, tone);
+      pill.className = pricePillClass(isActive, tone, markerAppearance);
       root.style.zIndex = isActive ? "2" : "1";
     }
-  }, [listings]);
+  }, [listings, markerAppearance]);
 
   useEffect(() => {
     for (const marker of markersRef.current) {
@@ -456,10 +479,10 @@ export function SearchMap({
       const tone = pillToneFromListingStatus(
         root.dataset.listingStatus ?? "ACTIVE",
       );
-      pill.className = pricePillClass(isActive, tone);
+      pill.className = pricePillClass(isActive, tone, markerAppearance);
       root.style.zIndex = isActive ? "2" : "1";
     }
-  }, [activeMls]);
+  }, [activeMls, markerAppearance]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -490,12 +513,13 @@ export function SearchMap({
       return;
     }
     const maxZoom = Math.min(mapFrame.maxZoom, MAP_MAX_ZOOM);
+    const fitPadding = markerAppearance === "royal" ? 72 : 56;
     const camera = map.cameraForBounds(
       [
         [mapFrame.west, mapFrame.south],
         [mapFrame.east, mapFrame.north],
       ],
-      { padding: 56, maxZoom },
+      { padding: fitPadding, maxZoom },
     );
     const fittedCenter = camera?.center;
     const fittedZoom = camera?.zoom;
@@ -517,13 +541,13 @@ export function SearchMap({
         [mapFrame.east, mapFrame.north],
       ],
       {
-        padding: 56,
+        padding: fitPadding,
         maxZoom,
         essential: true,
         duration,
       },
     );
-  }, [framedTokenRef, initialCameraRef, mapFrame]);
+  }, [framedTokenRef, initialCameraRef, mapFrame, markerAppearance]);
 
   useEffect(() => {
     const map = mapRef.current;

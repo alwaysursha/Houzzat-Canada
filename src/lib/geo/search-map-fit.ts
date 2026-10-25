@@ -2,6 +2,17 @@ import { cityMapCenter } from "@/lib/geo/regions";
 
 /** City-level fly-to. Wide enough that a whole city is in frame. */
 const CITY_ZOOM = 11;
+
+/**
+ * Opening camera for HIGH OCTANE when the search has no place yet.
+ * Houzzat and other tenants keep the GTA camera inside SearchMap.
+ * Centered on the Niagara demo set (Grimsby through Fort Erie).
+ */
+export const NIAGARA_SEARCH_MAP_CAMERA = {
+  lat: 43.078,
+  lng: -79.25,
+  zoom: 9,
+} as const;
 /** Result fit must not zoom into a single rooftop. */
 const RESULT_MAX_ZOOM = 13;
 
