@@ -24,6 +24,10 @@ import {
   type ItsoSourceRequest,
 } from "@/lib/listings/itso/itso-sources";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
+import {
+  highOctanePreviewProcessReady,
+  isApprovedHighOctanePreviewHostname,
+} from "@/lib/tenancy/templates/high-octane-staging-preview";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 
 export const HIGH_OCTANE_DEVELOPMENT_LISTINGS_SWITCH =
@@ -68,6 +72,23 @@ export function highOctaneDevelopmentListingsEnabled(
     env[HIGH_OCTANE_DEVELOPMENT_LISTINGS_SWITCH]?.trim().toLowerCase() ===
     HIGH_OCTANE_DEVELOPMENT_LISTINGS_ENABLED_VALUE
   );
+}
+
+/**
+ * Listing APIs resolve a workspace only from an ACTIVE domain row. The
+ * protected Preview hostname has no domain row. Use the staging slug for the
+ * demo gate only when that approved hostname and preview process both match.
+ * A slug already resolved for any tenant is left unchanged.
+ */
+export function highOctaneDevelopmentListingWorkspaceSlug(input: {
+  workspaceSlug: string | null;
+  hostname: string | null;
+  env?: NodeJS.ProcessEnv;
+}): string | null {
+  if (input.workspaceSlug) return input.workspaceSlug;
+  if (!isApprovedHighOctanePreviewHostname(input.hostname)) return null;
+  if (!highOctanePreviewProcessReady(input.env)) return null;
+  return HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
 }
 
 export function highOctaneDevelopmentListingBadge(

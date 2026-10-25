@@ -27,6 +27,7 @@ import { loadHighOctaneDevelopmentListingAccess } from "@/lib/tenancy/templates/
 import {
   HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE,
   highOctaneDevelopmentListingDetail,
+  highOctaneDevelopmentListingWorkspaceSlug,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
@@ -76,6 +77,7 @@ const resolveListingDetailEntitlementCached = cache(async () => {
   const context = await resolveListingEntitlementContextForServerPage();
   return {
     entitlement: context.entitlement,
+    hostname: context.hostname,
     workspaceSlug: context.resolution.ok
       ? context.resolution.host.workspaceSlug
       : null,
@@ -102,7 +104,10 @@ const loadListingByMlsCached = cache(async (mlsNumber: string) => {
   if (listing || !isHighOctaneDevelopmentListingMls(mlsNumber)) return listing;
   const session = await auth();
   const development = await loadHighOctaneDevelopmentListingAccess({
-    workspaceSlug: access.workspaceSlug,
+    workspaceSlug: highOctaneDevelopmentListingWorkspaceSlug({
+      workspaceSlug: access.workspaceSlug,
+      hostname: access.hostname,
+    }),
     userId: session?.user?.id ?? null,
   });
   if (!development.serveFixtures) return null;

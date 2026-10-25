@@ -4,6 +4,7 @@
  */
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
 import {
   readItsoLiveSourceInput,
   readItsoSourceRequest,
@@ -11,6 +12,7 @@ import {
 import type { ItsoLiveSourceInput, ItsoSourceRequest } from "@/lib/listings/itso/itso-sources";
 import {
   decideHighOctaneDevelopmentListingAccess,
+  highOctaneDevelopmentListingWorkspaceSlug,
   highOctaneDevelopmentListingsEnabled,
   type HighOctaneDevelopmentListingDecision,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
@@ -91,16 +93,19 @@ export async function loadHighOctaneDevelopmentListingAccessForRequest(
   request: Request,
   workspaceSlug: string | null,
 ): Promise<HighOctaneDevelopmentListingDecision> {
-  void request;
-  if (workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) {
+  const slug = highOctaneDevelopmentListingWorkspaceSlug({
+    workspaceSlug,
+    hostname: extractTrustedRequestHostname(request),
+  });
+  if (slug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) {
     return decideHighOctaneDevelopmentListingAccess({
-      workspaceSlug,
+      workspaceSlug: slug,
       actor: null,
     });
   }
   const session = highOctaneDevelopmentListingsEnabled() ? await auth() : null;
   return loadHighOctaneDevelopmentListingAccess({
-    workspaceSlug,
+    workspaceSlug: slug,
     userId: session?.user?.id ?? null,
   });
 }

@@ -13,9 +13,15 @@ import {
   decideHighOctaneDevelopmentListingAccess,
   decideHighOctaneDevelopmentListingSave,
   highOctaneDevelopmentListingDetail,
+  highOctaneDevelopmentListingWorkspaceSlug,
   isHighOctaneDevelopmentListingMls,
   searchHighOctaneDevelopmentListings,
 } from "../src/lib/tenancy/templates/high-octane-development-listings";
+import {
+  HIGH_OCTANE_STAGING_DIRECT_HOST,
+  HIGH_OCTANE_STAGING_POOLED_HOST,
+  HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+} from "../src/lib/tenancy/templates/high-octane-staging-preview";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "../src/lib/tenancy/templates/high-octane-staging-slug";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,6 +66,79 @@ assert.equal(
     actor: master,
   }).serveFixtures,
   true,
+);
+const previewReady = {
+  NODE_ENV: "production",
+  VERCEL_ENV: "preview",
+  HIGH_OCTANE_STAGING: "1",
+  HIGH_OCTANE_STAGING_ACCESS: "authenticated",
+  HIGH_OCTANE_DEVELOPMENT_LISTINGS: "on",
+  DATABASE_URL: `postgresql://staging-user:staging-secret@${HIGH_OCTANE_STAGING_POOLED_HOST}/neondb`,
+  DIRECT_URL: `postgresql://staging-user:staging-secret@${HIGH_OCTANE_STAGING_DIRECT_HOST}/neondb`,
+  VERCEL_BRANCH_URL: HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+};
+assert.equal(
+  highOctaneDevelopmentListingWorkspaceSlug({
+    workspaceSlug: null,
+    hostname: HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+    env: previewReady,
+  }),
+  HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+);
+assert.equal(
+  highOctaneDevelopmentListingWorkspaceSlug({
+    workspaceSlug: null,
+    hostname: HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+    env: { ...previewReady, VERCEL_ENV: "production" },
+  }),
+  null,
+);
+assert.equal(
+  highOctaneDevelopmentListingWorkspaceSlug({
+    workspaceSlug: null,
+    hostname: "houzzat.com",
+    env: previewReady,
+  }),
+  null,
+);
+assert.equal(
+  highOctaneDevelopmentListingWorkspaceSlug({
+    workspaceSlug: "houzzat",
+    hostname: HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+    env: previewReady,
+  }),
+  "houzzat",
+);
+const previewSlug = highOctaneDevelopmentListingWorkspaceSlug({
+  workspaceSlug: null,
+  hostname: HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME,
+  env: previewReady,
+});
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
+    env: previewReady,
+    workspaceSlug: previewSlug,
+    actor: saad,
+    requested: null,
+  }).serveFixtures,
+  true,
+);
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
+    env: previewReady,
+    workspaceSlug: previewSlug,
+    actor: saad,
+    requested: "disabled",
+  }).serveFixtures,
+  false,
+);
+assert.equal(
+  decideHighOctaneDevelopmentListingAccess({
+    env: previewReady,
+    workspaceSlug: previewSlug,
+    actor: null,
+  }).serveFixtures,
+  false,
 );
 assert.equal(
   decideHighOctaneDevelopmentListingAccess({
