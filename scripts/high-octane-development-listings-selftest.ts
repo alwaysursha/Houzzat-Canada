@@ -118,26 +118,30 @@ assert.equal(
   true,
 );
 assert.equal(cards.every((card) => card.organizationId == null), true);
-assert.deepEqual(
-  searchHighOctaneDevelopmentListings({ city: "Niagara Falls" }).map((card) => card.mlsNumber),
-  ["HODEV1002"],
-);
+const niagaraFalls = searchHighOctaneDevelopmentListings({ city: "Niagara Falls" });
+assert.equal(niagaraFalls.length, 2);
+assert.equal(niagaraFalls.every((card) => card.city === "Niagara Falls"), true);
 assert.equal(searchHighOctaneDevelopmentListings({ status: "SOLD" }).length, 0);
-assert.equal(searchHighOctaneDevelopmentListings({ q: "HODEV1001" })[0]?.city, "Niagara-on-the-Lake");
+assert.equal(
+  searchHighOctaneDevelopmentListings({ q: "ITSODEMO1003" })[0]?.city,
+  "Niagara-on-the-Lake",
+);
 
-const detail = highOctaneDevelopmentListingDetail("hodev1001");
+const detail = highOctaneDevelopmentListingDetail("itsodemo1003");
 assert.ok(detail);
-assert.equal(detail.mlsNumber, "HODEV1001");
+assert.equal(detail.mlsNumber, "ITSODEMO1003");
 assert.equal(detail.providerKey, null);
-assert.equal(detail.media.length, 1);
+assert.equal(detail.media.length, 2);
+assert.equal(detail.description?.includes("DEMO PROPERTY"), true);
 assert.equal(isHighOctaneDevelopmentListingMls("X12935628"), false);
 assert.equal(highOctaneDevelopmentListingDetail("X12935628"), null);
+assert.equal(isHighOctaneDevelopmentListingMls("HODEV1001"), false);
 
 assert.equal(
   decideHighOctaneDevelopmentListingSave({
     fullCustomer: false,
     serveFixtures: true,
-    mlsNumber: "HODEV1001",
+    mlsNumber: "ITSODEMO1001",
   }),
   "registration-required",
 );
@@ -145,7 +149,7 @@ assert.equal(
   decideHighOctaneDevelopmentListingSave({
     fullCustomer: true,
     serveFixtures: false,
-    mlsNumber: "HODEV1001",
+    mlsNumber: "ITSODEMO1001",
   }),
   "not-found",
 );
@@ -153,7 +157,7 @@ assert.equal(
   decideHighOctaneDevelopmentListingSave({
     fullCustomer: true,
     serveFixtures: true,
-    mlsNumber: "HODEV1001",
+    mlsNumber: "ITSODEMO1001",
   }),
   "save-fixture",
 );

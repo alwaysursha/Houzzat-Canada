@@ -184,7 +184,7 @@ function LiveFeaturedCard({ listing }: { listing: ListingCardData }) {
     <LuxuryCardFace
       badge={
         listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
-          ? "Development"
+          ? "DEMO PROPERTY"
           : listingStatusLabel(listing.status, listing.transactionType)
       }
       imageUrl={listing.primaryImageUrl}
