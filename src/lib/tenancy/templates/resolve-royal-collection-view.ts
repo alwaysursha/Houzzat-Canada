@@ -37,6 +37,15 @@ export type RoyalCollectionListingDisclosure =
   | "snapshot"
   | "authorized";
 
+export type RoyalCollectionHeroPortrait = {
+  imageUrl: string;
+  name: string;
+  role: string;
+  phone: string;
+  phoneHref: string;
+  team: string;
+};
+
 export type RoyalCollectionView = {
   brandName: string;
   logoUrl: string | null;
@@ -62,6 +71,8 @@ export type RoyalCollectionView = {
   valuationHeading: string;
   featuredCities: string[] | null;
   posterUrl: string | null;
+  /** Null unless this workspace owns a portrait cutout. */
+  heroPortrait: RoyalCollectionHeroPortrait | null;
   scenes: readonly RoyalCollectionScene[];
   /**
    * Story collage stills. Independent of hero scenes and `conceptStill`.
@@ -125,7 +136,22 @@ const HIGH_OCTANE_STORY_IMAGES = {
   insetUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.storyInset.file,
 };
 
-/** Covers for the three staging community cards. */
+/**
+ * Saad’s cutout belongs to the HIGH OCTANE workspace slug.
+ * Another Royal Collection tenant does not receive this block.
+ */
+const HIGH_OCTANE_HERO_PORTRAIT: RoyalCollectionHeroPortrait = {
+  imageUrl: "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+  name: "Saad Qureshi",
+  role: "Real Estate Agent",
+  phone: "(289) 501-7755",
+  phoneHref: "tel:+12895017755",
+  team: "Niagara Real Estate Team",
+};
+
+export const HIGH_OCTANE_LOGO_URL = "/media/royal-collection/high-octane/logo.svg";
+export const HIGH_OCTANE_FAVICON_URL = "/media/royal-collection/high-octane/favicon.svg";
+
 const HIGH_OCTANE_COMMUNITY_IMAGES: Record<string, string | null> = {
   "Niagara Falls": HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraFalls.file,
   "Niagara-on-the-Lake": HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraOnTheLake.file,
@@ -194,6 +220,7 @@ function highOctaneView(): RoyalCollectionView {
     valuationHeading: fixture.valuationHeading,
     featuredCities: [...fixture.featuredCities],
     posterUrl: null,
+    heroPortrait: null,
     scenes: fixture.scenes,
     storyMainUrl:
       fixture.scenes.find((scene) => scene.id === "niagara-on-the-lake")?.conceptStill ?? null,
@@ -269,7 +296,7 @@ export function resolveRoyalCollectionView(
 
   return {
     brandName,
-    logoUrl: brand.logoUrl,
+    logoUrl: stagingWorkspace ? HIGH_OCTANE_LOGO_URL : brand.logoUrl,
     provisionalWordmark: false,
     wordmarkMark: null,
     wordmarkSub: null,
@@ -299,6 +326,7 @@ export function resolveRoyalCollectionView(
         : markets
       : null,
     posterUrl: null,
+    heroPortrait: stagingWorkspace ? HIGH_OCTANE_HERO_PORTRAIT : null,
     scenes: stagingWorkspace ? HIGH_OCTANE_HERO_SCENES : [],
     storyMainUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.mainUrl : null,
     storyInsetUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.insetUrl : null,

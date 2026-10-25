@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RoyalCollectionScene } from "@/lib/tenancy/templates/royal-collection-media";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_PREVIEW_ACTION_NOTE } from "./preview-action-note";
+import { RoyalCollectionHeroChat } from "./RoyalCollectionHeroChat";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
@@ -86,7 +87,11 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
 
   return (
     <section
-      className={[styles.hero, scenes.some((scene) => scene.src.trim()) ? styles.heroHasVideo : ""]
+      className={[
+        styles.hero,
+        scenes.some((scene) => scene.src.trim()) ? styles.heroHasVideo : "",
+        view.heroPortrait ? styles.heroHasPortrait : "",
+      ]
         .filter(Boolean)
         .join(" ")}
       aria-label="Discover Niagara luxury living"
@@ -154,59 +159,94 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
           <p className={styles.previewNote}>{ROYAL_COLLECTION_PREVIEW_ACTION_NOTE}</p>
         ) : null}
       </div>
+      {view.heroPortrait ? (
+        <figure className={styles.heroPortrait}>
+          <figcaption className={styles.heroPortraitCopy}>
+            <span className={styles.heroPortraitRule} aria-hidden="true" />
+            <p className={styles.heroPortraitName}>{view.heroPortrait.name}</p>
+            <p className={styles.heroPortraitRole}>{view.heroPortrait.role}</p>
+            <a className={styles.heroPortraitPhone} href={view.heroPortrait.phoneHref}>
+              {view.heroPortrait.phone}
+            </a>
+            <p className={styles.heroPortraitTeam}>{view.heroPortrait.team}</p>
+          </figcaption>
+          {/* Keep the transparent cutout unoptimized so the portrait is not recompressed. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className={styles.heroPortraitImage}
+            src={view.heroPortrait.imageUrl}
+            alt=""
+          />
+        </figure>
+      ) : null}
       <div className={styles.heroVertical}>
         {view.displayFixtureId ? "THE ART OF LIVING · NIAGARA" : "THE ART OF LIVING"}
       </div>
       <div className={styles.heroBottom}>
-        <div className={styles.heroScenes} role="tablist" aria-label="Hero scenes">
-          {scenes.map((scene, sceneIndex) => (
-            <button
-              key={scene.id}
-              ref={(node) => {
-                tabRefs.current[sceneIndex] = node;
-              }}
-              type="button"
-              className={[styles.heroSceneBtn, sceneIndex === index ? styles.heroSceneBtnOn : ""]
-                .filter(Boolean)
-                .join(" ")}
-              data-rc-allow=""
-              role="tab"
-              id={`rc-hero-tab-${scene.id}`}
-              aria-selected={sceneIndex === index}
-              tabIndex={sceneIndex === index ? 0 : -1}
-              onClick={() => setIndex(sceneIndex)}
-              onKeyDown={(event) => {
-                if (event.key === "ArrowRight") {
-                  event.preventDefault();
-                  selectScene(sceneIndex + 1);
-                } else if (event.key === "ArrowLeft") {
-                  event.preventDefault();
-                  selectScene(sceneIndex - 1);
-                } else if (event.key === "Home") {
-                  event.preventDefault();
-                  selectScene(0);
-                } else if (event.key === "End") {
-                  event.preventDefault();
-                  selectScene(scenes.length - 1);
-                }
-              }}
-            >
-              {sceneIndex === index && !reduceMotion && scenes.length > 1 ? (
-                <span className={styles.heroProgress} style={{ animationDuration: `${holdMs}ms` }} />
-              ) : null}
-              <b>{String(sceneIndex + 1).padStart(2, "0")}</b>
-              {TAB_LABELS[scene.id] || scene.title}
-            </button>
-          ))}
-        </div>
-        <a className={styles.heroScroll} href="#rc-search" data-rc-allow="">
-          Scroll to discover
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 2v16M4 12l6 6 6-6" stroke="currentColor" fill="none" />
-          </svg>
-        </a>
+        {view.heroPortrait ? null : (
+          <div className={styles.heroScenes} role="tablist" aria-label="Hero scenes">
+            {scenes.map((scene, sceneIndex) => (
+              <button
+                key={scene.id}
+                ref={(node) => {
+                  tabRefs.current[sceneIndex] = node;
+                }}
+                type="button"
+                className={[styles.heroSceneBtn, sceneIndex === index ? styles.heroSceneBtnOn : ""]
+                  .filter(Boolean)
+                  .join(" ")}
+                data-rc-allow=""
+                role="tab"
+                id={`rc-hero-tab-${scene.id}`}
+                aria-selected={sceneIndex === index}
+                tabIndex={sceneIndex === index ? 0 : -1}
+                onClick={() => setIndex(sceneIndex)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    selectScene(sceneIndex + 1);
+                  } else if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    selectScene(sceneIndex - 1);
+                  } else if (event.key === "Home") {
+                    event.preventDefault();
+                    selectScene(0);
+                  } else if (event.key === "End") {
+                    event.preventDefault();
+                    selectScene(scenes.length - 1);
+                  }
+                }}
+              >
+                {sceneIndex === index && !reduceMotion && scenes.length > 1 ? (
+                  <span className={styles.heroProgress} style={{ animationDuration: `${holdMs}ms` }} />
+                ) : null}
+                <b>{String(sceneIndex + 1).padStart(2, "0")}</b>
+                {TAB_LABELS[scene.id] || scene.title}
+              </button>
+            ))}
+          </div>
+        )}
+        {view.heroPortrait ? (
+          <div className={styles.heroUtility}>
+            <HeroScrollLink />
+            <RoyalCollectionHeroChat />
+          </div>
+        ) : (
+          <HeroScrollLink />
+        )}
       </div>
     </section>
+  );
+}
+
+function HeroScrollLink() {
+  return (
+    <a className={styles.heroScroll} href="#rc-search" data-rc-allow="" aria-label="Scroll to discover">
+      <span className={styles.heroScrollLabel}>Scroll to discover</span>
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M10 2v16M4 12l6 6 6-6" stroke="currentColor" fill="none" />
+      </svg>
+    </a>
   );
 }
 

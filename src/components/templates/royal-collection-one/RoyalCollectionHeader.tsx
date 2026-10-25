@@ -3,8 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import {
+  HIGH_OCTANE_LOGO_URL,
+  type RoyalCollectionView,
+} from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
+import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
@@ -123,29 +127,38 @@ export function RoyalCollectionHeader({
     setMobileOpen(false);
   };
 
+  const blankUtility = view.logoUrl === HIGH_OCTANE_LOGO_URL;
+
   return (
     <header ref={headerRef} className={styles.header} data-rc-header="signature">
-      <div className={styles.utility}>
-        <p className={styles.utilityBrand}>{view.brandName}</p>
-        <div className={styles.utilityActions}>
-          {view.phone ? (
-            <a className={styles.utilityLink} href={`tel:${view.phone}`}>
-              {view.phone}
-            </a>
-          ) : null}
-          {view.email ? (
-            <a className={styles.utilityLink} href={`mailto:${view.email}`}>
-              {view.email}
-            </a>
-          ) : null}
-          <RoyalCollectionPreviewLink
-            className={styles.utilityLogin}
-            href="/auth/sign-in"
-            disabled={view.actionsDisabled}
-          >
-            Login
-          </RoyalCollectionPreviewLink>
-        </div>
+      <div
+        className={blankUtility ? `${styles.utility} ${styles.utilityBlank}` : styles.utility}
+        aria-hidden={blankUtility ? true : undefined}
+      >
+        {blankUtility ? null : (
+          <>
+            <p className={styles.utilityBrand}>{view.brandName}</p>
+            <div className={styles.utilityActions}>
+              {view.phone ? (
+                <a className={styles.utilityLink} href={`tel:${view.phone}`}>
+                  {view.phone}
+                </a>
+              ) : null}
+              {view.email ? (
+                <a className={styles.utilityLink} href={`mailto:${view.email}`}>
+                  {view.email}
+                </a>
+              ) : null}
+              <RoyalCollectionPreviewLink
+                className={styles.utilityLogin}
+                href="/auth/sign-in"
+                disabled={view.actionsDisabled}
+              >
+                Login
+              </RoyalCollectionPreviewLink>
+            </div>
+          </>
+        )}
       </div>
       <div
         className={[
@@ -156,13 +169,7 @@ export function RoyalCollectionHeader({
           .join(" ")}
       >
         <Link className={styles.wordmark} href={homeHref} data-rc-allow="" aria-label={`${view.brandName} home`}>
-          <span className={styles.wordmarkMark} aria-hidden="true">
-            {view.provisionalWordmark ? "H" : (view.brandName.trim()[0] || "H")}
-          </span>
-          <span className={styles.wordmarkCopy}>
-            <span className={styles.wordmarkTop}>{view.wordmarkMark || view.brandName}</span>
-            <span className={styles.wordmarkSub}>{view.wordmarkSub || "REAL ESTATE"}</span>
-          </span>
+          <RoyalCollectionLockup view={view} />
         </Link>
         <nav className={styles.nav} aria-label="Primary">
           <button

@@ -1,0 +1,89 @@
+.bar {
+  border-top: 1px solid color-mix(in srgb, var(--tenant-accent, #c8a66a) 55%, transparent);
+  background: var(--tenant-primary, #0b1f3a);
+  box-shadow: none;
+  color: rgb(255 255 255 / 0.62);
+}
+
+.bar :global(a),
+.bar :global(button) {
+  color: rgb(255 255 255 / 0.62);
+}
+
+.bar :global(a[aria-current="page"]),
+.bar :global(button[aria-expanded="true"]) {
+  color: var(--tenant-accent, #c8a66a);
+}
+
+.indicator {
+  background: var(--tenant-accent, #c8a66a);
+  box-shadow: none;
+}
+
+.veil {
+  background: rgb(7 22 41 / 0.46);
+}
+
+.sheet {
+  border: 0;
+  border-radius: 1.25rem 1.25rem 0 0;
+  background: var(--tenant-primary, #0b1f3a);
+  color: #fffdf8;
+  box-shadow: 0 -12px 32px rgb(7 22 41 / 0.22);
+}
+
+.sheetHeader {
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.sheetTitle {
+  color: var(--tenant-accent, #c8a66a);
+}
+
+.sheetClose {
+  color: rgb(255 253 248 / 0.7);
+}
+
+.sheetClose:hover {
+  background: rgb(255 255 255 / 0.06);
+  color: #fffdf8;
+}
+
+.row {
+  color: rgb(255 253 248 / 0.92);
+}
+
+.row:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.icon {
+  border: 0;
+  background: transparent;
+  color: var(--tenant-accent, #c8a66a);
+  box-shadow: none;
+}
+
+.sheetRule {
+  border-top: 1px solid rgb(255 255 255 / 0.1);
+}
+
+.quiet {
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: transparent;
+  color: #fffdf8;
+}
+
+.quiet:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+
+.signIn {
+  border: 1px solid color-mix(in srgb, var(--tenant-accent, #c8a66a) 70%, transparent);
+  background: transparent;
+  color: var(--tenant-accent, #c8a66a);
+}
+
+.signIn:hover {
+  background: color-mix(in srgb, var(--tenant-accent, #c8a66a) 12%, transparent);
+}

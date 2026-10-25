@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_PREVIEW_ACTION_NOTE } from "./preview-action-note";
+import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPlatformAttribution } from "./RoyalCollectionPlatformAttribution";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import {
@@ -42,13 +43,7 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
         </div>
         <div>
           <div className={styles.wordmark} style={{ marginBottom: 25 }}>
-            <span className={styles.wordmarkMark} aria-hidden="true">
-              {view.provisionalWordmark ? "H" : (view.brandName.trim()[0] || "H")}
-            </span>
-            <span className={styles.wordmarkCopy}>
-              <span className={styles.wordmarkTop}>{view.wordmarkMark || view.brandName}</span>
-              <span className={styles.wordmarkSub}>{view.wordmarkSub || "REAL ESTATE"}</span>
-            </span>
+            <RoyalCollectionLockup view={view} />
           </div>
           <p className={styles.footerSub}>
             {view.agentName}

@@ -199,6 +199,7 @@ assert.equal(fixtureView.phone, "289-501-7755");
 assert.equal(fixtureView.email, "saad@highoctaneniagara.ca");
 assert.equal(fixtureView.actionsDisabled, true);
 assert.equal(fixtureView.photoUrl, null);
+assert.equal(fixtureView.heroPortrait, null);
 assert.equal(fixtureView.bio, null);
 assert.equal(fixtureView.logoUrl, null);
 assert.equal(fixtureView.footerLegalText, null);
@@ -228,6 +229,21 @@ const highOctaneWorkspace = resolveRoyalCollectionView({
   templatePreview: null,
 });
 assert.equal(highOctaneWorkspace.displayFixtureId, null);
+assert.equal(highOctaneWorkspace.heroPortrait?.name, "Saad Qureshi");
+assert.equal(highOctaneWorkspace.heroPortrait?.role, "Real Estate Agent");
+assert.equal(highOctaneWorkspace.heroPortrait?.phone, "(289) 501-7755");
+assert.equal(highOctaneWorkspace.heroPortrait?.phoneHref, "tel:+12895017755");
+assert.equal(highOctaneWorkspace.heroPortrait?.team, "Niagara Real Estate Team");
+assert.equal(
+  highOctaneWorkspace.heroPortrait?.imageUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+);
+assert.equal(
+  existsSync(
+    join(root, "public/media/royal-collection/high-octane/saad-qureshi-portrait.png"),
+  ),
+  true,
+);
 assert.equal(highOctaneWorkspace.actionsDisabled, false);
 assert.equal(
   highOctaneWorkspace.storyMainUrl,
@@ -270,6 +286,7 @@ const houzzatWorkspace = resolveRoyalCollectionView({
   ...tenantBrand,
   templatePreview: null,
 });
+assert.equal(houzzatWorkspace.heroPortrait, null);
 assert.equal(houzzatWorkspace.scenes.length, 0);
 assert.equal(houzzatWorkspace.storyMainUrl, null);
 assert.equal(houzzatWorkspace.storyInsetUrl, null);
@@ -294,6 +311,7 @@ assert.equal(JSON.stringify(fixtureView).includes("hero-canadian-homes"), false)
 process.env.NODE_ENV = "production";
 assert.equal(isHighOctaneRoyalPreview(tenantBrand), false);
 const liveView = resolveRoyalCollectionView(tenantBrand);
+assert.equal(liveView.heroPortrait, null);
 assert.equal(liveView.agentName, "Ali Syed");
 assert.equal(liveView.displayFixtureId, null);
 assert.equal(liveView.actionsDisabled, false);
@@ -303,6 +321,7 @@ const ordinary = resolveRoyalCollectionView({
   ...tenantBrand,
   templatePreview: null,
 });
+assert.equal(ordinary.heroPortrait, null);
 assert.equal(ordinary.agentName, "Ali Syed");
 assert.equal(ordinary.storyMainUrl, null);
 assert.equal(ordinary.storyInsetUrl, null);
@@ -315,6 +334,8 @@ assert.equal(
   false,
 );
 assert.equal(ordinary.actionsDisabled, false);
+assert.equal(hero.includes("Saad Qureshi"), false);
+assert.equal(hero.includes("view.heroPortrait"), true);
 process.env.NODE_ENV = previousNode;
 
 const layout = read("src/app/(marketing)/layout.tsx");

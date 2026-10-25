@@ -8,6 +8,7 @@ import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-orig
 import { toMarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import { HOUZZAT_OFFICIAL_LOGO_PATH } from "@/lib/tenancy/legacy-houzzat-brand";
 import { resolveTenantFaviconMetadata } from "@/lib/tenancy/tenant-favicon";
+import { HIGH_OCTANE_FAVICON_URL } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import {
   HIGH_OCTANE_STAGING_AREA_SERVED,
   HIGH_OCTANE_STAGING_SEO_TITLE_SUFFIX,
@@ -51,6 +52,13 @@ function marketingIcons(
       { ...brand, faviconUrl: HOUZZAT_OFFICIAL_LOGO_PATH },
       canonicalOrigin,
     );
+  }
+  if (isHighOctaneStagingBrand(brand)) {
+    return {
+      icon: [{ url: HIGH_OCTANE_FAVICON_URL, type: "image/svg+xml" }],
+      shortcut: HIGH_OCTANE_FAVICON_URL,
+      apple: HIGH_OCTANE_FAVICON_URL,
+    };
   }
   return resolveTenantFaviconMetadata(brand, canonicalOrigin);
 }

@@ -36,11 +36,13 @@ import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
 import { useRoutePlanner } from "@/components/route-planner/RoutePlannerProvider";
 import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
 import type { MarketingChromeBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { isRoyalCollectionOneTemplateId } from "@/lib/tenancy/templates";
 import { parseHomepagePersonalizationQuery } from "@/lib/listings/homepage-personalization";
 import { resolveAppShell } from "@/lib/mobile/app-shell";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
 import { acquireScrollLock } from "@/lib/scroll-lock";
 import { cn } from "@/lib/utils";
+import royalNav from "./mobile-bottom-nav-royal.module.css";
 
 /** Compact bar; each cell still clears a ≥44px touch target. */
 const BOTTOM_NAV_HEIGHT = "3.75rem";
@@ -88,6 +90,7 @@ export function MobileBottomNav({
   const accountLabel = chromeBrand
     ? tenantAccountLabel(chromeBrand)
     : "Your Houzzat";
+  const royal = isRoyalCollectionOneTemplateId(chromeBrand?.templateId);
   const [pressedTab, setPressedTab] = useState<string | null>(null);
   const moreHistoryPushedRef = useRef(false);
   const searchPrefetchedRef = useRef(false);
@@ -250,7 +253,8 @@ export function MobileBottomNav({
           type="button"
           aria-label="Close menu"
           className={cn(
-            "fixed inset-0 z-[55] bg-ink/35 transition-opacity duration-200 ease-out md:hidden",
+            "fixed inset-0 z-[55] transition-opacity duration-200 ease-out md:hidden",
+            royal ? royalNav.veil : "bg-ink/35",
             moreVisible ? "opacity-100" : "opacity-0",
           )}
           onClick={closeMore}
@@ -261,6 +265,7 @@ export function MobileBottomNav({
         <MoreSheet
           menuId={menuId}
           moreVisible={moreVisible}
+          royal={royal}
           accountLabel={accountLabel}
           onClose={closeMore}
           onNavigateAway={dismissMoreForNavigate}
@@ -308,21 +313,25 @@ export function MobileBottomNav({
       <nav
         aria-label="Mobile"
         className={cn(
-          "fixed inset-x-0 bottom-0 z-[57] border-t border-line/80 bg-surface/95 backdrop-blur-md md:hidden",
+          "fixed inset-x-0 bottom-0 z-[57] md:hidden",
           "pb-[env(safe-area-inset-bottom,0px)]",
+          royal
+            ? royalNav.bar
+            : "border-t border-line/80 bg-surface/95 backdrop-blur-md",
         )}
       >
         <div
-          className="mx-auto grid max-w-lg grid-cols-4 px-0.5"
+          className="relative z-[1] mx-auto grid max-w-lg grid-cols-4 px-0.5"
           style={{ height: BOTTOM_NAV_HEIGHT }}
         >
           <NavItem
             href="/"
             label="Home"
             active={homeActive}
+            royal={royal}
             pressed={pressedTab === "home"}
             onPressChange={(down) => setPressedTab(down ? "home" : null)}
-            icon={<Home className="size-6" strokeWidth={2.15} aria-hidden />}
+            icon={<Home className="size-6" strokeWidth={royal ? 1.7 : 2.15} aria-hidden />}
             onSameRoute={() => {
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
@@ -331,9 +340,10 @@ export function MobileBottomNav({
             href={SEARCH_HREF}
             label="Search"
             active={searchActive}
+            royal={royal}
             pressed={pressedTab === "search"}
             onPressChange={(down) => setPressedTab(down ? "search" : null)}
-            icon={<Search className="size-6" strokeWidth={2.15} aria-hidden />}
+            icon={<Search className="size-6" strokeWidth={royal ? 1.7 : 2.15} aria-hidden />}
             onWarm={warmSearch}
           />
           <button
@@ -349,10 +359,10 @@ export function MobileBottomNav({
               if (moreOpen) closeMore();
               else setMoreOpen(true);
             }}
-            className={navItemClassName(moreOpen, pressedTab === "more")}
+            className={navItemClassName(moreOpen, pressedTab === "more", royal)}
           >
-            <span className={navIconWrapClassName(moreOpen)}>
-              <Menu className="size-6" strokeWidth={2.15} aria-hidden />
+            <span className={navIconWrapClassName(moreOpen, royal)}>
+              <Menu className="size-6" strokeWidth={royal ? 1.7 : 2.15} aria-hidden />
             </span>
             More
           </button>
@@ -360,11 +370,12 @@ export function MobileBottomNav({
             href="/account"
             label="Account"
             active={accountActive}
+            royal={royal}
             pressed={pressedTab === "account"}
             onPressChange={(down) => setPressedTab(down ? "account" : null)}
             hard
             icon={
-              <UserRound className="size-6" strokeWidth={2.15} aria-hidden />
+              <UserRound className="size-6" strokeWidth={royal ? 1.7 : 2.15} aria-hidden />
             }
           />
         </div>
@@ -391,21 +402,29 @@ export function MobileBottomNav({
   );
 }
 
-function navItemClassName(active: boolean, pressed: boolean) {
+function navItemClassName(active: boolean, pressed: boolean, royal: boolean) {
   return cn(
-    "relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 px-1",
-    "text-[11px] font-semibold leading-none tracking-wide",
-    "transition-[color,background-color,transform,opacity] duration-75 ease-out",
+    "relative flex min-h-[44px] flex-col items-center justify-center gap-1 px-1",
+    "leading-none transition-[color,transform] duration-150 ease-out",
     "active:scale-[0.96]",
-    pressed && "scale-[0.96] bg-canopy/[0.07]",
-    active ? "text-canopy" : "text-ink/55",
+    pressed && "scale-[0.96]",
+    royal
+      ? cn(
+          "text-[10px] font-medium uppercase tracking-[0.16em]",
+          active ? "text-[#f8edd4]" : "text-white/72",
+        )
+      : cn(
+          "text-[11px] font-semibold tracking-wide",
+          pressed && "bg-canopy/[0.07]",
+          active ? "text-canopy" : "text-ink/55",
+        ),
   );
 }
 
-function navIconWrapClassName(active: boolean) {
+function navIconWrapClassName(active: boolean, royal: boolean) {
   return cn(
-    "relative inline-flex size-7 items-center justify-center rounded-lg transition-colors duration-75",
-    active && "bg-canopy/10",
+    "relative inline-flex items-center justify-center transition-colors duration-150",
+    royal ? "size-7" : cn("size-7 rounded-lg", active && "bg-canopy/10"),
   );
 }
 
@@ -413,6 +432,7 @@ const NavItem = memo(function NavItem({
   href,
   label,
   active,
+  royal,
   icon,
   hard = false,
   pressed,
@@ -423,6 +443,7 @@ const NavItem = memo(function NavItem({
   href: string;
   label: string;
   active: boolean;
+  royal: boolean;
   icon: ReactNode;
   hard?: boolean;
   pressed: boolean;
@@ -430,7 +451,7 @@ const NavItem = memo(function NavItem({
   onWarm?: () => void;
   onSameRoute?: () => void;
 }) {
-  const className = navItemClassName(active, pressed);
+  const className = navItemClassName(active, pressed, royal);
   const pressProps = {
     onPointerDown: () => {
       onPressChange(true);
@@ -443,12 +464,19 @@ const NavItem = memo(function NavItem({
 
   const body = (
     <>
-      <span className={navIconWrapClassName(active)}>{icon}</span>
+      <span className={navIconWrapClassName(active, royal)}>{icon}</span>
       <span>{label}</span>
       {active ? (
         <span
           aria-hidden
-          className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-canopy"
+          className={
+            royal
+              ? cn(
+                  "absolute inset-x-4 top-0 h-px",
+                  royalNav.indicator,
+                )
+              : "absolute inset-x-5 top-0 h-0.5 rounded-full bg-canopy"
+          }
         />
       ) : null}
     </>
@@ -486,9 +514,24 @@ const NavItem = memo(function NavItem({
   );
 });
 
+function moreRowClass(royal: boolean) {
+  return cn(
+    "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition active:scale-[0.99]",
+    royal ? royalNav.row : "text-ink hover:bg-mist",
+  );
+}
+
+function moreIconClass(royal: boolean) {
+  return cn(
+    "inline-flex size-9 items-center justify-center rounded-lg",
+    royal ? royalNav.icon : "bg-canopy/10 text-canopy",
+  );
+}
+
 function MoreSheet({
   menuId,
   moreVisible,
+  royal,
   accountLabel,
   onClose,
   onNavigateAway,
@@ -496,6 +539,7 @@ function MoreSheet({
 }: {
   menuId: string;
   moreVisible: boolean;
+  royal: boolean;
   accountLabel: string;
   onClose: () => void;
   onNavigateAway: () => void;
@@ -508,6 +552,9 @@ function MoreSheet({
   const routePlanner = useRoutePlanner();
   const routeCount = routePlanner?.count ?? 0;
 
+  const rowClass = moreRowClass(royal);
+  const iconClass = moreIconClass(royal);
+
   return (
     <div
       id={menuId}
@@ -517,20 +564,34 @@ function MoreSheet({
       className={cn(
         "fixed inset-x-0 z-[56] mx-auto max-w-lg md:hidden",
         "bottom-[var(--mobile-bottom-nav)]",
-        "rounded-t-2xl border border-line bg-surface shadow-[0_-12px_40px_-16px_rgba(20,32,28,0.35)]",
         "transition-[opacity,transform] duration-200 ease-out",
+        royal
+          ? royalNav.sheet
+          : "rounded-t-2xl border border-line bg-surface shadow-[0_-12px_40px_-16px_rgba(20,32,28,0.35)]",
         moreVisible
           ? "translate-y-0 opacity-100"
           : "translate-y-2 opacity-0",
       )}
     >
-      <div className="flex items-center justify-between border-b border-line/70 px-4 py-3">
-        <p className="font-display text-lg text-ink">{accountLabel}</p>
+      <div
+        className={cn(
+          "flex items-center justify-between px-4 py-3",
+          royal ? royalNav.sheetHeader : "border-b border-line/70",
+        )}
+      >
+        <p className={cn("font-display text-lg", royal ? royalNav.sheetTitle : "text-ink")}>
+          {accountLabel}
+        </p>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="rounded-lg p-1.5 text-ink/55 transition hover:bg-mist hover:text-ink active:scale-95"
+          className={cn(
+            "rounded-lg p-1.5 transition active:scale-95",
+            royal
+              ? royalNav.sheetClose
+              : "text-ink/55 hover:bg-mist hover:text-ink",
+          )}
         >
           <X className="size-4" aria-hidden />
         </button>
@@ -545,9 +606,9 @@ function MoreSheet({
                 onNavigateAway();
                 chat.open({ forceExpand: true });
               }}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
+              className={rowClass}
             >
-              <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
+              <span className={iconClass}>
                 <MessageCircle className="size-4" aria-hidden />
               </span>
               Chat
@@ -557,7 +618,8 @@ function MoreSheet({
               href={CUSTOMER_CHAT_PAGE_HREF}
               icon={<MessageCircle className="size-4" aria-hidden />}
               label="Chat"
-              onNavigate={onNavigateAway}
+              royal={royal}
+          onNavigate={onNavigateAway}
             />
           )
         ) : (
@@ -573,9 +635,9 @@ function MoreSheet({
                 openAuth,
               });
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
+            className={rowClass}
           >
-            <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
+            <span className={iconClass}>
               <MessageCircle className="size-4" aria-hidden />
             </span>
             Chat
@@ -585,48 +647,54 @@ function MoreSheet({
           href="/account/notifications"
           icon={<Bell className="size-4" aria-hidden />}
           label="Notifications"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <MoreLink
           href="/account/searches"
           icon={<Search className="size-4" aria-hidden />}
           label="Saved searches"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <MoreLink
           href="/account/saved"
           icon={<Heart className="size-4" aria-hidden />}
           label="Saved listings"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <MoreLink
           href="/account/watchlist"
           icon={<Bell className="size-4" aria-hidden />}
           label="Watchlist"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <MoreLink
           href="/account/notes"
           icon={<NotebookPen className="size-4" aria-hidden />}
           label="Notes"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <MoreLink
           href="/route-planner"
-          icon={<RouteStartIcon className="size-4" />}
+          icon={<RouteStartIcon className="size-4 text-current" />}
           label={
             routeCount > 0
               ? `Route Planner · ${routeCount}`
               : "Route Planner"
           }
+          royal={royal}
           onNavigate={onNavigateAway}
         />
         <button
           type="button"
           onClick={onPersonalize}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]"
+          className={rowClass}
         >
-          <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
+          <span className={iconClass}>
             <SlidersHorizontal className="size-4" aria-hidden />
           </span>
           Personalize homepage
@@ -635,17 +703,28 @@ function MoreSheet({
           href="/account"
           icon={<UserRound className="size-4" aria-hidden />}
           label="Account"
+          royal={royal}
           onNavigate={onNavigateAway}
         />
-        <div className="border-t border-line/70 px-3 py-2">
+        <div className={cn("px-3 py-2", royal ? royalNav.sheetRule : "border-t border-line/70")}>
           {signedIn ? (
             <SignOutButton
               label="Log out"
-              className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/60 px-3 py-3 text-sm font-semibold text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger"
+              className={cn(
+                "flex w-full items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold",
+                royal
+                  ? royalNav.quiet
+                  : "border border-line bg-mist/60 text-ink hover:border-danger/40 hover:bg-danger/5 hover:text-danger",
+              )}
             />
           ) : status === "loading" ? (
             <div
-              className="flex w-full items-center justify-center rounded-xl border border-line bg-mist/40 px-3 py-3 text-sm font-semibold text-ink/40"
+              className={cn(
+                "flex w-full items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold",
+                royal
+                  ? royalNav.quiet
+                  : "border border-line bg-mist/40 text-ink/40",
+              )}
               aria-busy
             >
               …
@@ -655,7 +734,12 @@ function MoreSheet({
               mode="sign-in"
               callbackUrl="/"
               onClick={onNavigateAway}
-              className="flex w-full items-center justify-center rounded-xl border border-canopy/30 bg-canopy/10 px-3 py-3 text-sm font-semibold text-canopy-deep hover:border-canopy/50 hover:bg-canopy/15"
+              className={cn(
+                "flex w-full items-center justify-center rounded-xl px-3 py-3 text-sm font-semibold",
+                royal
+                  ? royalNav.signIn
+                  : "border border-canopy/30 bg-canopy/10 text-canopy-deep hover:border-canopy/50 hover:bg-canopy/15",
+              )}
             >
               Sign in
             </AuthOpenButton>
@@ -670,20 +754,19 @@ function MoreLink({
   href,
   icon,
   label,
+  royal,
   onNavigate,
 }: {
   href: string;
   icon: ReactNode;
   label: string;
+  royal: boolean;
   onNavigate: () => void;
 }) {
-  const className =
-    "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold text-ink transition hover:bg-mist active:scale-[0.99]";
+  const className = moreRowClass(royal);
   const body = (
     <>
-      <span className="inline-flex size-9 items-center justify-center rounded-lg bg-canopy/10 text-canopy">
-        {icon}
-      </span>
+      <span className={moreIconClass(royal)}>{icon}</span>
       {label}
     </>
   );

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AdsTrackingPixels } from "@/components/ads/AdsTrackingPixels";
@@ -216,6 +217,9 @@ export default async function MarketingLayout({
   const royalCollectionView = royalCollection
     ? resolveRoyalCollectionView(chromeBrand)
     : null;
+  const requestPath = (await headers()).get("x-houzzat-request-path") ?? "";
+  const heroChatWithScroll =
+    Boolean(royalCollectionView?.heroPortrait) && requestPath === "/";
   const tracking = await resolveWorkspaceTracking(tenancy.workspaceId);
 
   return (
@@ -286,7 +290,9 @@ export default async function MarketingLayout({
           <Suspense fallback={null}>
             <MarketingChromeGate>
               <RoutePlannerFloatingChip />
-              {royalCollectionView?.displayFixtureId ? null : <CustomerChatFab />}
+              {royalCollectionView?.displayFixtureId || heroChatWithScroll ? null : (
+                <CustomerChatFab />
+              )}
               <ScrollToTopButton />
               <MobileBottomNav cities={cities} chromeBrand={chromeBrand} />
             </MarketingChromeGate>

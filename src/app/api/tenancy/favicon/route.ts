@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
+import { HIGH_OCTANE_FAVICON_URL } from "@/lib/tenancy/templates/resolve-royal-collection-view";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import {
   buildGeneratedTenantFaviconSvg,
   faviconResponseCacheControl,
@@ -27,6 +29,15 @@ export async function GET(request: NextRequest) {
   }
 
   const { brand } = tenancy;
+  if (tenancy.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG) {
+    return NextResponse.redirect(new URL(HIGH_OCTANE_FAVICON_URL, request.url), {
+      status: 302,
+      headers: {
+        "Cache-Control": faviconResponseCacheControl(),
+        Vary: "Host",
+      },
+    });
+  }
   const customFavicon = brand.faviconUrl?.trim();
   if (customFavicon) {
     const target = customFavicon.startsWith("http")

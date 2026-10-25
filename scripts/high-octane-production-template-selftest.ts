@@ -142,8 +142,10 @@ assert.equal(otherTenant.agentName, "Mina Harbour");
 assert.equal(otherTenant.brandName, "Harbour & Co.");
 assert.equal(otherTenant.scenes.length, 0);
 assert.equal(otherTenant.storyMainUrl, null);
+assert.equal(otherTenant.heroPortrait, null);
 assert.equal(JSON.stringify(otherTenant).includes("/media/royal-collection/high-octane/"), false);
 assert.equal(JSON.stringify(otherTenant).includes("Saad Qureshi"), false);
+assert.equal(JSON.stringify(otherTenant).includes("saad-qureshi-portrait"), false);
 
 const highOctane = resolveRoyalCollectionView({
   ...brand,
@@ -167,6 +169,15 @@ assert.equal(usesHighOctaneRoyalCollectionMedia(HIGH_OCTANE_STAGING_WORKSPACE_SL
 assert.equal(highOctane.agentName, "Saad Qureshi");
 assert.equal(highOctane.storyMainUrl, "/media/royal-collection/high-octane/notl-house.webp");
 assert.equal(highOctane.scenes.length, 3);
+assert.equal(highOctane.heroPortrait?.name, "Saad Qureshi");
+assert.equal(highOctane.heroPortrait?.role, "Real Estate Agent");
+assert.equal(highOctane.heroPortrait?.phone, "(289) 501-7755");
+assert.equal(highOctane.heroPortrait?.team, "Niagara Real Estate Team");
+assert.equal(highOctane.heroPortrait?.phoneHref, "tel:+12895017755");
+assert.equal(
+  highOctane.heroPortrait?.imageUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+);
 process.env.NODE_ENV = previous;
 
 const plan = buildHighOctaneProductionProvisionPlan();

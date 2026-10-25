@@ -115,6 +115,11 @@ assert.equal(stagingView.markets[0], "Niagara Region");
 assert.equal(stagingView.navCommunities.some((place) => place.name === "Niagara-on-the-Lake"), true);
 assert.equal(stagingView.photoUrl, null);
 assert.equal(
+  stagingView.heroPortrait?.imageUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+);
+assert.equal(stagingView.heroPortrait?.name, "Saad Qureshi");
+assert.equal(
   stagingView.storyMainUrl,
   "/media/royal-collection/high-octane/notl-house.webp",
 );
@@ -232,6 +237,7 @@ assert.equal(houzzat.email, "hello@houzzat.com");
 assert.equal(houzzat.listingDisclosure, "unconnected");
 assert.equal(houzzat.featuredCities, null);
 assert.equal(houzzat.collectionCards, null);
+assert.equal(houzzat.heroPortrait, null);
 assert.equal(houzzat.storyMainUrl, null);
 assert.equal(houzzat.storyInsetUrl, null);
 assert.equal(JSON.stringify(houzzat.markets), JSON.stringify(["Mississauga"]));
