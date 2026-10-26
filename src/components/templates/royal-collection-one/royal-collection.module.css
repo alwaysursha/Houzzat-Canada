@@ -1778,6 +1778,14 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .searchLabel {
+    grid-column: 1 / -1;
+  }
+
+  .searchLabel span {
+    white-space: nowrap;
+  }
+
   .cardGrid {
     grid-template-columns: 1fr;
   }
