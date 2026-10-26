@@ -260,12 +260,14 @@ export function RoyalCollectionPropertyView({
               <div className={styles.agentIdentity}>
                 {model.contact.photoUrl ? (
                   // Approved workspace portrait. A cutout, so it sits on the navy ground.
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    className={styles.agentPhoto}
-                    src={model.contact.photoUrl}
-                    alt=""
-                  />
+                  <span className={styles.agentPhotoFrame}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className={styles.agentPhoto}
+                      src={model.contact.photoUrl}
+                      alt=""
+                    />
+                  </span>
                 ) : null}
                 <div>
                   {model.contact.agentName ? (
