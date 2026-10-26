@@ -6,10 +6,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   listingResultFrame,
+  NIAGARA_SEARCH_MAP_CAMERA,
   searchMapCentroidFrame,
   searchMapGeographyKey,
   searchMapNeedsResultFit,
 } from "../src/lib/geo/search-map-fit";
+import {
+  PRICE_CLUSTER_MAX_ZOOM,
+  PRICE_CLUSTER_RADIUS,
+  priceMarkerFeatureCollection,
+} from "../src/lib/maps/price-marker-source";
+import { searchHighOctaneDevelopmentListings } from "../src/lib/tenancy/templates/high-octane-development-listings";
 
 const empty = {
   city: "",
@@ -122,5 +129,51 @@ assert.doesNotMatch(
 );
 assert.match(map, /data-search-this-area/);
 assert.match(map, /Search This Area/);
+
+assert.ok(NIAGARA_SEARCH_MAP_CAMERA.lat > 42.8);
+assert.ok(NIAGARA_SEARCH_MAP_CAMERA.lat < 43.3);
+assert.ok(NIAGARA_SEARCH_MAP_CAMERA.lng < -78.9);
+assert.ok(NIAGARA_SEARCH_MAP_CAMERA.lng > -79.7);
+assert.notEqual(NIAGARA_SEARCH_MAP_CAMERA.lat, 43.7);
+assert.match(map, /\[-79\.4, 43\.7\]/);
+assert.match(experience, /royalSearch \? NIAGARA_SEARCH_MAP_CAMERA : undefined/);
+assert.match(experience, /if \(!royalSearch\) return;/);
+assert.match(map, /cluster: true/);
+assert.match(map, /clusterRadius: PRICE_CLUSTER_RADIUS/);
+assert.match(map, /attributionControl: \{ compact: true \}/);
+assert.match(map, /bottom-12/);
+assert.match(map, /onPinSelectRef\.current\(listing\.mlsNumber\)/);
+assert.equal(PRICE_CLUSTER_RADIUS, 52);
+assert.equal(PRICE_CLUSTER_MAX_ZOOM, 15);
+
+const niagara = searchHighOctaneDevelopmentListings({ sort: "newest", limit: 20 });
+assert.equal(niagara.length, 14);
+const niagaraFrame = listingResultFrame(niagara);
+assert.equal(niagaraFrame?.kind, "bounds");
+if (niagaraFrame?.kind === "bounds") {
+  assert.equal(niagaraFrame.maxZoom, 13);
+  for (const item of niagara) {
+    assert.ok(item.lng >= niagaraFrame.west && item.lng <= niagaraFrame.east);
+    assert.ok(item.lat >= niagaraFrame.south && item.lat <= niagaraFrame.north);
+  }
+  assert.ok(niagaraFrame.west < -79.5);
+  assert.ok(niagaraFrame.east > -79);
+  assert.ok(niagaraFrame.south < 43);
+  assert.ok(niagaraFrame.north > 43.2);
+}
+const clustered = priceMarkerFeatureCollection(niagara, {
+  excludeMls: niagara[0]?.mlsNumber,
+});
+assert.equal(clustered.features.length, 13);
+assert.ok(
+  clustered.features.every(
+    (feature) => feature.properties.mlsNumber !== niagara[0]?.mlsNumber,
+  ),
+);
+assert.equal(
+  priceMarkerFeatureCollection([{ lat: 0, lng: 0, mlsNumber: "ZERO" } as never])
+    .features.length,
+  0,
+);
 
 console.log("search-map-fit-selftest: ok");

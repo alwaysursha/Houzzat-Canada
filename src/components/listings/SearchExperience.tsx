@@ -78,6 +78,7 @@ import { withStructuredCity } from "@/lib/listings/structured-cities";
 import { pointInPolygon, polygonBBox } from "@/lib/maps/geo";
 import {
   listingResultFrame,
+  NIAGARA_SEARCH_MAP_CAMERA,
   searchMapCentroidFrame,
   searchMapGeographyKey,
   searchMapNeedsResultFit,
@@ -111,6 +112,8 @@ type Bounds = {
 };
 
 type LngLat = [number, number];
+
+const HIGH_OCTANE_RESULT_FRAME = "high-octane-results";
 
 const VIEW_MODES = [
   ["cards", LayoutGrid, "Cards"],
@@ -210,6 +213,7 @@ export function SearchExperience() {
   const [pending, startTransition] = useTransition();
   const [items, setItems] = useState<ListingCardData[]>([]);
   const [total, setTotal] = useState(0);
+  const [listingQuerySettled, setListingQuerySettled] = useState(false);
   const [activeMls, setActiveMls] = useState<string | null>(null);
   const [mapFrame, setMapFrame] = useState<(MapFrame & { token: string }) | null>(
     null,
@@ -352,6 +356,21 @@ export function SearchExperience() {
     setMapFrame({ ...frame, token: `results:${mapGeographyKey}` });
   }, [items, mapGeography, mapGeographyKey, polygon]);
 
+  // HIGH OCTANE has no GTA inventory. With no place selected, frame the
+  // listings that actually came back. A later place search or a user pan
+  // keeps the existing camera behavior.
+  useEffect(() => {
+    if (!royalSearch) return;
+    if (mapGeographyKey) return;
+    if (polygon) return;
+    if (appliedBounds) return;
+    if (mapPinnedToRef.current === HIGH_OCTANE_RESULT_FRAME) return;
+    const frame = listingResultFrame(items);
+    if (!frame) return;
+    mapPinnedToRef.current = HIGH_OCTANE_RESULT_FRAME;
+    setMapFrame({ ...frame, token: HIGH_OCTANE_RESULT_FRAME });
+  }, [appliedBounds, items, mapGeographyKey, polygon, royalSearch]);
+
   const searchCallbackPath = useCallback(
     (next: SearchFilters, nextCities?: string[]) => {
       const patch = commitPatchFromFilters(committed, next, {
@@ -382,7 +401,12 @@ export function SearchExperience() {
     const requestId = queryString;
     const keyAtStart = geoKeyRef.current;
     const res = await fetch(`/api/listings/search?${requestId}`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      if (buildListingsQuery(committedRef.current) === requestId) {
+        setListingQuerySettled(true);
+      }
+      return;
+    }
     const data = (await res.json()) as {
       items?: ListingCardData[];
       total?: number;
@@ -398,6 +422,7 @@ export function SearchExperience() {
     }
     setItems(nextItems);
     setTotal(polygon ? nextItems.length : (data.total ?? nextItems.length));
+    setListingQuerySettled(true);
     itemsGeoKeyRef.current = keyAtStart;
     // Criteria identity (not view/limit). Polygon fp when client filter changes results.
     const criteriaKey = buildCriteriaKey(committedRef.current);
@@ -412,6 +437,7 @@ export function SearchExperience() {
   }, [queryString, polygon]);
 
   useEffect(() => {
+    setListingQuerySettled(false);
     startTransition(() => {
       void load();
     });
@@ -686,8 +712,8 @@ export function SearchExperience() {
     next: Bounds,
     meta?: { userGesture: boolean },
   ) {
-    if (meta?.userGesture && geoKeyRef.current) {
-      mapPinnedToRef.current = geoKeyRef.current;
+    if (meta?.userGesture && (geoKeyRef.current || royalSearch)) {
+      mapPinnedToRef.current = geoKeyRef.current || HIGH_OCTANE_RESULT_FRAME;
     }
     // Programmatic flyTo / fitBounds never change search criteria.
     if (!meta?.userGesture) return;
@@ -776,9 +802,13 @@ export function SearchExperience() {
     [committed, pending, total],
   );
 
+  const awaitingFirstResults =
+    royalSearch && !listingQuerySettled && items.length === 0;
   const countLabel = pending
     ? "Updating"
-    : `${Math.max(0, total).toLocaleString("en-CA")} results`;
+    : awaitingFirstResults
+      ? "Loading"
+      : `${Math.max(0, total).toLocaleString("en-CA")} results`;
   const desktopCardsLayout = !isNarrow && view === "cards";
   const mobileCardsLayout = isNarrow && view === "cards";
 
@@ -1192,6 +1222,10 @@ export function SearchExperience() {
               activeMls={activeMls}
               activeListing={activeListing}
               mapFrame={mapFrame}
+              openingCamera={
+                royalSearch ? NIAGARA_SEARCH_MAP_CAMERA : undefined
+              }
+              markerAppearance={royalSearch ? "royal" : "default"}
               initialCameraRef={resumeCameraRef}
               framedTokenRef={framedTokenRef}
               onCamera={(camera) => {
@@ -1267,7 +1301,7 @@ export function SearchExperience() {
               onFocus={setActiveMls}
               signedIn={signedIn}
               hasClientAccess={hasClientAccess}
-              pending={pending}
+              pending={pending || awaitingFirstResults}
               horizontal={isNarrow && view === "split"}
               mobileFullWidth={mobileCardsLayout}
               wideGrid={!isNarrow && view === "cards"}

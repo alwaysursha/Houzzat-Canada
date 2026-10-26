@@ -117,6 +117,11 @@ export function SearchResultsPane({
             lockedPreview={!hasClientAccess && listing.status !== "ACTIVE"}
           />
         ))}
+        {items.length === 0 && pending && emptyPresentation === "royal" ? (
+          <p className="col-span-full px-6 py-12 text-center text-[15px] text-[#6d6458]">
+            Loading listings
+          </p>
+        ) : null}
         {items.length === 0 && !pending ? (
           <div
             className={cn(

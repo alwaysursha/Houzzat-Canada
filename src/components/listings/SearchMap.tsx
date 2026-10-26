@@ -6,6 +6,12 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import type { ListingCard } from "@/lib/listings/types";
 import { formatListPrice } from "@/lib/listings/constants";
+import {
+  PRICE_CLUSTER_MAX_ZOOM,
+  PRICE_CLUSTER_RADIUS,
+  PRICE_MARKER_SOURCE_ID,
+  priceMarkerFeatureCollection,
+} from "@/lib/maps/price-marker-source";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { readThemeColor } from "@/lib/tenancy/read-theme-color";
 import { SearchMapPopupCard } from "@/components/listings/SearchMapPopupCard";
@@ -53,9 +59,20 @@ function pillToneFromListingStatus(
 function pricePillClass(
   active: boolean,
   tone: "canopy" | "amber" | "danger" | "muted",
+  appearance: "default" | "royal" = "default",
 ) {
   const base =
-    "rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-semibold shadow-md transition-colors ";
+    appearance === "royal"
+      ? "rounded-full border-2 border-[#C8A66A] bg-[#0B1F3A] px-2.5 py-1 text-xs font-semibold text-[#F7F4EE] shadow-md transition-colors "
+      : "rounded-full border-2 border-white px-2.5 py-1 text-[11px] font-semibold shadow-md transition-colors ";
+  if (appearance === "royal" && tone === "canopy") {
+    return (
+      base +
+      (active
+        ? "ring-2 ring-[#C8A66A]"
+        : "hover:bg-[#071629]")
+    );
+  }
   if (tone === "danger") {
     return (
       base +
@@ -86,6 +103,22 @@ function pricePillClass(
       ? "bg-canopy-deep text-white ring-2 ring-canopy/40"
       : "bg-canopy text-white hover:bg-canopy-deep")
   );
+}
+
+function geoJsonSource(
+  source: maplibregl.Source | undefined,
+): maplibregl.GeoJSONSource | null {
+  if (!source || source.type !== "geojson") return null;
+  return source as maplibregl.GeoJSONSource;
+}
+
+function clusterPillClass(appearance: "default" | "royal"): string {
+  const base =
+    "cursor-pointer rounded-full border-2 px-2.5 py-1.5 text-xs font-semibold shadow-md ";
+  if (appearance === "royal") {
+    return base + "border-[#C8A66A] bg-[#0B1F3A] text-[#F7F4EE]";
+  }
+  return base + "border-white bg-canopy text-white";
 }
 
 type DrawFeature = {
@@ -124,6 +157,8 @@ export function SearchMap({
   searchThisAreaVisible = false,
   onSearchThisArea,
   mapFrame,
+  openingCamera,
+  markerAppearance = "default",
   initialCameraRef,
   framedTokenRef,
   onCamera,
@@ -160,6 +195,13 @@ export function SearchMap({
         maxZoom: number;
       }
   )) | null;
+  /**
+   * Camera used only when this map has no remembered view.
+   * Omit it to keep the GTA opening frame.
+   */
+  openingCamera?: { lat: number; lng: number; zoom: number };
+  /** Royal Collection price pills. Other tenants keep the default pills. */
+  markerAppearance?: "default" | "royal";
   /** Last camera, used when the map is created again after Cards mode. */
   initialCameraRef?: MutableRefObject<{
     lat: number;
@@ -181,7 +223,16 @@ export function SearchMap({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const openingCameraRef = useRef(openingCamera);
+  openingCameraRef.current = openingCamera;
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const listingsRef = useRef(listings);
+  listingsRef.current = listings;
+  const markerAppearanceRef = useRef(markerAppearance);
+  markerAppearanceRef.current = markerAppearance;
+  const priceDataRef = useRef(priceMarkerFeatureCollection(listings));
+  const priceSignatureRef = useRef("");
+  const syncPriceMarkersRef = useRef<() => void>(() => {});
   const popupRef = useRef<HTMLDivElement>(null);
   const onCameraRef = useRef(onCamera);
   onCameraRef.current = onCamera;
@@ -226,7 +277,7 @@ export function SearchMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const camera = initialCameraRef?.current;
+    const camera = initialCameraRef?.current ?? openingCameraRef.current;
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: OSM_STYLE,
@@ -234,6 +285,7 @@ export function SearchMap({
       zoom: camera?.zoom ?? 9.4,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
+      attributionControl: { compact: true },
     });
 
     map.addControl(
@@ -277,9 +329,38 @@ export function SearchMap({
           "circle-stroke-color": "#ffffff",
         },
       });
+      map.addSource(PRICE_MARKER_SOURCE_ID, {
+        type: "geojson",
+        data: priceDataRef.current,
+        cluster: true,
+        clusterRadius: PRICE_CLUSTER_RADIUS,
+        clusterMaxZoom: PRICE_CLUSTER_MAX_ZOOM,
+      });
+      // These layers stay painted at zero opacity so MapLibre loads clustered
+      // tiles. querySourceFeatures returns nothing while every layer is hidden.
+      map.addLayer({
+        id: "houzzat-price-clusters",
+        type: "circle",
+        source: PRICE_MARKER_SOURCE_ID,
+        filter: ["has", "point_count"],
+        paint: { "circle-opacity": 0, "circle-radius": 1 },
+      });
+      map.addLayer({
+        id: "houzzat-price-unclustered",
+        type: "circle",
+        source: PRICE_MARKER_SOURCE_ID,
+        filter: ["!", ["has", "point_count"]],
+        paint: { "circle-opacity": 0, "circle-radius": 1 },
+      });
+      map.once("idle", () => syncPriceMarkersRef.current());
+    });
+
+    map.on("idle", () => {
+      syncPriceMarkersRef.current();
     });
 
     map.on("moveend", (event) => {
+      syncPriceMarkersRef.current();
       const center = map.getCenter();
       onCameraRef.current?.({
         lat: center.lat,
@@ -395,56 +476,170 @@ export function SearchMap({
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+  function addPriceMarker(
+    map: maplibregl.Map,
+    listing: ListingCard,
+    appearance: "default" | "royal",
+  ) {
+    // Outer node is owned by MapLibre. Never replace its className.
+    const root = document.createElement("div");
+    root.dataset.mls = listing.mlsNumber;
+    root.dataset.listingStatus = listing.status;
+    const isActive = listing.mlsNumber === activeMlsRef.current;
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = pricePillClass(
+      isActive,
+      pillToneFromListingStatus(listing.status),
+      appearance,
+    );
+    pill.textContent = formatListPrice(
+      listing.listPrice,
+      listing.transactionType,
+    ).replace("CA$", "$");
+    pill.addEventListener("click", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      onPinSelectRef.current(listing.mlsNumber);
+    });
+    root.appendChild(pill);
+    root.style.zIndex = isActive ? "2" : "1";
+    return new maplibregl.Marker({ element: root, anchor: "center" })
+      .setLngLat([listing.lng, listing.lat])
+      .addTo(map);
+  }
 
-    markersRef.current.forEach((m) => m.remove());
+  syncPriceMarkersRef.current = () => {
+    const map = mapRef.current;
+    const source = geoJsonSource(map?.getSource(PRICE_MARKER_SOURCE_ID));
+    if (!map || !source) return;
+
+    const appearance = markerAppearanceRef.current;
+    const seen = new Set<string>();
+    const planned: Array<
+      | {
+          kind: "cluster";
+          clusterId: number;
+          count: number;
+          lng: number;
+          lat: number;
+        }
+      | { kind: "price"; listing: ListingCard }
+    > = [];
+
+    for (const feature of map.querySourceFeatures(PRICE_MARKER_SOURCE_ID)) {
+      const geometry = feature.geometry;
+      if (geometry.type !== "Point") continue;
+      const [lng, lat] = geometry.coordinates;
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      const props = feature.properties ?? {};
+      if (props.cluster) {
+        const clusterId = Number(props.cluster_id);
+        const count = Number(props.point_count);
+        if (!Number.isFinite(clusterId) || !Number.isFinite(count)) continue;
+        const key = `cluster:${clusterId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        planned.push({ kind: "cluster", clusterId, count, lng, lat });
+        continue;
+      }
+      const mlsNumber = String(props.mlsNumber ?? "");
+      const listing = listingsRef.current.find(
+        (item) => item.mlsNumber === mlsNumber,
+      );
+      if (!listing || seen.has(mlsNumber)) continue;
+      seen.add(mlsNumber);
+      planned.push({ kind: "price", listing });
+    }
+
+    const selected = listingsRef.current.find(
+      (item) => item.mlsNumber === activeMlsRef.current,
+    );
+    if (
+      selected &&
+      !seen.has(selected.mlsNumber) &&
+      Number.isFinite(selected.lat) &&
+      Number.isFinite(selected.lng)
+    ) {
+      planned.push({ kind: "price", listing: selected });
+    }
+
+    const signature = planned
+      .map((item) =>
+        item.kind === "cluster"
+          ? `cluster:${item.clusterId}:${item.count}`
+          : `price:${item.listing.mlsNumber}`,
+      )
+      .sort()
+      .join("|");
+    const nextSignature = `${signature}|${appearance}`;
+    if (
+      nextSignature === priceSignatureRef.current &&
+      markersRef.current.length > 0
+    ) {
+      return;
+    }
+    priceSignatureRef.current = nextSignature;
+    markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    for (const listing of listings) {
-      // Outer node is owned by MapLibre (gets `.maplibregl-marker` + transform).
-      // Never replace its className — that strips positioning and scatters pins.
+    for (const item of planned) {
+      if (item.kind === "price") {
+        markersRef.current.push(addPriceMarker(map, item.listing, appearance));
+        continue;
+      }
+      // Outer node is owned by MapLibre. Never replace its className.
       const root = document.createElement("div");
-      root.dataset.mls = listing.mlsNumber;
-      root.dataset.listingStatus = listing.status;
-
+      root.dataset.clusterId = String(item.clusterId);
       const pill = document.createElement("button");
       pill.type = "button";
-      pill.className = pricePillClass(
-        false,
-        pillToneFromListingStatus(listing.status),
+      pill.className = clusterPillClass(appearance);
+      pill.textContent = String(item.count);
+      pill.setAttribute(
+        "aria-label",
+        `${item.count} listings in this area. Zoom in.`,
       );
-      pill.textContent = formatListPrice(
-        listing.listPrice,
-        listing.transactionType,
-      ).replace("CA$", "$");
       pill.addEventListener("click", (event) => {
         event.stopPropagation();
         event.preventDefault();
-        onPinSelectRef.current(listing.mlsNumber);
+        const current = geoJsonSource(
+          mapRef.current?.getSource(PRICE_MARKER_SOURCE_ID),
+        );
+        if (!current) return;
+        void current.getClusterExpansionZoom(item.clusterId).then((zoom: number) => {
+          const activeMap = mapRef.current;
+          if (!activeMap) return;
+          skipBoundsNotify.current = true;
+          activeMap.easeTo({
+            center: [item.lng, item.lat],
+            zoom: Math.min(
+              Math.max(zoom, activeMap.getZoom() + 1),
+              MAP_MAX_ZOOM,
+            ),
+          });
+        });
       });
       root.appendChild(pill);
-
-      const marker = new maplibregl.Marker({ element: root, anchor: "center" })
-        .setLngLat([listing.lng, listing.lat])
-        .addTo(map);
-      markersRef.current.push(marker);
-    }
-
-    // Apply current selection without rewriting MapLibre's root classes.
-    for (const marker of markersRef.current) {
-      const root = marker.getElement();
-      const pill = root.querySelector("button");
-      if (!pill || !root.dataset.mls) continue;
-      const isActive = root.dataset.mls === activeMlsRef.current;
-      const tone = pillToneFromListingStatus(
-        root.dataset.listingStatus ?? "ACTIVE",
+      markersRef.current.push(
+        new maplibregl.Marker({ element: root, anchor: "center" })
+          .setLngLat([item.lng, item.lat])
+          .addTo(map),
       );
-      pill.className = pricePillClass(isActive, tone);
-      root.style.zIndex = isActive ? "2" : "1";
     }
-  }, [listings]);
+  };
+
+  useEffect(() => {
+    const data = priceMarkerFeatureCollection(listings, {
+      excludeMls: activeMls,
+    });
+    priceDataRef.current = data;
+    const map = mapRef.current;
+    const source = geoJsonSource(map?.getSource(PRICE_MARKER_SOURCE_ID));
+    if (!map || !source) return;
+    void source.setData(data, true).then(() => {
+      syncPriceMarkersRef.current();
+    });
+  }, [listings, activeMls, markerAppearance]);
 
   useEffect(() => {
     for (const marker of markersRef.current) {
@@ -456,10 +651,10 @@ export function SearchMap({
       const tone = pillToneFromListingStatus(
         root.dataset.listingStatus ?? "ACTIVE",
       );
-      pill.className = pricePillClass(isActive, tone);
+      pill.className = pricePillClass(isActive, tone, markerAppearance);
       root.style.zIndex = isActive ? "2" : "1";
     }
-  }, [activeMls]);
+  }, [activeMls, markerAppearance]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -490,12 +685,13 @@ export function SearchMap({
       return;
     }
     const maxZoom = Math.min(mapFrame.maxZoom, MAP_MAX_ZOOM);
+    const fitPadding = markerAppearance === "royal" ? 72 : 56;
     const camera = map.cameraForBounds(
       [
         [mapFrame.west, mapFrame.south],
         [mapFrame.east, mapFrame.north],
       ],
-      { padding: 56, maxZoom },
+      { padding: fitPadding, maxZoom },
     );
     const fittedCenter = camera?.center;
     const fittedZoom = camera?.zoom;
@@ -517,13 +713,13 @@ export function SearchMap({
         [mapFrame.east, mapFrame.north],
       ],
       {
-        padding: 56,
+        padding: fitPadding,
         maxZoom,
         essential: true,
         duration,
       },
     );
-  }, [framedTokenRef, initialCameraRef, mapFrame]);
+  }, [framedTokenRef, initialCameraRef, mapFrame, markerAppearance]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -690,8 +886,8 @@ export function SearchMap({
       ) : null}
 
       {onStatusToggle ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
-          <div className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-12 z-10 flex justify-center px-3 pr-12 sm:bottom-3 sm:pr-3">
+          <div className="pointer-events-auto flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:justify-center sm:gap-2">
             {(isLease
               ? ([
                   ["ACTIVE", "For lease", "canopy"],
@@ -717,7 +913,7 @@ export function SearchMap({
                     onStatusToggle(value);
                   }}
                   className={cn(
-                    "rounded-full px-3.5 py-2 text-xs font-bold uppercase tracking-wide shadow-lg transition sm:px-4 sm:text-sm",
+                    "shrink-0 rounded-full px-3.5 py-2 text-xs font-bold uppercase tracking-wide shadow-lg transition sm:px-4 sm:text-sm",
                     tone === "canopy" &&
                       (selected
                         ? "bg-canopy text-white ring-2 ring-canopy/40 ring-offset-2 ring-offset-mist"
