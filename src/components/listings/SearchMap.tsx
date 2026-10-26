@@ -335,21 +335,21 @@ export function SearchMap({
         clusterRadius: PRICE_CLUSTER_RADIUS,
         clusterMaxZoom: PRICE_CLUSTER_MAX_ZOOM,
       });
+      // These layers stay painted at zero opacity so MapLibre loads clustered
+      // tiles. querySourceFeatures returns nothing while every layer is hidden.
       map.addLayer({
         id: "houzzat-price-clusters",
         type: "circle",
         source: PRICE_MARKER_SOURCE_ID,
         filter: ["has", "point_count"],
-        layout: { visibility: "none" },
-        paint: { "circle-opacity": 0, "circle-radius": 0 },
+        paint: { "circle-opacity": 0, "circle-radius": 1 },
       });
       map.addLayer({
         id: "houzzat-price-unclustered",
         type: "circle",
         source: PRICE_MARKER_SOURCE_ID,
         filter: ["!", ["has", "point_count"]],
-        layout: { visibility: "none" },
-        paint: { "circle-opacity": 0, "circle-radius": 0 },
+        paint: { "circle-opacity": 0, "circle-radius": 1 },
       });
       map.once("idle", () => syncPriceMarkersRef.current());
     });
