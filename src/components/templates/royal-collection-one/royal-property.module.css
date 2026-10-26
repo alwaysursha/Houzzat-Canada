@@ -618,19 +618,14 @@
 .introListing h1 {
   max-width: 18em;
   overflow-wrap: break-word;
+  font-family: var(--font-rc-address), "Fraunces", Georgia, serif;
   font-size: clamp(32px, 1.6rem + 1.6vw, 48px);
-  font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1.12;
-}
-
-.streetNumber {
-  font-family: var(--rc-sans);
-  font-size: 0.98em;
-  font-weight: 500;
+  font-weight: 460;
+  font-variation-settings: "SOFT" 100, "opsz" 48, "wght" 460;
   font-variant-numeric: lining-nums;
   font-feature-settings: "lnum" 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
 }
 
 .place {
