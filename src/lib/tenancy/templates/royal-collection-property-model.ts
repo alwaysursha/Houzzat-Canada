@@ -5,7 +5,7 @@
 import type { PropertyType } from "@prisma/client";
 import {
   formatListPrice,
-  formatListingAddressOneLine,
+  formatListingAddress,
   propertyTypeLabel,
 } from "@/lib/listings/constants";
 import {
@@ -35,8 +35,12 @@ export type RoyalCollectionPropertyCopy = {
 export type RoyalCollectionPropertyModel = {
   kind: "concept" | "listing" | "withheld";
   kicker: string;
+  /** Street address for a listing. Concept and withheld pages use their own heading. */
   title: string;
+  /** City, province, and postal code for a listing. */
   place: string | null;
+  /** Understated development label. Absent for ordinary listings. */
+  badge: string | null;
   lede: string | null;
   frames: readonly RoyalCollectionPropertyFrame[];
   facts: readonly RoyalCollectionPropertyRow[];
@@ -80,10 +84,14 @@ export type RoyalCollectionPropertyModel = {
     eyebrow: string;
     title: string;
     agentName: string;
+    /** Workspace designation. Omitted when the workspace has none. */
+    role: string | null;
     brandName: string;
     brokerageName: string;
     phone: string | null;
     email: string | null;
+    /** Approved workspace portrait. Omitted when none is on file. */
+    photoUrl: string | null;
   };
 };
 
@@ -125,6 +133,8 @@ export type RoyalCollectionListingSite = {
   brokerageName: string;
   phone: string | null;
   email: string | null;
+  role?: string | null;
+  photoUrl?: string | null;
 };
 
 function clean(value: string | null | undefined): string | null {
@@ -186,12 +196,14 @@ function roomMeasure(room: NonNullable<RoyalCollectionListingSource["rooms"]>[nu
 function contactFor(site: RoyalCollectionListingSite): RoyalCollectionPropertyModel["contact"] {
   return {
     eyebrow: "Private viewing",
-    title: "Request a private viewing",
+    title: "Request a Private Viewing",
     agentName: clean(site.agentName) ?? "",
+    role: clean(site.role),
     brandName: clean(site.brandName) ?? "",
     brokerageName: clean(site.brokerageName) ?? "",
     phone: clean(site.phone),
     email: clean(site.email),
+    photoUrl: clean(site.photoUrl),
   };
 }
 
@@ -201,6 +213,7 @@ function withheldModel(site: RoyalCollectionListingSite): RoyalCollectionPropert
     kicker: "Registration required",
     title: "This listing is available after you continue.",
     place: null,
+    badge: null,
     lede: "Address, price, photographs, and remarks stay on the server until you are signed in.",
     frames: [],
     facts: [],
@@ -225,6 +238,7 @@ export function buildRoyalCollectionListingModel(input: {
   photos: readonly { url: string; label?: string | null }[];
   viewer: { signedIn: boolean; detailsLocked: boolean };
   site: RoyalCollectionListingSite;
+  badge?: string | null;
 }): RoyalCollectionPropertyModel {
   if (!input.viewer.signedIn) return withheldModel(input.site);
 
@@ -234,16 +248,20 @@ export function buildRoyalCollectionListingModel(input: {
   const city = clean(listing.city);
   const community = clean(listing.community);
   const street = locked ? null : clean(listing.addressLine);
-  const address =
+  const addressParts =
     !locked && street && city
-      ? formatListingAddressOneLine({
+      ? formatListingAddress({
           addressLine: street,
           unitNumber: listing.unitNumber,
           city,
           province: listing.province,
           postalCode: listing.postalCode,
         })
-      : street;
+      : null;
+  const address = addressParts ? addressParts.join(", ") : street;
+  const locality = addressParts
+    ? addressParts[1]
+    : [community, city].filter(Boolean).join(" · ") || null;
   const price =
     locked || listing.listPrice == null || !Number.isFinite(listing.listPrice) || listing.listPrice <= 0
       ? null
@@ -338,8 +356,9 @@ export function buildRoyalCollectionListingModel(input: {
   return {
     kind: "listing",
     kicker: type ?? "Property",
-    title: address ?? city ?? "Listing",
-    place: [community, city].filter(Boolean).join(" · ") || null,
+    title: addressParts?.[0] ?? street ?? city ?? "Listing",
+    place: locality,
+    badge: clean(input.badge),
     lede: locked ? "Some property details stay hidden until this account can view them." : null,
     frames: photos,
     facts: rows,

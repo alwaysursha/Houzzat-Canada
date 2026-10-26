@@ -56,7 +56,7 @@ export function CustomerChatFab() {
     "size-11 sm:h-11 sm:w-auto sm:px-3.5",
     "sm:right-6",
     aboveListingBar
-      ? "bottom-[calc(var(--mobile-bottom-nav,0px)+8.5rem)] md:bottom-24"
+      ? "bottom-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px)+8.5rem)] md:bottom-24"
       : "bottom-[calc(var(--mobile-bottom-nav,0px)+4.75rem)] md:bottom-20",
   );
 

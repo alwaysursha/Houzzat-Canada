@@ -81,7 +81,7 @@ export function CustomerChatFloatingWindow() {
           "text-sm font-semibold text-canopy-deep shadow-[0_10px_30px_rgba(15,107,76,0.18)]",
           "transition hover:border-canopy/40",
           isMobile
-            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+5.5rem)] right-4"
+            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px)+5.5rem)] right-4"
             : null,
         )}
         style={

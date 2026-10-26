@@ -42,7 +42,7 @@ export function RoutePlannerFloatingChip({
         layer === "sheet"
           ? "bottom-[calc(4.5rem+max(3rem,env(safe-area-inset-bottom,0px)))] md:bottom-6"
           : aboveListingBar
-            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+5.5rem)] md:bottom-6"
+            ? "bottom-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px)+5.5rem)] md:bottom-6"
             : "bottom-[calc(var(--mobile-bottom-nav,0px)+1.25rem)] sm:bottom-6",
         visible
           ? "pointer-events-auto translate-y-0 opacity-100"

@@ -61,6 +61,7 @@ export function RoyalCollectionPropertyDemonstration() {
     kicker: "Design Concept — Not an MLS Listing",
     title: "The residence.",
     place: "Niagara Region · Concept",
+    badge: null,
     lede:
       "Illustrative layout only. Address, price, size, and rooms stay blank until an authorized listing is supplied. These studies are not a connected property.",
     frames: FRAMES,
@@ -123,19 +124,21 @@ export function RoyalCollectionPropertyDemonstration() {
     },
     contact: {
       eyebrow: "Private viewing",
-      title: "Request a private viewing",
+      title: "Request a Private Viewing",
       agentName: fixture.agentName,
+      role: null,
       brandName: fixture.brandName,
       brokerageName: fixture.brokerageName,
       phone: fixture.phone,
       email: fixture.email,
+      photoUrl: null,
     },
   };
 
   return (
     <RoyalCollectionPropertyView model={model}>
       <button type="button" className={styles.viewing} disabled aria-disabled="true">
-        Request a private viewing
+        Request a Private Viewing
       </button>
       <p className={styles.note}>{ROYAL_COLLECTION_PREVIEW_ACTION_NOTE}</p>
       <p className={styles.asideFine}>

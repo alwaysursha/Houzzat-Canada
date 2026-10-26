@@ -113,7 +113,7 @@ export function CustomerChatUnreadPreview({
       className={cn(
         "fixed z-[70] w-[min(22.5rem,calc(100vw-1.5rem))]",
         isMobile
-          ? "bottom-[calc(var(--mobile-bottom-nav,0px)+env(safe-area-inset-bottom,0px)+1rem)] left-1/2 -translate-x-1/2"
+          ? "bottom-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px)+env(safe-area-inset-bottom,0px)+1rem)] left-1/2 -translate-x-1/2"
           : "bottom-6 right-6",
         reduceMotion
           ? null

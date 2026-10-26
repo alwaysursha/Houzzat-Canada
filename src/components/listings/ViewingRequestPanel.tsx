@@ -46,6 +46,7 @@ export function ViewingRequestPanel({
   signedIn = false,
   className,
   claimRestore = "auto",
+  appearance = "standard",
 }: {
   mlsNumber: string;
   /** Canonical SEO path for auth redirects. */
@@ -64,6 +65,8 @@ export function ViewingRequestPanel({
    * always: this panel is the visible form at every width (map overlay).
    */
   claimRestore?: "auto" | "always";
+  /** Royal Collection property page. The default shell stays the Houzzat card. */
+  appearance?: "standard" | "royal";
 }) {
   const viewport = useListingViewport();
   const { status } = useSession();
@@ -91,36 +94,48 @@ export function ViewingRequestPanel({
   const activePanel: "tour" | "info" =
     !panelChosen && restore?.kind === "inquiry" ? "info" : panel;
   const showInquiryOnMobile = narrow && restore?.kind === "inquiry";
+  const royal = appearance === "royal";
   const shellClass = cn(
-    // Parent column must be the tall grid aside — do not wrap this in a short
-    // div, or sticky has no room to travel.
-    // Sit just under site header + listing action bar.
-    // Sheet/panel sets --site-header-stack and --listing-viewing-sticky-gap to 0
-    // so this docks flush under the Share/Save bar (no phantom header gap).
-    "sticky top-[calc(var(--site-header-stack,4rem)+var(--listing-sticky-bar-height,5.5rem)+var(--listing-viewing-sticky-gap,0.5rem))] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
+    royal
+      ? undefined
+      : // Parent column must be the tall grid aside — do not wrap this in a short
+        // div, or sticky has no room to travel.
+        // Sit just under site header + listing action bar.
+        // Sheet/panel sets --site-header-stack and --listing-viewing-sticky-gap to 0
+        // so this docks flush under the Share/Save bar (no phantom header gap).
+        "sticky top-[calc(var(--site-header-stack,4rem)+var(--listing-sticky-bar-height,5.5rem)+var(--listing-viewing-sticky-gap,0.5rem))] z-10 rounded-2xl border border-line/80 bg-surface p-5 shadow-[0_1px_0_rgb(20_32_28/0.03)] sm:p-6",
     className,
   );
   const shellStyle = showInquiryOnMobile ? { display: "block" as const } : undefined;
 
   if (inactive) {
     return (
-      <div className={shellClass} style={shellStyle}>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
-          Next step
-        </p>
-        <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
-          Ask about this home
-        </h2>
-        <p className="mt-1.5 text-sm text-ink/60">
-          This listing is no longer active. Send an inquiry and we’ll help with
-          details or similar homes nearby.
-        </p>
+      <div
+        className={shellClass}
+        style={shellStyle}
+        data-rc-viewing={royal ? "" : undefined}
+      >
+        {royal ? null : (
+          <>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-canopy/80">
+              Next step
+            </p>
+            <h2 className="mt-1 font-display text-xl text-ink sm:text-2xl">
+              Ask about this home
+            </h2>
+            <p className="mt-1.5 text-sm text-ink/60">
+              This listing is no longer active. Send an inquiry and we’ll help with
+              details or similar homes nearby.
+            </p>
+          </>
+        )}
         <div className="mt-4">
           <LeadRequestForm
             key={`${status}-${restore?.kind === "inquiry" ? restore.restoredAt : "inquiry"}`}
             mlsNumber={mlsNumber}
             kind="inquiry"
             callbackPath={authCallbackUrl}
+            appearance={appearance}
             defaults={{
               name: resolvedContact?.name ?? "",
               email: resolvedContact?.email ?? "",
@@ -151,6 +166,7 @@ export function ViewingRequestPanel({
           ) : null}
           <Link
             href={similarHref}
+            data-rc-similar={royal ? "" : undefined}
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border border-line bg-mist px-4 text-sm font-semibold text-ink transition hover:border-canopy/40"
           >
             <Search className="size-4" aria-hidden />
@@ -162,28 +178,42 @@ export function ViewingRequestPanel({
   }
 
   return (
-    <div className={shellClass} style={shellStyle}>
+    <div
+      className={shellClass}
+      style={shellStyle}
+      data-rc-viewing={royal ? "" : undefined}
+    >
       <div className="mb-4">
         <RoutePlannerToggleButton
           mlsNumber={mlsNumber}
           listingStatus="ACTIVE"
           size="button"
+          className={royal ? "rc-route-planner" : undefined}
         />
       </div>
       <div
         role="tablist"
         aria-label="Contact this listing"
-        className="grid grid-cols-2 rounded-xl bg-mist/70 p-1"
+        data-rc-tablist={royal ? "" : undefined}
+        className={
+          royal ? "grid grid-cols-2" : "grid grid-cols-2 rounded-xl bg-mist/70 p-1"
+        }
       >
         <button
           type="button"
           role="tab"
           aria-selected={activePanel === "tour"}
-          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-            activePanel === "tour"
-              ? "bg-surface text-ink shadow-sm"
-              : "text-ink/55"
-          }`}
+          data-rc-tab={royal ? "" : undefined}
+          data-selected={royal ? String(activePanel === "tour") : undefined}
+          className={
+            royal
+              ? undefined
+              : `rounded-lg px-3 py-2 text-sm font-semibold ${
+                  activePanel === "tour"
+                    ? "bg-surface text-ink shadow-sm"
+                    : "text-ink/55"
+                }`
+          }
           onClick={() => {
             setPanelChosen(true);
             setPanel("tour");
@@ -195,11 +225,17 @@ export function ViewingRequestPanel({
           type="button"
           role="tab"
           aria-selected={activePanel === "info"}
-          className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-            activePanel === "info"
-              ? "bg-surface text-ink shadow-sm"
-              : "text-ink/55"
-          }`}
+          data-rc-tab={royal ? "" : undefined}
+          data-selected={royal ? String(activePanel === "info") : undefined}
+          className={
+            royal
+              ? undefined
+              : `rounded-lg px-3 py-2 text-sm font-semibold ${
+                  activePanel === "info"
+                    ? "bg-surface text-ink shadow-sm"
+                    : "text-ink/55"
+                }`
+          }
           onClick={() => {
             setPanelChosen(true);
             setPanel("info");
@@ -210,14 +246,23 @@ export function ViewingRequestPanel({
       </div>
       {activePanel === "tour" ? (
         <>
-          <div className="mt-3 flex gap-2">
+          <div
+            className={royal ? undefined : "mt-3 flex gap-2"}
+            data-rc-choices={royal ? "" : undefined}
+          >
             <button
               type="button"
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-                restoredViewing === "showing"
-                  ? "bg-canopy text-white shadow-sm"
-                  : "border border-line/70 bg-mist/40 text-ink/70"
-              }`}
+              data-rc-choice={royal ? "" : undefined}
+              data-selected={royal ? String(restoredViewing === "showing") : undefined}
+              className={
+                royal
+                  ? undefined
+                  : `rounded-full px-3.5 py-1.5 text-sm font-semibold ${
+                      restoredViewing === "showing"
+                        ? "bg-canopy text-white shadow-sm"
+                        : "border border-line/70 bg-mist/40 text-ink/70"
+                    }`
+              }
               onClick={() => {
                 setModeChosen(true);
                 setMode("showing");
@@ -227,11 +272,19 @@ export function ViewingRequestPanel({
             </button>
             <button
               type="button"
-              className={`rounded-full px-3.5 py-1.5 text-sm font-semibold ${
-                restoredViewing === "virtual_viewing"
-                  ? "bg-signal text-white shadow-sm"
-                  : "border border-line/70 bg-mist/40 text-ink/70"
-              }`}
+              data-rc-choice={royal ? "" : undefined}
+              data-selected={
+                royal ? String(restoredViewing === "virtual_viewing") : undefined
+              }
+              className={
+                royal
+                  ? undefined
+                  : `rounded-full px-3.5 py-1.5 text-sm font-semibold ${
+                      restoredViewing === "virtual_viewing"
+                        ? "bg-signal text-white shadow-sm"
+                        : "border border-line/70 bg-mist/40 text-ink/70"
+                    }`
+              }
               onClick={() => {
                 setModeChosen(true);
                 setMode("virtual_viewing");
@@ -246,6 +299,7 @@ export function ViewingRequestPanel({
               mlsNumber={mlsNumber}
               kind={restoredViewing}
               callbackPath={authCallbackUrl}
+              appearance={appearance}
               defaults={{
                 name: resolvedContact?.name ?? "",
                 email: resolvedContact?.email ?? "",
@@ -272,6 +326,7 @@ export function ViewingRequestPanel({
             mlsNumber={mlsNumber}
             kind="inquiry"
             callbackPath={authCallbackUrl}
+            appearance={appearance}
             defaults={{
               name: resolvedContact?.name ?? "",
               email: resolvedContact?.email ?? "",

@@ -8,6 +8,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "../src/lib/tenancy/templates/high-octane-staging-slug";
+import {
+  royalListingGalleryLayout,
+  royalListingGalleryTileCount,
+} from "../src/lib/tenancy/templates/royal-collection-gallery-layout";
 import { buildRoyalCollectionListingModel } from "../src/lib/tenancy/templates/royal-collection-property-model";
 import { selectRoyalCollectionOperationalPresentation } from "../src/lib/tenancy/templates/royal-collection-operational-listing";
 import type { RoyalCollectionListingSource } from "../src/lib/tenancy/templates/royal-collection-property-model";
@@ -130,6 +134,9 @@ const complete = buildRoyalCollectionListingModel({
   site,
 });
 assert.equal(complete.kind, "listing");
+assert.equal(complete.title, "14 Hidden Cedar");
+assert.equal(complete.place, "Niagara Falls, ON L2E 1A1");
+assert.equal(complete.badge, null);
 assert.equal(fact(complete, "Address")?.includes("14 Hidden Cedar"), true);
 assert.equal(fact(complete, "City"), "Niagara Falls");
 assert.equal(fact(complete, "Asking")?.includes("1,250,000"), true);
@@ -265,6 +272,23 @@ assert.ok(gallerySource.includes('presentation === "listing"'));
 assert.ok(gallerySource.includes("ArrowLeft"));
 assert.ok(gallerySource.includes("data-rc-allow"));
 assert.ok(gallerySource.includes("No photograph is part of this concept."));
+assert.ok(gallerySource.includes("View All Photos"));
+assert.ok(gallerySource.includes("Previous"));
+assert.ok(gallerySource.includes("Escape"));
+assert.ok(gallerySource.includes("data-gallery-layout"));
+assert.equal(gallerySource.includes("unsplash"), false);
+assert.equal(gallerySource.includes("demoPropertyImageUrl"), false);
+assert.equal(royalListingGalleryLayout(0), "none");
+assert.equal(royalListingGalleryLayout(1), "one");
+assert.equal(royalListingGalleryLayout(2), "two");
+assert.equal(royalListingGalleryLayout(3), "three");
+assert.equal(royalListingGalleryLayout(4), "four");
+assert.equal(royalListingGalleryLayout(5), "five");
+assert.equal(royalListingGalleryLayout(12), "five");
+assert.equal(royalListingGalleryTileCount(0), 0);
+assert.equal(royalListingGalleryTileCount(2), 2);
+assert.equal(royalListingGalleryTileCount(4), 4);
+assert.equal(royalListingGalleryTileCount(12), 5);
 
 const concept = read(
   "src/components/templates/royal-collection-one/RoyalCollectionPropertyDemonstration.tsx",
@@ -275,8 +299,54 @@ assert.equal(concept.includes("ListingAccessGate"), false);
 assert.equal(concept.includes("loadListingForDetailPage"), false);
 
 const css = read("src/components/templates/royal-collection-one/royal-property.module.css");
+assert.ok(css.includes("--font-rc-address"));
+assert.ok(css.includes("lining-nums"));
 assert.ok(css.includes("prefers-reduced-motion"));
 assert.ok(css.includes("min-height: 44px"));
 assert.ok(css.includes("--mobile-bottom-nav"));
+assert.ok(css.includes("data-rc-tab"));
+assert.ok(css.includes("rc-viewing-submit"));
+assert.ok(renderer.includes('appearance="royal"'));
+assert.ok(viewSource.includes("model.contact.role"));
+assert.ok(viewSource.includes("model.contact.photoUrl"));
+assert.equal(viewSource.includes("model.contact.brandName"), false);
+assert.equal(viewSource.includes("mailto:"), false);
+assert.ok(modelSource.includes("Request a Private Viewing"));
+assert.ok(modelSource.includes("role: clean(site.role)"));
+const panel = read("src/components/listings/ViewingRequestPanel.tsx");
+const leadForm = read("src/components/listings/LeadRequestForm.tsx");
+const houzzatDetail = read("src/components/listings/ListingDetailView.tsx");
+assert.ok(panel.includes('appearance = "standard"'));
+assert.ok(panel.includes("rounded-2xl border border-line/80 bg-surface"));
+assert.ok(panel.includes("Request Tour"));
+assert.ok(panel.includes("Request Info"));
+assert.ok(panel.includes("In-person"));
+assert.ok(panel.includes("Virtual Viewing"));
+assert.ok(leadForm.includes("I agree to be contacted about this request."));
+assert.ok(
+  leadForm.includes(
+    "I agree to be contacted by a {tenantName} agent about this request by",
+  ),
+);
+assert.ok(leadForm.includes("contactConsent: true"));
+assert.equal(leadForm.includes("useState(true)"), false);
+assert.equal(houzzatDetail.includes('appearance="royal"'), false);
+assert.equal(houzzatDetail.includes("RoyalCollectionConciergeBar"), false);
+assert.ok(viewSource.includes("RoyalCollectionConciergeBar"));
+assert.ok(viewSource.includes('model.kind === "listing"'));
+const concierge = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionConciergeBar.tsx",
+);
+assert.ok(concierge.includes("Request Private Viewing"));
+assert.ok(concierge.includes("IntersectionObserver"));
+assert.ok(concierge.includes("prefers-reduced-motion"));
+assert.ok(concierge.includes('aria-label={`Call ${agentName}`}'));
+assert.ok(concierge.includes('getElementById("rc-contact")'));
+assert.ok(concierge.includes("(max-width: 767px)"));
+assert.ok(css.includes(".concierge"));
+assert.ok(css.includes("#071629"));
+assert.ok(css.includes("min-height: 44px"));
+const below = read("src/components/site/MarketingBelowHeader.tsx");
+assert.ok(below.includes("--rc-concierge-bar"));
 
 console.log("royal-collection-property-listing-selftest: ok");

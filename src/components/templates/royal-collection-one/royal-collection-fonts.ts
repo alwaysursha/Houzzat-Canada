@@ -1,4 +1,4 @@
-import { DM_Sans, Playfair_Display } from "next/font/google";
+import { DM_Sans, Fraunces, Playfair_Display } from "next/font/google";
 
 const serif = Playfair_Display({
   subsets: ["latin"],
@@ -15,4 +15,12 @@ const sans = DM_Sans({
   display: "swap",
 });
 
-export const royalCollectionFonts = `${serif.variable} ${sans.variable}`;
+/** Soft serif for the street address. OFL, so the number and the street can share one face. */
+const address = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  axes: ["SOFT", "opsz"],
+  variable: "--font-rc-address",
+});
+
+export const royalCollectionFonts = `${serif.variable} ${sans.variable} ${address.variable}`;

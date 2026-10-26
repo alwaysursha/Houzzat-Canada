@@ -47,12 +47,42 @@ const SEEDS: readonly Seed[] = [
   { n: 1014, city: "Fort Erie", streetNumber: "44", streetName: "Demo Garrison", streetSuffix: "Court", postalCode: "L2A 0D4", price: 529000, beds: 3, baths: 2, parking: 1, area: 1380, subtype: "Townhouse", lat: 42.909, lng: -78.945, listed: "2026-09-12", accent: "#B03A2E", style: "Townhouse" },
 ];
 
+const SHOWCASE_LISTING_ID = 1001;
+const SHOWCASE_MEDIA_DIR = "/media/royal-collection/high-octane/itso-demo-1001";
+
+const SHOWCASE_FRAMES = [
+  { file: "01-exterior.webp", description: "DEMO PROPERTY exterior" },
+  { file: "02-living-room.webp", description: "DEMO PROPERTY living room" },
+  { file: "03-kitchen.webp", description: "DEMO PROPERTY kitchen" },
+  { file: "04-primary-bedroom.webp", description: "DEMO PROPERTY bedroom" },
+  { file: "05-rear-patio.webp", description: "DEMO PROPERTY outdoor area" },
+] as const;
+
+export function highOctaneDemoPhotoLabel(url: string): string | null {
+  const frame = SHOWCASE_FRAMES.find((item) => url.endsWith(`/${item.file}`));
+  return frame?.description ?? null;
+}
+
+function showcaseMedia(key: string): ResoListingPackage["media"] {
+  return SHOWCASE_FRAMES.map((frame, order) => ({
+    MediaKey: `${key}-${order + 1}`,
+    ResourceRecordKey: key,
+    MediaURL: `${SHOWCASE_MEDIA_DIR}/${frame.file}`,
+    MediaCategory: "Photo",
+    Order: order,
+    ...(order === 0 ? { PreferredPhotoYN: true as const } : {}),
+    ShortDescription: frame.description,
+    MediaType: "image/webp" as const,
+  }));
+}
+
 function packageFromSeed(seed: Seed): ResoListingPackage {
   const id = `ITSODEMO${seed.n}`;
   const key = `itso-demo-${seed.n}`;
   const address = `${seed.streetNumber} ${seed.streetName} ${seed.streetSuffix}`;
   const primary = demoPropertyImageUrl(seed.city, seed.accent);
   const secondary = demoPropertyImageUrl(`${seed.city} plan`, "#F6F1E8");
+  const showcase = seed.n === SHOWCASE_LISTING_ID;
   const openHouses = seed.openHouse
     ? [
         {
@@ -102,29 +132,31 @@ function packageFromSeed(seed: Seed): ResoListingPackage {
       ListingContractDate: `${seed.listed}T15:00:00.000Z`,
       ModificationTimestamp: "2026-10-20T15:00:00.000Z",
       OnMarketDate: `${seed.listed}T15:00:00.000Z`,
-      PhotosCount: 2,
+      PhotosCount: showcase ? SHOWCASE_FRAMES.length : 2,
     },
-    media: [
-      {
-        MediaKey: `${key}-1`,
-        ResourceRecordKey: key,
-        MediaURL: primary,
-        MediaCategory: "Photo",
-        Order: 0,
-        PreferredPhotoYN: true,
-        ShortDescription: MARK,
-        MediaType: "image/svg+xml",
-      },
-      {
-        MediaKey: `${key}-2`,
-        ResourceRecordKey: key,
-        MediaURL: secondary,
-        MediaCategory: "Photo",
-        Order: 1,
-        ShortDescription: `${MARK} floor plan`,
-        MediaType: "image/svg+xml",
-      },
-    ],
+    media: showcase
+      ? showcaseMedia(key)
+      : [
+          {
+            MediaKey: `${key}-1`,
+            ResourceRecordKey: key,
+            MediaURL: primary,
+            MediaCategory: "Photo",
+            Order: 0,
+            PreferredPhotoYN: true,
+            ShortDescription: MARK,
+            MediaType: "image/svg+xml",
+          },
+          {
+            MediaKey: `${key}-2`,
+            ResourceRecordKey: key,
+            MediaURL: secondary,
+            MediaCategory: "Photo",
+            Order: 1,
+            ShortDescription: `${MARK} floor plan`,
+            MediaType: "image/svg+xml",
+          },
+        ],
     openHouses,
   };
 }

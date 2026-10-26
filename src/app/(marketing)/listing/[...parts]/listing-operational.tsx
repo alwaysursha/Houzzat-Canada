@@ -26,6 +26,7 @@ import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high
 import { loadHighOctaneDevelopmentListingAccess } from "@/lib/tenancy/templates/high-octane-development-listing-access";
 import {
   HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE,
+  highOctaneDevelopmentListingBadge,
   highOctaneDevelopmentListingDetail,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
@@ -286,7 +287,10 @@ export async function OperationalListingDetail({
         brokerageName: royal?.brokerage.name ?? "",
         phone: royal?.phone ?? null,
         email: royal?.email ?? null,
+        role: royal?.title ?? null,
+        photoUrl: royal?.photoUrl ?? royal?.heroPortrait?.imageUrl ?? null,
       },
+      badge: highOctaneDevelopmentListingBadge(listing.dataSource),
     });
     const viewing =
       user && model.kind === "listing"

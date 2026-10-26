@@ -1,11 +1,81 @@
 import type { ReactNode } from "react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
+import { RoyalCollectionConciergeBar } from "./RoyalCollectionConciergeBar";
 import { RoyalCollectionPropertyGallery } from "./RoyalCollectionPropertyGallery";
-import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
+import type {
+  RoyalCollectionPropertyModel,
+  RoyalCollectionPropertyRow,
+} from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
 
 function phoneHref(phone: string): string {
   return "tel:" + phone.replace(/[^\d+]/g, "");
+}
+
+type FactTone = "price" | "stat" | "meta" | "identity";
+
+function factTone(label: string): FactTone {
+  switch (label) {
+    case "Asking":
+    case "Sold":
+      return "price";
+    case "Bedrooms":
+    case "Bathrooms":
+    case "Type":
+    case "Interior":
+      return "stat";
+    case "Address":
+    case "City":
+      return "identity";
+    case "MLS":
+    case "Lot":
+      return "meta";
+    default:
+      return "meta";
+  }
+}
+
+function FactCell({ fact, tone }: { fact: RoyalCollectionPropertyRow; tone: Exclude<FactTone, "identity"> }) {
+  const toneClass =
+    tone === "price" ? styles.factPrice : tone === "stat" ? styles.factStat : styles.factMeta;
+  return (
+    <div className={toneClass}>
+      <dt>{fact.label}</dt>
+      <dd>{fact.value}</dd>
+    </div>
+  );
+}
+
+function ListingFacts({ facts }: { facts: readonly RoyalCollectionPropertyRow[] }) {
+  const prices = facts.filter((fact) => factTone(fact.label) === "price");
+  const stats = facts.filter((fact) => factTone(fact.label) === "stat");
+  const meta = facts.filter((fact) => factTone(fact.label) === "meta");
+  if (prices.length + stats.length + meta.length === 0) return null;
+  return (
+    <dl className={styles.listingFacts}>
+      {prices.length > 0 ? (
+        <div className={styles.priceRow}>
+          {prices.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="price" />
+          ))}
+        </div>
+      ) : null}
+      {stats.length > 0 ? (
+        <div className={styles.statGrid}>
+          {stats.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="stat" />
+          ))}
+        </div>
+      ) : null}
+      {meta.length > 0 ? (
+        <div className={styles.metaGrid}>
+          {meta.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="meta" />
+          ))}
+        </div>
+      ) : null}
+    </dl>
+  );
 }
 
 /**
@@ -39,16 +109,21 @@ export function RoyalCollectionPropertyView({
         )}
 
         <div className={styles.inner}>
-          <header className={styles.intro}>
-            <div>
-              <p className={styles.kicker}>{model.kicker}</p>
+          <header className={model.kind === "listing" ? `${styles.intro} ${styles.introListing}` : styles.intro}>
+            <div className={styles.heading}>
+              <div className={styles.kickerRow}>
+                <p className={styles.kicker}>{model.kicker}</p>
+                {model.badge ? <p className={styles.demoBadge}>{model.badge}</p> : null}
+              </div>
               <h1>{model.title}</h1>
               {model.place ? <p className={styles.place}>{model.place}</p> : null}
             </div>
             {model.lede ? <p>{model.lede}</p> : null}
           </header>
 
-          {model.facts.length > 0 ? (
+          {model.kind === "listing" ? (
+            <ListingFacts facts={model.facts} />
+          ) : model.facts.length > 0 ? (
             <dl className={styles.facts}>
               {model.facts.map((fact) => (
                 <div key={fact.label}>
@@ -183,28 +258,51 @@ export function RoyalCollectionPropertyView({
             </div>
 
             <aside className={styles.aside} id="rc-contact" aria-label="Private viewing">
+              <div className={styles.agentIdentity}>
+                {model.contact.photoUrl ? (
+                  // Approved workspace portrait. A cutout, so it sits on the navy ground.
+                  <span className={styles.agentPhotoFrame}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      className={styles.agentPhoto}
+                      src={model.contact.photoUrl}
+                      alt=""
+                    />
+                  </span>
+                ) : null}
+                <div>
+                  {model.contact.agentName ? (
+                    <p className={styles.agent}>{model.contact.agentName}</p>
+                  ) : null}
+                  {model.contact.role ? (
+                    <p className={styles.agentRole}>{model.contact.role}</p>
+                  ) : null}
+                  {model.contact.brokerageName ? (
+                    <p className={styles.asideCopy}>{model.contact.brokerageName}</p>
+                  ) : null}
+                  {model.contact.phone ? (
+                    <p className={styles.contact}>
+                      <a href={phoneHref(model.contact.phone)}>{model.contact.phone}</a>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
               <p className={styles.eyebrow}>{model.contact.eyebrow}</p>
               <h2>{model.contact.title}</h2>
-              {model.contact.agentName ? <p className={styles.agent}>{model.contact.agentName}</p> : null}
-              {model.contact.brandName ? <p className={styles.asideCopy}>{model.contact.brandName}</p> : null}
-              {model.contact.brokerageName ? (
-                <p className={styles.asideCopy}>{model.contact.brokerageName}</p>
-              ) : null}
-              {model.contact.phone || model.contact.email ? (
-                <p className={styles.contact}>
-                  {model.contact.phone ? (
-                    <a href={phoneHref(model.contact.phone)}>{model.contact.phone}</a>
-                  ) : null}
-                  {model.contact.email ? (
-                    <a href={"mailto:" + model.contact.email}>{model.contact.email}</a>
-                  ) : null}
-                </p>
-              ) : null}
               {children}
             </aside>
           </div>
         </div>
       </div>
+      {model.kind === "listing" && model.contact.agentName ? (
+        <RoyalCollectionConciergeBar
+          agentName={model.contact.agentName}
+          role={model.contact.role}
+          brokerageName={model.contact.brokerageName}
+          phone={model.contact.phone}
+          photoUrl={model.contact.photoUrl}
+        />
+      ) : null}
     </div>
   );
 }

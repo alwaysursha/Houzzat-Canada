@@ -48,6 +48,7 @@ export function RoyalCollectionOperationalProperty({
             segment={viewing.segment}
             signedIn={viewing.signedIn}
             contact={viewing.contact}
+            appearance="royal"
           />
         </div>
       ) : (
