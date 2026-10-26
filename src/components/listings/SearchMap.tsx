@@ -6,6 +6,12 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import type { ListingCard } from "@/lib/listings/types";
 import { formatListPrice } from "@/lib/listings/constants";
+import {
+  PRICE_CLUSTER_MAX_ZOOM,
+  PRICE_CLUSTER_RADIUS,
+  PRICE_MARKER_SOURCE_ID,
+  priceMarkerFeatureCollection,
+} from "@/lib/maps/price-marker-source";
 import { MAP_MAX_ZOOM, MAP_MIN_ZOOM, OSM_STYLE } from "@/lib/maps/osm-style";
 import { readThemeColor } from "@/lib/tenancy/read-theme-color";
 import { SearchMapPopupCard } from "@/components/listings/SearchMapPopupCard";
@@ -97,6 +103,22 @@ function pricePillClass(
       ? "bg-canopy-deep text-white ring-2 ring-canopy/40"
       : "bg-canopy text-white hover:bg-canopy-deep")
   );
+}
+
+function geoJsonSource(
+  source: maplibregl.Source | undefined,
+): maplibregl.GeoJSONSource | null {
+  if (!source || source.type !== "geojson") return null;
+  return source as maplibregl.GeoJSONSource;
+}
+
+function clusterPillClass(appearance: "default" | "royal"): string {
+  const base =
+    "cursor-pointer rounded-full border-2 px-2.5 py-1.5 text-xs font-semibold shadow-md ";
+  if (appearance === "royal") {
+    return base + "border-[#C8A66A] bg-[#0B1F3A] text-[#F7F4EE]";
+  }
+  return base + "border-white bg-canopy text-white";
 }
 
 type DrawFeature = {
@@ -204,6 +226,12 @@ export function SearchMap({
   const openingCameraRef = useRef(openingCamera);
   openingCameraRef.current = openingCamera;
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const listingsRef = useRef(listings);
+  listingsRef.current = listings;
+  const markerAppearanceRef = useRef(markerAppearance);
+  markerAppearanceRef.current = markerAppearance;
+  const priceDataRef = useRef(priceMarkerFeatureCollection(listings));
+  const syncPriceMarkersRef = useRef<() => void>(() => {});
   const popupRef = useRef<HTMLDivElement>(null);
   const onCameraRef = useRef(onCamera);
   onCameraRef.current = onCamera;
@@ -256,6 +284,7 @@ export function SearchMap({
       zoom: camera?.zoom ?? 9.4,
       minZoom: MAP_MIN_ZOOM,
       maxZoom: MAP_MAX_ZOOM,
+      attributionControl: { compact: true },
     });
 
     map.addControl(
@@ -299,9 +328,34 @@ export function SearchMap({
           "circle-stroke-color": "#ffffff",
         },
       });
+      map.addSource(PRICE_MARKER_SOURCE_ID, {
+        type: "geojson",
+        data: priceDataRef.current,
+        cluster: true,
+        clusterRadius: PRICE_CLUSTER_RADIUS,
+        clusterMaxZoom: PRICE_CLUSTER_MAX_ZOOM,
+      });
+      map.addLayer({
+        id: "houzzat-price-clusters",
+        type: "circle",
+        source: PRICE_MARKER_SOURCE_ID,
+        filter: ["has", "point_count"],
+        layout: { visibility: "none" },
+        paint: { "circle-opacity": 0, "circle-radius": 0 },
+      });
+      map.addLayer({
+        id: "houzzat-price-unclustered",
+        type: "circle",
+        source: PRICE_MARKER_SOURCE_ID,
+        filter: ["!", ["has", "point_count"]],
+        layout: { visibility: "none" },
+        paint: { "circle-opacity": 0, "circle-radius": 0 },
+      });
+      map.once("idle", () => syncPriceMarkersRef.current());
     });
 
     map.on("moveend", (event) => {
+      syncPriceMarkersRef.current();
       const center = map.getCenter();
       onCameraRef.current?.({
         lat: center.lat,
@@ -417,57 +471,130 @@ export function SearchMap({
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+  function addPriceMarker(
+    map: maplibregl.Map,
+    listing: ListingCard,
+    appearance: "default" | "royal",
+  ) {
+    // Outer node is owned by MapLibre. Never replace its className.
+    const root = document.createElement("div");
+    root.dataset.mls = listing.mlsNumber;
+    root.dataset.listingStatus = listing.status;
+    const isActive = listing.mlsNumber === activeMlsRef.current;
+    const pill = document.createElement("button");
+    pill.type = "button";
+    pill.className = pricePillClass(
+      isActive,
+      pillToneFromListingStatus(listing.status),
+      appearance,
+    );
+    pill.textContent = formatListPrice(
+      listing.listPrice,
+      listing.transactionType,
+    ).replace("CA$", "$");
+    pill.addEventListener("click", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      onPinSelectRef.current(listing.mlsNumber);
+    });
+    root.appendChild(pill);
+    root.style.zIndex = isActive ? "2" : "1";
+    return new maplibregl.Marker({ element: root, anchor: "center" })
+      .setLngLat([listing.lng, listing.lat])
+      .addTo(map);
+  }
 
-    markersRef.current.forEach((m) => m.remove());
+  syncPriceMarkersRef.current = () => {
+    const map = mapRef.current;
+    const source = geoJsonSource(map?.getSource(PRICE_MARKER_SOURCE_ID));
+    if (!map || !source) return;
+
+    markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    for (const listing of listings) {
-      // Outer node is owned by MapLibre (gets `.maplibregl-marker` + transform).
-      // Never replace its className — that strips positioning and scatters pins.
-      const root = document.createElement("div");
-      root.dataset.mls = listing.mlsNumber;
-      root.dataset.listingStatus = listing.status;
-
-      const pill = document.createElement("button");
-      pill.type = "button";
-      pill.className = pricePillClass(
-        false,
-        pillToneFromListingStatus(listing.status),
-        markerAppearance,
+    const seen = new Set<string>();
+    const appearance = markerAppearanceRef.current;
+    for (const feature of map.querySourceFeatures(PRICE_MARKER_SOURCE_ID)) {
+      const geometry = feature.geometry;
+      if (geometry.type !== "Point") continue;
+      const [lng, lat] = geometry.coordinates;
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+      const props = feature.properties ?? {};
+      if (props.cluster) {
+        const clusterId = Number(props.cluster_id);
+        const count = Number(props.point_count);
+        if (!Number.isFinite(clusterId) || !Number.isFinite(count)) continue;
+        const key = `cluster:${clusterId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // Outer node is owned by MapLibre. Never replace its className.
+        const root = document.createElement("div");
+        root.dataset.clusterId = String(clusterId);
+        const pill = document.createElement("button");
+        pill.type = "button";
+        pill.className = clusterPillClass(appearance);
+        pill.textContent = String(count);
+        pill.setAttribute(
+          "aria-label",
+          `${count} listings in this area. Zoom in.`,
+        );
+        pill.addEventListener("click", (event) => {
+          event.stopPropagation();
+          event.preventDefault();
+          const current = geoJsonSource(
+            mapRef.current?.getSource(PRICE_MARKER_SOURCE_ID),
+          );
+          if (!current) return;
+          void current.getClusterExpansionZoom(clusterId).then((zoom: number) => {
+            skipBoundsNotify.current = true;
+            mapRef.current?.easeTo({
+              center: [lng, lat],
+              zoom: Math.min(zoom, MAP_MAX_ZOOM),
+            });
+          });
+        });
+        root.appendChild(pill);
+        markersRef.current.push(
+          new maplibregl.Marker({ element: root, anchor: "center" })
+            .setLngLat([lng, lat])
+            .addTo(map),
+        );
+        continue;
+      }
+      const mlsNumber = String(props.mlsNumber ?? "");
+      const listing = listingsRef.current.find(
+        (item) => item.mlsNumber === mlsNumber,
       );
-      pill.textContent = formatListPrice(
-        listing.listPrice,
-        listing.transactionType,
-      ).replace("CA$", "$");
-      pill.addEventListener("click", (event) => {
-        event.stopPropagation();
-        event.preventDefault();
-        onPinSelectRef.current(listing.mlsNumber);
-      });
-      root.appendChild(pill);
-
-      const marker = new maplibregl.Marker({ element: root, anchor: "center" })
-        .setLngLat([listing.lng, listing.lat])
-        .addTo(map);
-      markersRef.current.push(marker);
+      if (!listing || seen.has(mlsNumber)) continue;
+      seen.add(mlsNumber);
+      markersRef.current.push(addPriceMarker(map, listing, appearance));
     }
 
-    // Apply current selection without rewriting MapLibre's root classes.
-    for (const marker of markersRef.current) {
-      const root = marker.getElement();
-      const pill = root.querySelector("button");
-      if (!pill || !root.dataset.mls) continue;
-      const isActive = root.dataset.mls === activeMlsRef.current;
-      const tone = pillToneFromListingStatus(
-        root.dataset.listingStatus ?? "ACTIVE",
-      );
-      pill.className = pricePillClass(isActive, tone, markerAppearance);
-      root.style.zIndex = isActive ? "2" : "1";
+    const selected = listingsRef.current.find(
+      (item) => item.mlsNumber === activeMlsRef.current,
+    );
+    if (
+      selected &&
+      !seen.has(selected.mlsNumber) &&
+      Number.isFinite(selected.lat) &&
+      Number.isFinite(selected.lng)
+    ) {
+      markersRef.current.push(addPriceMarker(map, selected, appearance));
     }
-  }, [listings, markerAppearance]);
+  };
+
+  useEffect(() => {
+    const data = priceMarkerFeatureCollection(listings, {
+      excludeMls: activeMls,
+    });
+    priceDataRef.current = data;
+    const map = mapRef.current;
+    const source = geoJsonSource(map?.getSource(PRICE_MARKER_SOURCE_ID));
+    if (!map || !source) return;
+    void source.setData(data, true).then(() => {
+      syncPriceMarkersRef.current();
+    });
+  }, [listings, activeMls, markerAppearance]);
 
   useEffect(() => {
     for (const marker of markersRef.current) {
@@ -714,8 +841,8 @@ export function SearchMap({
       ) : null}
 
       {onStatusToggle ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center px-3">
-          <div className="pointer-events-auto flex max-w-full flex-wrap justify-center gap-2">
+        <div className="pointer-events-none absolute inset-x-0 bottom-12 z-10 flex justify-center px-3 pr-12 sm:bottom-3 sm:pr-3">
+          <div className="pointer-events-auto flex max-w-full flex-nowrap items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:justify-center sm:gap-2">
             {(isLease
               ? ([
                   ["ACTIVE", "For lease", "canopy"],
@@ -741,7 +868,7 @@ export function SearchMap({
                     onStatusToggle(value);
                   }}
                   className={cn(
-                    "rounded-full px-3.5 py-2 text-xs font-bold uppercase tracking-wide shadow-lg transition sm:px-4 sm:text-sm",
+                    "shrink-0 rounded-full px-3.5 py-2 text-xs font-bold uppercase tracking-wide shadow-lg transition sm:px-4 sm:text-sm",
                     tone === "canopy" &&
                       (selected
                         ? "bg-canopy text-white ring-2 ring-canopy/40 ring-offset-2 ring-offset-mist"
