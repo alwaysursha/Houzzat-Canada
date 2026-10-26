@@ -68,7 +68,7 @@ export function RoyalCollectionSyntheticPreview({
       }
     >
       <button type="button" className={styles.viewing} disabled aria-disabled="true">
-        Request a private viewing
+        Request a Private Viewing
       </button>
       <p className={styles.note}>
         Viewing request disabled. This synthetic page does not create a lead.

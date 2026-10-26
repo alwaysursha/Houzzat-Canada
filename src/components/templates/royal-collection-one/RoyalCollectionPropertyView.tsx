@@ -257,23 +257,35 @@ export function RoyalCollectionPropertyView({
             </div>
 
             <aside className={styles.aside} id="rc-contact" aria-label="Private viewing">
+              <div className={styles.agentIdentity}>
+                {model.contact.photoUrl ? (
+                  // Approved workspace portrait. A cutout, so it sits on the navy ground.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    className={styles.agentPhoto}
+                    src={model.contact.photoUrl}
+                    alt=""
+                  />
+                ) : null}
+                <div>
+                  {model.contact.agentName ? (
+                    <p className={styles.agent}>{model.contact.agentName}</p>
+                  ) : null}
+                  {model.contact.role ? (
+                    <p className={styles.agentRole}>{model.contact.role}</p>
+                  ) : null}
+                  {model.contact.brokerageName ? (
+                    <p className={styles.asideCopy}>{model.contact.brokerageName}</p>
+                  ) : null}
+                  {model.contact.phone ? (
+                    <p className={styles.contact}>
+                      <a href={phoneHref(model.contact.phone)}>{model.contact.phone}</a>
+                    </p>
+                  ) : null}
+                </div>
+              </div>
               <p className={styles.eyebrow}>{model.contact.eyebrow}</p>
               <h2>{model.contact.title}</h2>
-              {model.contact.agentName ? <p className={styles.agent}>{model.contact.agentName}</p> : null}
-              {model.contact.brandName ? <p className={styles.asideCopy}>{model.contact.brandName}</p> : null}
-              {model.contact.brokerageName ? (
-                <p className={styles.asideCopy}>{model.contact.brokerageName}</p>
-              ) : null}
-              {model.contact.phone || model.contact.email ? (
-                <p className={styles.contact}>
-                  {model.contact.phone ? (
-                    <a href={phoneHref(model.contact.phone)}>{model.contact.phone}</a>
-                  ) : null}
-                  {model.contact.email ? (
-                    <a href={"mailto:" + model.contact.email}>{model.contact.email}</a>
-                  ) : null}
-                </p>
-              ) : null}
               {children}
             </aside>
           </div>

@@ -296,6 +296,8 @@ export async function OperationalListingDetail({
         brokerageName: royal?.brokerage.name ?? "",
         phone: royal?.phone ?? null,
         email: royal?.email ?? null,
+        role: royal?.title ?? null,
+        photoUrl: royal?.photoUrl ?? royal?.heroPortrait?.imageUrl ?? null,
       },
       badge: highOctaneDevelopmentListingBadge(listing.dataSource),
     });

@@ -24,6 +24,7 @@ export function LeadRequestForm({
   kind,
   callbackPath,
   defaults,
+  appearance = "standard",
 }: {
   mlsNumber: string;
   kind: Kind;
@@ -36,6 +37,8 @@ export function LeadRequestForm({
     message?: string;
     focusNotes?: string;
   };
+  /** Royal Collection property page. The default markup stays the Houzzat form. */
+  appearance?: "standard" | "royal";
 }) {
   const tenantName = useTenantDisplayName("Houzzat");
   const { status } = useSession();
@@ -74,6 +77,7 @@ export function LeadRequestForm({
   }, [kind, mlsNumber, phoneDraft, status]);
 
   const isVirtual = kind === "virtual_viewing";
+  const royal = appearance === "royal";
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -144,7 +148,14 @@ export function LeadRequestForm({
         ? "showing request"
         : "inquiry";
     return (
-      <p className="rounded-xl border border-canopy/30 bg-canopy/5 px-4 py-3 text-sm text-canopy-deep">
+      <p
+        className={
+          royal
+            ? undefined
+            : "rounded-xl border border-canopy/30 bg-canopy/5 px-4 py-3 text-sm text-canopy-deep"
+        }
+        data-rc-success={royal ? "" : undefined}
+      >
         Thanks — your {label} was sent. An agent will follow up shortly
         {isVirtual ? " to schedule the live walkthrough" : ""}.
       </p>
@@ -152,15 +163,33 @@ export function LeadRequestForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3">
+    <form
+      onSubmit={onSubmit}
+      className={royal ? undefined : "space-y-3"}
+      data-rc-form={royal ? "" : undefined}
+    >
       {isVirtual ? (
-        <p className="rounded-lg bg-signal/10 px-3 py-2 text-xs text-ink/70">
+        <p
+          className={
+            royal
+              ? undefined
+              : "rounded-lg bg-signal/10 px-3 py-2 text-xs text-ink/70"
+          }
+          data-rc-note={royal ? "" : undefined}
+        >
           An agent goes to the property and walks you through live on video —
           {tenantName}&apos;s Virtual Viewing.
         </p>
       ) : null}
       {signedIn ? (
-        <div className="rounded-lg border border-line bg-mist/40 px-3 py-2.5">
+        <div
+          className={
+            royal
+              ? undefined
+              : "rounded-lg border border-line bg-mist/40 px-3 py-2.5"
+          }
+          data-rc-requester={royal ? "" : undefined}
+        >
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink/45">
             Requesting as
           </p>
@@ -208,7 +237,12 @@ export function LeadRequestForm({
         />
       ) : null}
       <textarea
-        className="min-h-24 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+        className={
+          royal
+            ? "min-h-24 w-full px-3 py-2 text-sm"
+            : "min-h-24 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+        }
+        data-rc-field={royal ? "" : undefined}
         placeholder={
           isVirtual
             ? "Anything else before your Virtual Viewing?"
@@ -219,24 +253,53 @@ export function LeadRequestForm({
         value={message}
         onChange={(e) => setMessage(e.target.value)}
       />
-      <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-mist/40 px-3 py-2.5 text-sm text-ink/80">
-        <input
-          type="checkbox"
-          required
-          checked={contactConsent}
-          onChange={(e) => {
-            setContactConsent(e.target.checked);
-            if (e.target.checked) setError(null);
-          }}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-canopy"
-        />
-        <span>
-          I agree to be contacted by a {tenantName} agent about this request by
-          phone, email, or text. I can unsubscribe anytime.
-        </span>
-      </label>
+      {royal ? (
+        <div data-rc-consent="">
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              required
+              checked={contactConsent}
+              onChange={(e) => {
+                setContactConsent(e.target.checked);
+                if (e.target.checked) setError(null);
+              }}
+              className="mt-0.5 h-4 w-4 shrink-0"
+            />
+            <span>I agree to be contacted about this request.</span>
+          </label>
+          <details>
+            <summary>Communications disclosure</summary>
+            <p>
+              I agree to be contacted by a {tenantName} agent about this request
+              by phone, email, or text. I can unsubscribe anytime.
+            </p>
+          </details>
+        </div>
+      ) : (
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-mist/40 px-3 py-2.5 text-sm text-ink/80">
+          <input
+            type="checkbox"
+            required
+            checked={contactConsent}
+            onChange={(e) => {
+              setContactConsent(e.target.checked);
+              if (e.target.checked) setError(null);
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-canopy"
+          />
+          <span>
+            I agree to be contacted by a {tenantName} agent about this request by
+            phone, email, or text. I can unsubscribe anytime.
+          </span>
+        </label>
+      )}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button
+        type="submit"
+        disabled={pending}
+        className={royal ? "rc-viewing-submit" : "w-full"}
+      >
         {pending
           ? "Sending…"
           : isVirtual

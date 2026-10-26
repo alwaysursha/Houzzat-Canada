@@ -304,5 +304,32 @@ assert.ok(css.includes("lining-nums"));
 assert.ok(css.includes("prefers-reduced-motion"));
 assert.ok(css.includes("min-height: 44px"));
 assert.ok(css.includes("--mobile-bottom-nav"));
+assert.ok(css.includes("data-rc-tab"));
+assert.ok(css.includes("rc-viewing-submit"));
+assert.ok(renderer.includes('appearance="royal"'));
+assert.ok(viewSource.includes("model.contact.role"));
+assert.ok(viewSource.includes("model.contact.photoUrl"));
+assert.equal(viewSource.includes("model.contact.brandName"), false);
+assert.equal(viewSource.includes("mailto:"), false);
+assert.ok(modelSource.includes("Request a Private Viewing"));
+assert.ok(modelSource.includes("role: clean(site.role)"));
+const panel = read("src/components/listings/ViewingRequestPanel.tsx");
+const leadForm = read("src/components/listings/LeadRequestForm.tsx");
+const houzzatDetail = read("src/components/listings/ListingDetailView.tsx");
+assert.ok(panel.includes('appearance = "standard"'));
+assert.ok(panel.includes("rounded-2xl border border-line/80 bg-surface"));
+assert.ok(panel.includes("Request Tour"));
+assert.ok(panel.includes("Request Info"));
+assert.ok(panel.includes("In-person"));
+assert.ok(panel.includes("Virtual Viewing"));
+assert.ok(leadForm.includes("I agree to be contacted about this request."));
+assert.ok(
+  leadForm.includes(
+    "I agree to be contacted by a {tenantName} agent about this request by",
+  ),
+);
+assert.ok(leadForm.includes("contactConsent: true"));
+assert.equal(leadForm.includes("useState(true)"), false);
+assert.equal(houzzatDetail.includes('appearance="royal"'), false);
 
 console.log("royal-collection-property-listing-selftest: ok");

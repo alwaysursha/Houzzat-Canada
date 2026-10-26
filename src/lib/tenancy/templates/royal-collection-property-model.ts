@@ -84,10 +84,14 @@ export type RoyalCollectionPropertyModel = {
     eyebrow: string;
     title: string;
     agentName: string;
+    /** Workspace designation. Omitted when the workspace has none. */
+    role: string | null;
     brandName: string;
     brokerageName: string;
     phone: string | null;
     email: string | null;
+    /** Approved workspace portrait. Omitted when none is on file. */
+    photoUrl: string | null;
   };
 };
 
@@ -129,6 +133,8 @@ export type RoyalCollectionListingSite = {
   brokerageName: string;
   phone: string | null;
   email: string | null;
+  role?: string | null;
+  photoUrl?: string | null;
 };
 
 function clean(value: string | null | undefined): string | null {
@@ -190,12 +196,14 @@ function roomMeasure(room: NonNullable<RoyalCollectionListingSource["rooms"]>[nu
 function contactFor(site: RoyalCollectionListingSite): RoyalCollectionPropertyModel["contact"] {
   return {
     eyebrow: "Private viewing",
-    title: "Request a private viewing",
+    title: "Request a Private Viewing",
     agentName: clean(site.agentName) ?? "",
+    role: clean(site.role),
     brandName: clean(site.brandName) ?? "",
     brokerageName: clean(site.brokerageName) ?? "",
     phone: clean(site.phone),
     email: clean(site.email),
+    photoUrl: clean(site.photoUrl),
   };
 }
 
