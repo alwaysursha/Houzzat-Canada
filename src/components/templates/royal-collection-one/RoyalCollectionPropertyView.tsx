@@ -11,6 +11,18 @@ function phoneHref(phone: string): string {
   return "tel:" + phone.replace(/[^\d+]/g, "");
 }
 
+const STREET_NUMBER = /^(\d[\dA-Za-z-]*)\s+(\S.*)$/;
+
+function ListingTitle({ title }: { title: string }) {
+  const match = STREET_NUMBER.exec(title);
+  if (!match) return title;
+  return (
+    <>
+      <span className={styles.streetNumber}>{match[1]}</span> {match[2]}
+    </>
+  );
+}
+
 type FactTone = "price" | "stat" | "meta" | "identity";
 
 function factTone(label: string): FactTone {
@@ -114,7 +126,7 @@ export function RoyalCollectionPropertyView({
                 <p className={styles.kicker}>{model.kicker}</p>
                 {model.badge ? <p className={styles.demoBadge}>{model.badge}</p> : null}
               </div>
-              <h1>{model.title}</h1>
+              <h1>{model.kind === "listing" ? <ListingTitle title={model.title} /> : model.title}</h1>
               {model.place ? <p className={styles.place}>{model.place}</p> : null}
             </div>
             {model.lede ? <p>{model.lede}</p> : null}

@@ -299,6 +299,8 @@ assert.equal(concept.includes("ListingAccessGate"), false);
 assert.equal(concept.includes("loadListingForDetailPage"), false);
 
 const css = read("src/components/templates/royal-collection-one/royal-property.module.css");
+assert.ok(viewSource.includes("streetNumber"));
+assert.ok(css.includes("lining-nums"));
 assert.ok(css.includes("prefers-reduced-motion"));
 assert.ok(css.includes("min-height: 44px"));
 assert.ok(css.includes("--mobile-bottom-nav"));

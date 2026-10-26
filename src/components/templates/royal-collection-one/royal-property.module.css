@@ -624,6 +624,15 @@
   line-height: 1.12;
 }
 
+.streetNumber {
+  font-family: var(--rc-sans);
+  font-size: 0.98em;
+  font-weight: 500;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+  letter-spacing: -0.03em;
+}
+
 .place {
   margin: 14px 0 0;
   color: var(--rc-slate);
