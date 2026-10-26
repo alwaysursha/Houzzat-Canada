@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
+import { RoyalCollectionConciergeBar } from "./RoyalCollectionConciergeBar";
 import { RoyalCollectionPropertyGallery } from "./RoyalCollectionPropertyGallery";
 import type {
   RoyalCollectionPropertyModel,
@@ -293,6 +294,15 @@ export function RoyalCollectionPropertyView({
           </div>
         </div>
       </div>
+      {model.kind === "listing" && model.contact.agentName ? (
+        <RoyalCollectionConciergeBar
+          agentName={model.contact.agentName}
+          role={model.contact.role}
+          brokerageName={model.contact.brokerageName}
+          phone={model.contact.phone}
+          photoUrl={model.contact.photoUrl}
+        />
+      ) : null}
     </div>
   );
 }

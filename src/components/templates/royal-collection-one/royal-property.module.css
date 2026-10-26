@@ -1034,6 +1034,7 @@
 .aside {
   position: sticky;
   top: calc(var(--rc-fixed-header, 148px) + 16px);
+  scroll-margin-top: calc(var(--rc-fixed-header, 148px) + 12px);
   padding: 40px 22px 22px;
   border: 1px solid rgb(200 166 106 / 0.38);
   background: var(--rc-navy);
@@ -1407,7 +1408,8 @@
 @media (prefers-reduced-motion: reduce) {
   .horizon,
   .stagePhoto,
-  .lightboxStage img {
+  .lightboxStage img,
+  .concierge {
     animation: none;
   }
 
@@ -1443,5 +1445,170 @@
   50% {
     opacity: 1;
     transform: scaleX(1);
+  }
+}
+
+.concierge {
+  position: fixed;
+  z-index: 30;
+  left: 12px;
+  right: 12px;
+  bottom: calc(max(var(--mobile-bottom-nav, 0px), env(safe-area-inset-bottom, 0px)) + 10px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  max-width: 100%;
+  padding: 8px 8px 8px 10px;
+  border: 1px solid rgb(200 166 106 / 0.75);
+  border-radius: 999px;
+  background: #071629;
+  color: #f7f4ee;
+  box-shadow: 0 16px 36px rgb(7 22 41 / 0.38);
+  font-family: var(--rc-sans);
+  animation: conciergeIn 320ms ease;
+}
+
+.concierge[hidden] {
+  display: none;
+}
+
+.conciergePhoto {
+  position: relative;
+  display: block;
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  overflow: hidden;
+  border: 1px solid #c8a66a;
+  border-radius: 50%;
+  background: #10243d;
+  box-shadow: 0 0 0 3px rgb(7 22 41 / 0.85);
+}
+
+.conciergePhoto img {
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 155%;
+  height: auto;
+  max-width: none;
+  transform: translateX(-50%);
+}
+
+.conciergeIdentity {
+  min-width: 0;
+  flex: 1 1 108px;
+}
+
+.conciergeName {
+  margin: 0;
+  overflow: hidden;
+  color: #f7f4ee;
+  font-family: var(--rc-serif);
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conciergeRole,
+.conciergeBrokerage {
+  margin: 1px 0 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conciergeRole {
+  color: rgb(247 244 238 / 0.86);
+}
+
+.conciergeBrokerage {
+  color: rgb(247 244 238 / 0.64);
+  font-size: 10px;
+}
+
+.conciergeCall {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(200 166 106 / 0.85);
+  border-radius: 50%;
+  color: #f7f4ee;
+  background: transparent;
+}
+
+.conciergeCall svg {
+  width: 18px;
+  height: 18px;
+}
+
+.conciergeCta {
+  display: inline-flex;
+  min-height: 44px;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #e6cd92 0%, #c8a66a 52%, #b6904f 100%);
+  color: #071629;
+  font-family: var(--rc-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  cursor: pointer;
+}
+
+.conciergeCta svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.conciergeCall:focus-visible,
+.conciergeCta:focus-visible {
+  outline: 2px solid #f7f4ee;
+  outline-offset: 2px;
+}
+
+.conciergeCta:active {
+  filter: brightness(0.94);
+}
+
+@media (max-width: 429px) {
+  .concierge {
+    border-radius: 28px;
+  }
+
+  .conciergeCta {
+    flex: 1 1 100%;
+  }
+
+  .conciergeBrokerage {
+    display: none;
+  }
+}
+
+@keyframes conciergeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
   }
 }

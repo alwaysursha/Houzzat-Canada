@@ -75,7 +75,7 @@ export function MarketingBelowHeader({
         </main>
         {/* Bottom-nav clearance after footer — not on main (avoids a blank band above the footer). */}
         {!hideChrome ? (
-          <div className="pb-[var(--mobile-bottom-nav,0px)] md:pb-0">
+          <div className="pb-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px))] md:pb-0">
             {!isAgentSignatureTemplateId(chromeBrand.templateId) &&
             !isTeamSignatureTemplateId(chromeBrand.templateId) &&
             !isRoyalCollectionOneTemplateId(chromeBrand.templateId) ? (

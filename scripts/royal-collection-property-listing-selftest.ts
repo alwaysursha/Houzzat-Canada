@@ -331,5 +331,22 @@ assert.ok(
 assert.ok(leadForm.includes("contactConsent: true"));
 assert.equal(leadForm.includes("useState(true)"), false);
 assert.equal(houzzatDetail.includes('appearance="royal"'), false);
+assert.equal(houzzatDetail.includes("RoyalCollectionConciergeBar"), false);
+assert.ok(viewSource.includes("RoyalCollectionConciergeBar"));
+assert.ok(viewSource.includes('model.kind === "listing"'));
+const concierge = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionConciergeBar.tsx",
+);
+assert.ok(concierge.includes("Request Private Viewing"));
+assert.ok(concierge.includes("IntersectionObserver"));
+assert.ok(concierge.includes("prefers-reduced-motion"));
+assert.ok(concierge.includes('aria-label={`Call ${agentName}`}'));
+assert.ok(concierge.includes('getElementById("rc-contact")'));
+assert.ok(concierge.includes("(max-width: 767px)"));
+assert.ok(css.includes(".concierge"));
+assert.ok(css.includes("#071629"));
+assert.ok(css.includes("min-height: 44px"));
+const below = read("src/components/site/MarketingBelowHeader.tsx");
+assert.ok(below.includes("--rc-concierge-bar"));
 
 console.log("royal-collection-property-listing-selftest: ok");
