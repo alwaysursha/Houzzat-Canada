@@ -8,6 +8,10 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "../src/lib/tenancy/templates/high-octane-staging-slug";
+import {
+  royalListingGalleryLayout,
+  royalListingGalleryTileCount,
+} from "../src/lib/tenancy/templates/royal-collection-gallery-layout";
 import { buildRoyalCollectionListingModel } from "../src/lib/tenancy/templates/royal-collection-property-model";
 import { selectRoyalCollectionOperationalPresentation } from "../src/lib/tenancy/templates/royal-collection-operational-listing";
 import type { RoyalCollectionListingSource } from "../src/lib/tenancy/templates/royal-collection-property-model";
@@ -265,6 +269,23 @@ assert.ok(gallerySource.includes('presentation === "listing"'));
 assert.ok(gallerySource.includes("ArrowLeft"));
 assert.ok(gallerySource.includes("data-rc-allow"));
 assert.ok(gallerySource.includes("No photograph is part of this concept."));
+assert.ok(gallerySource.includes("View All Photos"));
+assert.ok(gallerySource.includes("Previous"));
+assert.ok(gallerySource.includes("Escape"));
+assert.ok(gallerySource.includes("data-gallery-layout"));
+assert.equal(gallerySource.includes("unsplash"), false);
+assert.equal(gallerySource.includes("demoPropertyImageUrl"), false);
+assert.equal(royalListingGalleryLayout(0), "none");
+assert.equal(royalListingGalleryLayout(1), "one");
+assert.equal(royalListingGalleryLayout(2), "two");
+assert.equal(royalListingGalleryLayout(3), "three");
+assert.equal(royalListingGalleryLayout(4), "four");
+assert.equal(royalListingGalleryLayout(5), "five");
+assert.equal(royalListingGalleryLayout(12), "five");
+assert.equal(royalListingGalleryTileCount(0), 0);
+assert.equal(royalListingGalleryTileCount(2), 2);
+assert.equal(royalListingGalleryTileCount(4), 4);
+assert.equal(royalListingGalleryTileCount(12), 5);
 
 const concept = read(
   "src/components/templates/royal-collection-one/RoyalCollectionPropertyDemonstration.tsx",

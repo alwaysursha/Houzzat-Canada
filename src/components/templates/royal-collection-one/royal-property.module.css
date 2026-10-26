@@ -206,10 +206,181 @@
 .studyOn:focus-visible,
 .studyOff:focus-visible,
 .thumb:focus-visible,
+.tile:focus-visible,
+.viewAll:focus-visible,
+.reelPrev:focus-visible,
+.reelNext:focus-visible,
+.mobileReel:focus-visible,
 .viewing:focus-visible,
 .contact a:focus-visible {
   outline: 2px solid var(--rc-gold);
   outline-offset: 3px;
+}
+
+.galleryFrame {
+  position: relative;
+}
+
+.mosaicFive,
+.mosaicFour,
+.mosaicThree,
+.mosaicTwo,
+.mosaicOne {
+  display: grid;
+  gap: 5px;
+  height: clamp(480px, 42vw, 580px);
+  min-width: 0;
+}
+
+.mosaicFive,
+.mosaicTwo {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mosaicThree {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.mosaicFour {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mosaicOne {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mosaicOne .studyArt,
+.mobileReel .studyArt {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.mosaicQuad,
+.mosaicStack {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mosaicQuad {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mosaicStack {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.tile {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: var(--rc-navy);
+  color: #f7f4ee;
+  cursor: pointer;
+}
+
+.tile img,
+.mobileReel img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tileEmpty {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: 12px;
+  color: #f7f4ee;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.viewAll,
+.reelPrev,
+.reelNext {
+  border: 1px solid var(--rc-gold);
+  background: rgb(7 22 41 / 0.88);
+  color: #f7f4ee;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.viewAll {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+.viewAll span {
+  color: var(--rc-gold);
+}
+
+.mobileReel {
+  display: none;
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: var(--rc-navy);
+  touch-action: pan-y;
+  outline: none;
+}
+
+.reelCount {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 12px;
+  background: rgb(7 22 41 / 0.82);
+  color: #f7f4ee;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.reelPrev,
+.reelNext {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+  transform: translateY(-50%);
+}
+
+.reelPrev {
+  left: 8px;
+}
+
+.reelNext {
+  right: 8px;
 }
 
 .thumbs {
@@ -679,6 +850,51 @@
   text-transform: uppercase;
 }
 
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .tile img {
+    transition: transform 500ms ease;
+  }
+
+  .tile:hover img,
+  .tile:focus-visible img {
+    transform: scale(1.035);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .mosaicFive,
+  .mosaicThree,
+  .mosaicTwo {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(280px, 420px) 120px;
+    height: auto;
+  }
+
+  .mosaicOne {
+    height: clamp(320px, 52vw, 460px);
+  }
+
+  .mosaicQuad {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .mosaicStack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .mosaicFour {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: minmax(280px, 380px) 120px;
+    height: auto;
+  }
+
+  .mosaicFour > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 1024px) {
   .intro,
   .stage,
@@ -738,6 +954,23 @@
   .galleryBar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .mosaicFive,
+  .mosaicFour,
+  .mosaicThree,
+  .mosaicTwo,
+  .mosaicOne {
+    display: none;
+  }
+
+  .mobileReel {
+    display: block;
+  }
+
+  .viewAll {
+    right: 8px;
+    bottom: 8px;
   }
 
   .stageFrame,
@@ -826,8 +1059,13 @@
 
   .featureCard,
   .thumb,
-  .navButton {
+  .navButton,
+  .tile img {
     transition: none;
+  }
+
+  .tile img {
+    transform: none;
   }
 }
 

@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  royalListingGalleryLayout,
+  type RoyalListingGalleryLayout,
+} from "@/lib/tenancy/templates/royal-collection-gallery-layout";
 import styles from "./royal-property.module.css";
 
 export type RoyalConceptFrame = {
@@ -97,9 +101,89 @@ export function RoyalCollectionPropertyGallery({
       event.preventDefault();
       step(1);
     } else if (event.key === "Enter" && current && !missing) {
+      const target = event.target;
+      if (target instanceof Element && target.closest("button")) return;
       event.preventDefault();
       setOpen(true);
+    } else if (event.key === "Escape") {
+      setOpen(false);
     }
+  }
+
+  if (listing) {
+    const activeIndex = count > 0 ? Math.min(index, count - 1) : 0;
+    return (
+      <section className={styles.gallery} aria-label="Property gallery" data-rc-allow="">
+        <div className={styles.galleryBar}>
+          <p>Photographs</p>
+          <p>{count === 1 ? "1 photo" : `${count} photos`}</p>
+        </div>
+        <ListingMosaic
+          frames={visible}
+          broken={broken}
+          index={activeIndex}
+          onOpen={(frameIndex) => {
+            setIndex(frameIndex);
+            setOpen(true);
+          }}
+          onStep={step}
+          onBroken={(src) => {
+            setBroken((state) => ({ ...state, [src]: true }));
+          }}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => {
+            originX.current = null;
+          }}
+          onKeyDown={onKeyDown}
+        />
+        <dialog
+          ref={dialogRef}
+          className={styles.lightbox}
+          aria-label="Fullscreen photograph"
+          onClose={() => setOpen(false)}
+          onKeyDown={onKeyDown}
+        >
+          <div className={styles.lightboxBar}>
+            <p>{current?.label ?? "Photograph"}</p>
+            <button type="button" className={styles.navButton} onClick={() => setOpen(false)}>
+              Close
+            </button>
+          </div>
+          <div className={styles.lightboxStage} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+            {current && !missing ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={current.src} alt={current.alt} />
+            ) : (
+              <ArchitecturalStudy caption="No photograph is on file." />
+            )}
+          </div>
+          {showChrome ? (
+            <div className={styles.stageNav}>
+              <button
+                type="button"
+                className={styles.navButton}
+                onClick={() => step(-1)}
+                aria-label="Previous photograph"
+              >
+                Previous
+              </button>
+              <p aria-live="polite">
+                {activeIndex + 1} / {count}
+              </p>
+              <button
+                type="button"
+                className={styles.navButton}
+                onClick={() => step(1)}
+                aria-label="Next photograph"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
+        </dialog>
+      </section>
+    );
   }
 
   const stage = (
@@ -298,6 +382,207 @@ export function RoyalCollectionPropertyGallery({
         ) : null}
       </dialog>
     </section>
+  );
+}
+
+function ListingMosaic({
+  frames,
+  broken,
+  index,
+  onOpen,
+  onStep,
+  onBroken,
+  onPointerDown,
+  onPointerUp,
+  onPointerCancel,
+  onKeyDown,
+}: {
+  frames: readonly RoyalConceptFrame[];
+  broken: Record<string, boolean>;
+  index: number;
+  onOpen: (frameIndex: number) => void;
+  onStep: (direction: -1 | 1) => void;
+  onBroken: (src: string) => void;
+  onPointerDown: (event: PointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: PointerEvent<HTMLElement>) => void;
+  onPointerCancel: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+}) {
+  const count = frames.length;
+  const layout = royalListingGalleryLayout(count);
+  const active = frames[index] ?? null;
+
+  return (
+    <div className={styles.galleryFrame}>
+      <ListingMosaicGrid
+        layout={layout}
+        frames={frames}
+        broken={broken}
+        onOpen={onOpen}
+        onBroken={onBroken}
+      />
+      <div
+        className={styles.mobileReel}
+        tabIndex={0}
+        aria-roledescription="carousel"
+        aria-label="Listing photographs"
+        onKeyDown={onKeyDown}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      >
+        {active && !broken[active.src] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={active.src} alt={active.alt} draggable={false} onError={() => onBroken(active.src)} />
+        ) : (
+          <ArchitecturalStudy
+            caption={active ? "This photograph could not be shown." : "No photograph is on file."}
+          />
+        )}
+        {count > 0 ? (
+          <p className={styles.reelCount} aria-live="polite">
+            {index + 1} / {count}
+          </p>
+        ) : null}
+        {count > 1 ? (
+          <>
+            <button type="button" className={styles.reelPrev} aria-label="Previous photograph" onClick={() => onStep(-1)}>
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button type="button" className={styles.reelNext} aria-label="Next photograph" onClick={() => onStep(1)}>
+              <span aria-hidden="true">›</span>
+            </button>
+          </>
+        ) : null}
+      </div>
+      {count > 0 ? (
+        <button type="button" className={styles.viewAll} onClick={() => onOpen(index)}>
+          View All Photos
+          <span>{count}</span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ListingMosaicGrid({
+  layout,
+  frames,
+  broken,
+  onOpen,
+  onBroken,
+}: {
+  layout: RoyalListingGalleryLayout;
+  frames: readonly RoyalConceptFrame[];
+  broken: Record<string, boolean>;
+  onOpen: (frameIndex: number) => void;
+  onBroken: (src: string) => void;
+}) {
+  const count = frames.length;
+  const tile = (frameIndex: number) => {
+    const frame = frames[frameIndex];
+    if (!frame) return null;
+    return (
+      <GalleryTile
+        key={`${frame.src}-${frameIndex}`}
+        frame={frame}
+        position={frameIndex + 1}
+        total={count}
+        broken={Boolean(broken[frame.src])}
+        onOpen={() => onOpen(frameIndex)}
+        onBroken={() => onBroken(frame.src)}
+      />
+    );
+  };
+
+  switch (layout) {
+    case "none":
+      return (
+        <div className={styles.mosaicOne} data-gallery-layout="none" data-photo-count="0">
+          <ArchitecturalStudy caption="No photograph is on file." />
+        </div>
+      );
+    case "one":
+      return (
+        <div className={styles.mosaicOne} data-gallery-layout="one" data-photo-count={count}>
+          {tile(0)}
+        </div>
+      );
+    case "two":
+      return (
+        <div className={styles.mosaicTwo} data-gallery-layout="two" data-photo-count={count}>
+          {tile(0)}
+          {tile(1)}
+        </div>
+      );
+    case "three":
+      return (
+        <div className={styles.mosaicThree} data-gallery-layout="three" data-photo-count={count}>
+          {tile(0)}
+          <div className={styles.mosaicStack}>
+            {tile(1)}
+            {tile(2)}
+          </div>
+        </div>
+      );
+    case "four":
+      return (
+        <div className={styles.mosaicFour} data-gallery-layout="four" data-photo-count={count}>
+          {tile(0)}
+          {tile(1)}
+          {tile(2)}
+          {tile(3)}
+        </div>
+      );
+    case "five":
+      return (
+        <div className={styles.mosaicFive} data-gallery-layout="five" data-photo-count={count}>
+          {tile(0)}
+          <div className={styles.mosaicQuad}>
+            {tile(1)}
+            {tile(2)}
+            {tile(3)}
+            {tile(4)}
+          </div>
+        </div>
+      );
+    default: {
+      const unexpected: never = layout;
+      return unexpected;
+    }
+  }
+}
+
+function GalleryTile({
+  frame,
+  position,
+  total,
+  broken,
+  onOpen,
+  onBroken,
+}: {
+  frame: RoyalConceptFrame;
+  position: number;
+  total: number;
+  broken: boolean;
+  onOpen: () => void;
+  onBroken: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.tile}
+      aria-label={`Open photograph ${position} of ${total}. ${frame.alt}`}
+      onClick={onOpen}
+    >
+      {broken ? (
+        <span className={styles.tileEmpty}>Photograph unavailable</span>
+      ) : (
+        // Local design stills and listing SVG illustrations. The image optimizer can return an undecodable body.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={frame.src} alt={frame.alt} draggable={false} onError={onBroken} />
+      )}
+    </button>
   );
 }
 
