@@ -10,6 +10,7 @@ import {
 import { formatListingAddressOneLine, isOnMarketListingStatus } from "@/lib/listings/constants";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
+import { highOctaneDemoPhotoLabel } from "@/lib/listings/itso/niagara-demo-listings";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { auth } from "@/lib/auth";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
@@ -280,7 +281,10 @@ export async function OperationalListingDetail({
     const royal = brand ? resolveRoyalCollectionView(brand) : null;
     const model = buildRoyalCollectionListingModel({
       listing: listingForClient,
-      photos: galleryPhotos.map((photo) => ({ url: photo.url })),
+      photos: galleryPhotos.map((photo) => ({
+        url: photo.url,
+        label: highOctaneDemoPhotoLabel(photo.url),
+      })),
       viewer: {
         signedIn: Boolean(user),
         detailsLocked,

@@ -66,7 +66,7 @@ export type ResoMedia = {
   Order: number;
   PreferredPhotoYN?: boolean;
   ShortDescription?: string;
-  MediaType: "image/svg+xml";
+  MediaType: "image/svg+xml" | "image/webp";
 };
 
 export type ResoOpenHouse = {

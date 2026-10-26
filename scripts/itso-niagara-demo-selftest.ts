@@ -48,8 +48,22 @@ const cards = highOctaneDevelopmentListingCards();
 assert.equal(cards.length, NIAGARA_DEMO_LISTINGS.length);
 assert.equal(cards.every((card) => card.isMock && card.soldPrice == null), true);
 assert.equal(cards.every((card) => card.brokerageName === "Demo Property Brokerage"), true);
+const showcase = cards.find((card) => card.mlsNumber === "ITSODEMO1001");
+const illustrated = cards.filter((card) => card.mlsNumber !== "ITSODEMO1001");
+assert.equal(showcase?.imageUrls.length, 5);
 assert.equal(
-  cards.every((card) => card.primaryImageUrl?.startsWith("data:image/svg+xml,")),
+  showcase?.primaryImageUrl,
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp",
+);
+assert.deepEqual(showcase?.imageUrls, [
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp",
+  "/media/royal-collection/high-octane/itso-demo-1001/02-living-room.webp",
+  "/media/royal-collection/high-octane/itso-demo-1001/03-kitchen.webp",
+  "/media/royal-collection/high-octane/itso-demo-1001/04-primary-bedroom.webp",
+  "/media/royal-collection/high-octane/itso-demo-1001/05-rear-patio.webp",
+]);
+assert.equal(
+  illustrated.every((card) => card.primaryImageUrl?.startsWith("data:image/svg+xml,")),
   true,
 );
 assert.equal(
@@ -59,7 +73,15 @@ assert.equal(
   true,
 );
 
-const decoded = decodeURIComponent(cards[0]?.primaryImageUrl?.slice("data:image/svg+xml,".length) ?? "");
+const decoded = decodeURIComponent(
+  illustrated[0]?.primaryImageUrl?.slice("data:image/svg+xml,".length) ?? "",
+);
+const showcaseDetail = highOctaneDevelopmentListingDetail("ITSODEMO1001");
+assert.ok(showcaseDetail);
+assert.equal(showcaseDetail.media.length, 5);
+assert.equal(showcaseDetail.media[0]?.isPrimary, true);
+assert.equal(showcaseDetail.media.slice(1).every((photo) => photo.isPrimary === false), true);
+assert.equal(showcaseDetail.description.includes("DEMO PROPERTY"), true);
 assert.equal(decoded.includes("DEMO PROPERTY"), true);
 assert.equal(decoded.includes("<image"), false);
 
