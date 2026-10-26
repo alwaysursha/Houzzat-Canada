@@ -2493,8 +2493,9 @@
 
   .heroHasPortrait .heroPortraitImage {
     width: auto;
-    height: calc(clamp(320px, 86vw, 420px) + var(--mobile-bottom-nav, 0px));
+    height: auto;
     max-width: 46vw;
+    aspect-ratio: 369 / 621;
     flex: 0 0 auto;
     object-fit: contain;
     object-position: center bottom;
@@ -2502,7 +2503,7 @@
 
   .heroHasPortrait .heroPortraitCopy {
     max-width: 11.25rem;
-    margin-bottom: calc(clamp(6.5rem, 26vw, 8.5rem) + var(--mobile-bottom-nav, 0px));
+    margin-bottom: clamp(7.5rem, 32vw, 9.5rem);
     gap: 0.34rem;
   }
 
