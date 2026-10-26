@@ -1755,9 +1755,15 @@
   .heroHasPortrait .heroScroll {
     position: absolute;
     right: 22px;
-    bottom: calc(12px + var(--mobile-bottom-nav, 0px));
+    bottom: calc(2.25rem + max(var(--mobile-bottom-nav, 0px), 3.75rem));
     z-index: 7;
     display: flex;
+  }
+
+  .heroHasVideo .heroOverlay {
+    background:
+      linear-gradient(90deg, #071629e0 0%, #071629a3 36%, #07162938 68%, #07162914 100%),
+      linear-gradient(180deg, #07162952 0%, #0716291a 10%, transparent 20%);
   }
 
   .heroHasPortrait .heroScrollLabel {
