@@ -2476,9 +2476,9 @@
   .heroHasPortrait .heroPortrait {
     align-items: flex-end;
     margin-top: auto;
-    margin-bottom: 0;
-    padding-top: 0.75rem;
-    padding-right: 3.25rem;
+    margin-bottom: calc(var(--mobile-bottom-nav, 0px) + 0.35rem);
+    padding-top: 0.5rem;
+    padding-right: 0.85rem;
   }
 
   .heroHasPortrait .heroUtility {
@@ -2492,15 +2492,17 @@
   }
 
   .heroHasPortrait .heroPortraitImage {
-    width: clamp(146px, 39vw, 186px);
-    height: clamp(308px, 84vw, 400px);
-    object-fit: cover;
+    width: auto;
+    height: clamp(248px, 68vw, 320px);
+    max-width: 44vw;
+    flex: 0 0 auto;
+    object-fit: contain;
     object-position: center bottom;
   }
 
   .heroHasPortrait .heroPortraitCopy {
     max-width: 11.25rem;
-    margin-bottom: clamp(3.4rem, 14vw, 5rem);
+    margin-bottom: clamp(5.5rem, 22vw, 7.5rem);
     gap: 0.34rem;
   }
 
@@ -2531,8 +2533,9 @@
   }
 
   .heroHasPortrait .heroPortraitImage {
-    width: 146px;
-    height: 312px;
+    width: auto;
+    height: 244px;
+    max-width: 42vw;
   }
 
   .heroHasPortrait .heroContent {
