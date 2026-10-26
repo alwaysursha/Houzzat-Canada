@@ -134,6 +134,9 @@ const complete = buildRoyalCollectionListingModel({
   site,
 });
 assert.equal(complete.kind, "listing");
+assert.equal(complete.title, "14 Hidden Cedar");
+assert.equal(complete.place, "Niagara Falls, ON L2E 1A1");
+assert.equal(complete.badge, null);
 assert.equal(fact(complete, "Address")?.includes("14 Hidden Cedar"), true);
 assert.equal(fact(complete, "City"), "Niagara Falls");
 assert.equal(fact(complete, "Asking")?.includes("1,250,000"), true);

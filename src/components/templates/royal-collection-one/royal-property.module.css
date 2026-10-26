@@ -568,6 +568,35 @@
   gap: 40px;
 }
 
+.introListing {
+  align-items: flex-start;
+}
+
+.heading {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.kickerRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.demoBadge {
+  margin: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--rc-line);
+  color: var(--rc-slate);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
 .intro h1,
 .block h2,
 .aside h2,
@@ -586,12 +615,31 @@
   font-size: clamp(56px, 6vw, 92px);
 }
 
+.introListing h1 {
+  max-width: 18em;
+  overflow-wrap: break-word;
+  font-size: clamp(32px, 1.6rem + 1.6vw, 48px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
 .place {
   margin: 14px 0 0;
   color: var(--rc-slate);
   font-size: 14px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.introListing .place {
+  margin-top: 8px;
+  font-family: var(--rc-sans);
+  font-size: clamp(15px, 1.15vw, 18px);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  line-height: 1.45;
+  text-transform: none;
 }
 
 .intro > p:last-child {
@@ -614,19 +662,47 @@
   border-bottom: 1px solid var(--rc-line);
 }
 
+.listingFacts {
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) repeat(4, minmax(0, 1fr));
+  gap: 16px 22px;
+  align-items: start;
+  margin: 0;
+  padding: 20px 0 18px;
+  border-top: 1px solid var(--rc-line);
+  border-bottom: 1px solid var(--rc-line);
+}
+
+.priceRow,
+.statGrid,
+.metaGrid {
+  display: contents;
+}
+
+.factPrice {
+  grid-column: 1;
+}
+
 .facts div,
 .details div {
   padding: 18px 18px 18px 0;
 }
 
+.listingFacts div {
+  min-width: 0;
+  padding: 0;
+}
+
 .facts dt,
 .details dt,
+.listingFacts dt,
 .related p {
   margin: 0;
   color: var(--rc-slate);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
@@ -637,6 +713,35 @@
   font-family: var(--rc-serif);
   font-size: 22px;
   line-height: 1.15;
+}
+
+.listingFacts dd {
+  margin: 6px 0 0;
+  color: var(--rc-navy);
+  font-family: var(--rc-sans);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.factPrice dd {
+  font-size: clamp(30px, 2.5vw, 36px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.factStat dd {
+  font-size: clamp(18px, 1.5vw, 22px);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.factMeta dd {
+  font-size: clamp(15px, 1.05vw, 17px);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
 }
 
 .stage {
@@ -904,6 +1009,15 @@
     grid-template-columns: 1fr 1fr;
   }
 
+  .listingFacts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px 18px;
+  }
+
+  .factPrice {
+    grid-column: 1 / -1;
+  }
+
   .intro,
   .stage {
     display: flex;
@@ -1030,13 +1144,22 @@
     object-position: center;
   }
 
-  .intro h1 {
+  .intro:not(.introListing) h1 {
     font-size: clamp(44px, 14vw, 64px);
   }
 
   .facts,
   .details {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .listingFacts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .factPrice,
+  .factMeta {
+    grid-column: 1 / -1;
   }
 
   .highlights li {

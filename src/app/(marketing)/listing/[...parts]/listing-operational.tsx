@@ -27,6 +27,7 @@ import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high
 import { loadHighOctaneDevelopmentListingAccess } from "@/lib/tenancy/templates/high-octane-development-listing-access";
 import {
   HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE,
+  highOctaneDevelopmentListingBadge,
   highOctaneDevelopmentListingDetail,
   highOctaneDevelopmentListingWorkspaceSlug,
   isHighOctaneDevelopmentListingMls,
@@ -296,6 +297,7 @@ export async function OperationalListingDetail({
         phone: royal?.phone ?? null,
         email: royal?.email ?? null,
       },
+      badge: highOctaneDevelopmentListingBadge(listing.dataSource),
     });
     const viewing =
       user && model.kind === "listing"

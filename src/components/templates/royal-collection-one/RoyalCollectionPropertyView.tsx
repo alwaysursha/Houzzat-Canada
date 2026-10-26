@@ -1,11 +1,80 @@
 import type { ReactNode } from "react";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { RoyalCollectionPropertyGallery } from "./RoyalCollectionPropertyGallery";
-import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
+import type {
+  RoyalCollectionPropertyModel,
+  RoyalCollectionPropertyRow,
+} from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
 
 function phoneHref(phone: string): string {
   return "tel:" + phone.replace(/[^\d+]/g, "");
+}
+
+type FactTone = "price" | "stat" | "meta" | "identity";
+
+function factTone(label: string): FactTone {
+  switch (label) {
+    case "Asking":
+    case "Sold":
+      return "price";
+    case "Bedrooms":
+    case "Bathrooms":
+    case "Type":
+    case "Interior":
+      return "stat";
+    case "Address":
+    case "City":
+      return "identity";
+    case "MLS":
+    case "Lot":
+      return "meta";
+    default:
+      return "meta";
+  }
+}
+
+function FactCell({ fact, tone }: { fact: RoyalCollectionPropertyRow; tone: Exclude<FactTone, "identity"> }) {
+  const toneClass =
+    tone === "price" ? styles.factPrice : tone === "stat" ? styles.factStat : styles.factMeta;
+  return (
+    <div className={toneClass}>
+      <dt>{fact.label}</dt>
+      <dd>{fact.value}</dd>
+    </div>
+  );
+}
+
+function ListingFacts({ facts }: { facts: readonly RoyalCollectionPropertyRow[] }) {
+  const prices = facts.filter((fact) => factTone(fact.label) === "price");
+  const stats = facts.filter((fact) => factTone(fact.label) === "stat");
+  const meta = facts.filter((fact) => factTone(fact.label) === "meta");
+  if (prices.length + stats.length + meta.length === 0) return null;
+  return (
+    <dl className={styles.listingFacts}>
+      {prices.length > 0 ? (
+        <div className={styles.priceRow}>
+          {prices.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="price" />
+          ))}
+        </div>
+      ) : null}
+      {stats.length > 0 ? (
+        <div className={styles.statGrid}>
+          {stats.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="stat" />
+          ))}
+        </div>
+      ) : null}
+      {meta.length > 0 ? (
+        <div className={styles.metaGrid}>
+          {meta.map((fact) => (
+            <FactCell key={fact.label} fact={fact} tone="meta" />
+          ))}
+        </div>
+      ) : null}
+    </dl>
+  );
 }
 
 /**
@@ -39,16 +108,21 @@ export function RoyalCollectionPropertyView({
         )}
 
         <div className={styles.inner}>
-          <header className={styles.intro}>
-            <div>
-              <p className={styles.kicker}>{model.kicker}</p>
+          <header className={model.kind === "listing" ? `${styles.intro} ${styles.introListing}` : styles.intro}>
+            <div className={styles.heading}>
+              <div className={styles.kickerRow}>
+                <p className={styles.kicker}>{model.kicker}</p>
+                {model.badge ? <p className={styles.demoBadge}>{model.badge}</p> : null}
+              </div>
               <h1>{model.title}</h1>
               {model.place ? <p className={styles.place}>{model.place}</p> : null}
             </div>
             {model.lede ? <p>{model.lede}</p> : null}
           </header>
 
-          {model.facts.length > 0 ? (
+          {model.kind === "listing" ? (
+            <ListingFacts facts={model.facts} />
+          ) : model.facts.length > 0 ? (
             <dl className={styles.facts}>
               {model.facts.map((fact) => (
                 <div key={fact.label}>

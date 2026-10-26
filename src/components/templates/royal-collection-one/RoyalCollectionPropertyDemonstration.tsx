@@ -61,6 +61,7 @@ export function RoyalCollectionPropertyDemonstration() {
     kicker: "Design Concept — Not an MLS Listing",
     title: "The residence.",
     place: "Niagara Region · Concept",
+    badge: null,
     lede:
       "Illustrative layout only. Address, price, size, and rooms stay blank until an authorized listing is supplied. These studies are not a connected property.",
     frames: FRAMES,
