@@ -231,6 +231,7 @@ export function SearchMap({
   const markerAppearanceRef = useRef(markerAppearance);
   markerAppearanceRef.current = markerAppearance;
   const priceDataRef = useRef(priceMarkerFeatureCollection(listings));
+  const priceSignatureRef = useRef("");
   const syncPriceMarkersRef = useRef<() => void>(() => {});
   const popupRef = useRef<HTMLDivElement>(null);
   const onCameraRef = useRef(onCamera);
@@ -352,6 +353,10 @@ export function SearchMap({
         paint: { "circle-opacity": 0, "circle-radius": 1 },
       });
       map.once("idle", () => syncPriceMarkersRef.current());
+    });
+
+    map.on("idle", () => {
+      syncPriceMarkersRef.current();
     });
 
     map.on("moveend", (event) => {
@@ -509,11 +514,19 @@ export function SearchMap({
     const source = geoJsonSource(map?.getSource(PRICE_MARKER_SOURCE_ID));
     if (!map || !source) return;
 
-    markersRef.current.forEach((marker) => marker.remove());
-    markersRef.current = [];
-
-    const seen = new Set<string>();
     const appearance = markerAppearanceRef.current;
+    const seen = new Set<string>();
+    const planned: Array<
+      | {
+          kind: "cluster";
+          clusterId: number;
+          count: number;
+          lng: number;
+          lat: number;
+        }
+      | { kind: "price"; listing: ListingCard }
+    > = [];
+
     for (const feature of map.querySourceFeatures(PRICE_MARKER_SOURCE_ID)) {
       const geometry = feature.geometry;
       if (geometry.type !== "Point") continue;
@@ -527,38 +540,7 @@ export function SearchMap({
         const key = `cluster:${clusterId}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        // Outer node is owned by MapLibre. Never replace its className.
-        const root = document.createElement("div");
-        root.dataset.clusterId = String(clusterId);
-        const pill = document.createElement("button");
-        pill.type = "button";
-        pill.className = clusterPillClass(appearance);
-        pill.textContent = String(count);
-        pill.setAttribute(
-          "aria-label",
-          `${count} listings in this area. Zoom in.`,
-        );
-        pill.addEventListener("click", (event) => {
-          event.stopPropagation();
-          event.preventDefault();
-          const current = geoJsonSource(
-            mapRef.current?.getSource(PRICE_MARKER_SOURCE_ID),
-          );
-          if (!current) return;
-          void current.getClusterExpansionZoom(clusterId).then((zoom: number) => {
-            skipBoundsNotify.current = true;
-            mapRef.current?.easeTo({
-              center: [lng, lat],
-              zoom: Math.min(zoom, MAP_MAX_ZOOM),
-            });
-          });
-        });
-        root.appendChild(pill);
-        markersRef.current.push(
-          new maplibregl.Marker({ element: root, anchor: "center" })
-            .setLngLat([lng, lat])
-            .addTo(map),
-        );
+        planned.push({ kind: "cluster", clusterId, count, lng, lat });
         continue;
       }
       const mlsNumber = String(props.mlsNumber ?? "");
@@ -567,7 +549,7 @@ export function SearchMap({
       );
       if (!listing || seen.has(mlsNumber)) continue;
       seen.add(mlsNumber);
-      markersRef.current.push(addPriceMarker(map, listing, appearance));
+      planned.push({ kind: "price", listing });
     }
 
     const selected = listingsRef.current.find(
@@ -579,7 +561,70 @@ export function SearchMap({
       Number.isFinite(selected.lat) &&
       Number.isFinite(selected.lng)
     ) {
-      markersRef.current.push(addPriceMarker(map, selected, appearance));
+      planned.push({ kind: "price", listing: selected });
+    }
+
+    const signature = planned
+      .map((item) =>
+        item.kind === "cluster"
+          ? `cluster:${item.clusterId}:${item.count}`
+          : `price:${item.listing.mlsNumber}`,
+      )
+      .sort()
+      .join("|");
+    const nextSignature = `${signature}|${appearance}`;
+    if (
+      nextSignature === priceSignatureRef.current &&
+      markersRef.current.length > 0
+    ) {
+      return;
+    }
+    priceSignatureRef.current = nextSignature;
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    for (const item of planned) {
+      if (item.kind === "price") {
+        markersRef.current.push(addPriceMarker(map, item.listing, appearance));
+        continue;
+      }
+      // Outer node is owned by MapLibre. Never replace its className.
+      const root = document.createElement("div");
+      root.dataset.clusterId = String(item.clusterId);
+      const pill = document.createElement("button");
+      pill.type = "button";
+      pill.className = clusterPillClass(appearance);
+      pill.textContent = String(item.count);
+      pill.setAttribute(
+        "aria-label",
+        `${item.count} listings in this area. Zoom in.`,
+      );
+      pill.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        const current = geoJsonSource(
+          mapRef.current?.getSource(PRICE_MARKER_SOURCE_ID),
+        );
+        if (!current) return;
+        void current.getClusterExpansionZoom(item.clusterId).then((zoom: number) => {
+          const activeMap = mapRef.current;
+          if (!activeMap) return;
+          skipBoundsNotify.current = true;
+          activeMap.easeTo({
+            center: [item.lng, item.lat],
+            zoom: Math.min(
+              Math.max(zoom, activeMap.getZoom() + 1),
+              MAP_MAX_ZOOM,
+            ),
+          });
+        });
+      });
+      root.appendChild(pill);
+      markersRef.current.push(
+        new maplibregl.Marker({ element: root, anchor: "center" })
+          .setLngLat([item.lng, item.lat])
+          .addTo(map),
+      );
     }
   };
 
