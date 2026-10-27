@@ -13,6 +13,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
+import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
@@ -35,6 +36,7 @@ function loadAddressAutocomplete(): Promise<AutocompleteComponent> {
 function SearchShellInput({
   placeholder,
   inputClassName,
+  iconClassName,
   initialQuery,
   inputId,
   onActivate,
@@ -42,12 +44,13 @@ function SearchShellInput({
 }: {
   placeholder?: string;
   inputClassName?: string;
+  iconClassName?: string;
   initialQuery?: string;
   inputId: string;
   onActivate: () => void;
   onQueryChange?: (value: string) => void;
 }) {
-  return (
+  const field = (
     <Input
       id={inputId}
       value={initialQuery ?? ""}
@@ -63,6 +66,19 @@ function SearchShellInput({
       }}
       aria-label={placeholder ?? "Search"}
     />
+  );
+  if (!iconClassName) return field;
+  return (
+    <div className="relative h-full">
+      <Search
+        className={cn(
+          "pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-ink/40",
+          iconClassName,
+        )}
+        aria-hidden
+      />
+      {field}
+    </div>
   );
 }
 
@@ -113,6 +129,7 @@ export function LazyAddressAutocomplete(props: AutocompleteProps) {
         inputId={inputId}
         placeholder={props.placeholder}
         inputClassName={props.inputClassName}
+        iconClassName={props.iconClassName}
         initialQuery={props.initialQuery}
         onQueryChange={props.onQueryChange}
         onActivate={() => {

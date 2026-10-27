@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
@@ -19,9 +19,22 @@ type Mode = "buy" | "rent" | "sell";
  * `hero` = white type on green photo;
  * `page` = ink on soft wash;
  * `agent` = Agent Signature chrome;
- * `team` = Team Signature dark band (light tabs + page-style search bar).
+ * `team` = Team Signature dark band (light tabs + page-style search bar);
+ * `royal` = Royal Collection editorial search (HIGH OCTANE).
  */
-type SearchSurface = "hero" | "page" | "agent" | "team";
+type SearchSurface = "hero" | "page" | "agent" | "team" | "royal";
+
+function useNarrowSearch() {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 767px)");
+    const update = () => setNarrow(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return narrow;
+}
 
 export function HomeHeroSearch({
   surface = "hero",
@@ -37,10 +50,12 @@ export function HomeHeroSearch({
   const [error, setError] = useState<string | null>(null);
   const onAgent = surface === "agent";
   const onTeam = surface === "team";
+  const onRoyal = surface === "royal";
+  const narrowSearch = useNarrowSearch();
   /** Light search chrome (white bar) — page, agent, and team. */
   const onPage = surface === "page" || surface === "agent" || surface === "team";
   /** Helper/error copy that sits on a light page wash (not Team dark band). */
-  const onLightCopy = surface === "page" || surface === "agent";
+  const onLightCopy = surface === "page" || surface === "agent" || surface === "royal";
   const estimateLockRef = useRef(false);
 
   function txn() {
@@ -233,15 +248,37 @@ export function HomeHeroSearch({
 
   const isInventory = mode === "buy" || mode === "rent";
 
+  const placeholder = onRoyal
+    ? mode === "sell"
+      ? narrowSearch
+        ? "Enter your home address"
+        : "Enter your home address with unit# (if applicable)"
+      : mode === "rent"
+        ? narrowSearch
+          ? "Search rentals by address or MLS® #"
+          : "Search rentals by address, neighbourhood, or MLS®"
+        : narrowSearch
+          ? "Search by address, city or MLS® #"
+          : "Search by MLS® #, address, city or neighbourhood"
+    : mode === "sell"
+      ? "Enter your home address with unit# (if applicable)"
+      : mode === "rent"
+        ? "Search rentals by address, neighbourhood, or MLS®"
+        : "Search active or sold listings by MLS® #, address or neighbourhood";
+
   return (
     <div
+      data-surface={onRoyal ? "royal" : undefined}
       className={cn(
         "relative z-50 w-full",
-        onAgent ? "max-w-none" : "max-w-3xl",
+        onAgent ? "max-w-none" : onRoyal ? "max-w-none" : "max-w-3xl",
       )}
     >
       <div className="overflow-visible">
-        <div className="flex gap-1 px-1 pb-2">
+        <div
+          data-rc-tabs={onRoyal ? "" : undefined}
+          className={cn(onRoyal ? "flex w-full" : "flex gap-1 px-1 pb-2")}
+        >
           {(
             [
               ["buy", "Buy a Home"],
@@ -252,6 +289,9 @@ export function HomeHeroSearch({
             <button
               key={value}
               type="button"
+              data-rc-tab={onRoyal ? "" : undefined}
+              data-active={onRoyal ? (mode === value ? "true" : "false") : undefined}
+              aria-pressed={mode === value}
               onClick={() => {
                 setMode(value);
                 setError(null);
@@ -259,41 +299,48 @@ export function HomeHeroSearch({
                 setQuery("");
               }}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm transition",
-                onTeam
-                  ? mode === value
-                    ? "font-semibold text-surface"
-                    : "font-medium text-surface/85 hover:text-surface"
-                  : onAgent
+                onRoyal
+                  ? "bg-transparent"
+                  : "rounded-md px-3 py-1.5 text-sm transition",
+                onRoyal
+                  ? undefined
+                  : onTeam
                     ? mode === value
-                      ? "font-semibold text-ink"
-                      : "font-medium text-ink/45 hover:text-ink/75"
-                    : onPage
+                      ? "font-semibold text-surface"
+                      : "font-medium text-surface/85 hover:text-surface"
+                    : onAgent
                       ? mode === value
                         ? "font-semibold text-ink"
-                        : "font-medium text-ink/50 hover:text-ink/80"
-                      : mode === value
-                        ? "font-semibold text-white"
-                        : "font-medium text-white/65 hover:text-white/90",
+                        : "font-medium text-ink/45 hover:text-ink/75"
+                      : onPage
+                        ? mode === value
+                          ? "font-semibold text-ink"
+                          : "font-medium text-ink/50 hover:text-ink/80"
+                        : mode === value
+                          ? "font-semibold text-white"
+                          : "font-medium text-white/65 hover:text-white/90",
               )}
             >
               {label}
-              {mode === value ? (
-                <span
-                  className={cn(
-                    "mt-1 block h-0.5 rounded-full",
-                    onTeam
-                      ? "bg-[var(--ts-accent,var(--canopy,#1F7A8C))]"
-                      : onAgent
-                        ? "bg-ink"
-                        : onPage
-                          ? "bg-canopy"
-                          : "bg-white",
-                  )}
-                />
-              ) : (
-                <span className="mt-1 block h-0.5 rounded-full bg-transparent" />
-              )}
+              <span
+                data-rc-tab-mark={onRoyal ? "" : undefined}
+                aria-hidden
+                className={cn(
+                  onRoyal
+                    ? "block"
+                    : "mt-1 block h-0.5 rounded-full",
+                  !onRoyal &&
+                    (mode === value
+                      ? onTeam
+                        ? "bg-[var(--ts-accent,var(--canopy,#1F7A8C))]"
+                        : onAgent
+                          ? "bg-ink"
+                          : onPage
+                            ? "bg-canopy"
+                            : "bg-white"
+                      : "bg-transparent"),
+                )}
+              />
             </button>
           ))}
         </div>
@@ -301,15 +348,19 @@ export function HomeHeroSearch({
         <div
           data-search-bar
           className={cn(
-            "flex flex-col gap-1.5 p-1.5 sm:flex-row sm:items-stretch sm:gap-2 sm:p-2.5",
-            onAgent
-              ? "rounded-none border-b border-ink/20 bg-transparent"
-              : onPage
-                ? "rounded-md border border-line bg-surface shadow-sm"
-                : "rounded-md bg-white/90 shadow-lg backdrop-blur-md",
+            onRoyal
+              ? "flex items-center overflow-visible"
+              : "flex flex-col gap-1.5 p-1.5 sm:flex-row sm:items-stretch sm:gap-2 sm:p-2.5",
+            onRoyal
+              ? undefined
+              : onAgent
+                ? "rounded-none border-b border-ink/20 bg-transparent"
+                : onPage
+                  ? "rounded-md border border-line bg-surface shadow-sm"
+                  : "rounded-md bg-white/90 shadow-lg backdrop-blur-md",
           )}
         >
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 self-stretch">
             <LazyAddressAutocomplete
               key={mode}
               initialQuery={query}
@@ -317,17 +368,26 @@ export function HomeHeroSearch({
               minChars={mode === "sell" ? 2 : 1}
               source={mode === "sell" ? "google" : "listings"}
               closeWhenHiddenBehindHeader
+              portalDesktopSuggestions={onRoyal}
+              matchShellWidth={onRoyal}
               transactionType={
                 mode === "buy" ? "SALE" : mode === "rent" ? "LEASE" : undefined
               }
-              placeholder={
-                mode === "sell"
-                  ? "Enter your home address with unit# (if applicable)"
-                  : mode === "rent"
-                    ? "Search rentals by address, neighbourhood, or MLS®"
-                    : "Search active or sold listings by MLS® #, address or neighbourhood"
+              placeholder={placeholder}
+              iconClassName={
+                onRoyal ? "size-3.5 text-[#6d6458] sm:size-4" : undefined
               }
-              inputClassName="h-9 rounded-md border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-[15px]"
+              clearClassName={onRoyal ? "rounded-none" : undefined}
+              listboxClassName={
+                onRoyal
+                  ? "rounded-none border-[#e6dccb] bg-white shadow-none"
+                  : undefined
+              }
+              inputClassName={
+                onRoyal
+                  ? "h-[56px] rounded-none border-0 bg-transparent pl-11 text-[15px] text-[#071629] shadow-none placeholder:text-[#6d6458] focus-visible:ring-0 sm:h-[68px] sm:text-base"
+                  : "h-9 rounded-md border-0 bg-transparent text-sm shadow-none focus-visible:ring-0 sm:h-11 sm:text-[15px]"
+              }
               onQueryChange={(value) => {
                 explicitPlaceRef.current = false;
                 setQuery(value);
@@ -350,13 +410,20 @@ export function HomeHeroSearch({
           </div>
           <Button
             type="button"
+            data-rc-search-action={onRoyal ? "" : undefined}
+            variant={onRoyal ? "ghost" : "default"}
             className={cn(
-              isInventory
-                ? "hidden h-9 w-full shrink-0 sm:inline-flex sm:h-11 sm:w-[8.75rem]"
-                : "h-9 w-full shrink-0 sm:h-11 sm:w-[8.75rem]",
-              onAgent
-                ? "rounded-none bg-ink text-surface hover:bg-canopy-deep"
-                : "rounded-md",
+              onRoyal
+                ? isInventory
+                  ? "hidden h-10 w-auto shrink-0 rounded-none bg-transparent px-3 text-[13px] font-medium text-[#071629] shadow-none hover:bg-[#071629]/5 sm:inline-flex"
+                  : "inline-flex h-10 w-auto shrink-0 rounded-none bg-transparent px-3 text-[13px] font-medium text-[#071629] shadow-none hover:bg-[#071629]/5"
+                : isInventory
+                  ? "hidden h-9 w-full shrink-0 sm:inline-flex sm:h-11 sm:w-[8.75rem]"
+                  : "h-9 w-full shrink-0 sm:h-11 sm:w-[8.75rem]",
+              !onRoyal &&
+                (onAgent
+                  ? "rounded-none bg-ink text-surface hover:bg-canopy-deep"
+                  : "rounded-md"),
             )}
             disabled={pending}
             onClick={() => {

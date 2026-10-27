@@ -38,7 +38,7 @@ export function RoyalCollectionSearch({
           </>
         ) : (
           <div className={styles.searchLive}>
-            <HomeHeroSearch surface="agent" />
+            <HomeHeroSearch surface="royal" />
           </div>
         )}
       </div>

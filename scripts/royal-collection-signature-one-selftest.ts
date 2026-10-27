@@ -382,6 +382,28 @@ assert.equal(
   read("src/components/home/HomeHeroSearch.tsx").includes("actionsDisabled"),
   false,
 );
+const royalHomeSearch = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionSearch.tsx",
+);
+assert.ok(royalHomeSearch.includes('surface="royal"'));
+assert.equal(royalHomeSearch.includes('surface="agent"'), false);
+const heroSearch = read("src/components/home/HomeHeroSearch.tsx");
+assert.ok(heroSearch.includes('surface === "royal"'));
+assert.ok(heroSearch.includes("routeFreeTextInventorySearch"));
+assert.ok(heroSearch.includes("onSearchSubmit"));
+assert.ok(heroSearch.includes("Buy a Home"));
+assert.ok(heroSearch.includes("Rent a Home"));
+assert.ok(heroSearch.includes("Sell a Home"));
+assert.ok(
+  heroSearch.includes("Search by MLS® #, address, city or neighbourhood"),
+);
+assert.ok(heroSearch.includes("Search by address, city or MLS® #"));
+assert.ok(heroSearch.includes('surface === "agent"'));
+assert.ok(
+  read(
+    "src/components/templates/agent-signature/AgentSignatureSearchSection.tsx",
+  ).includes('surface="agent"'),
+);
 
 const searchPage = read("src/app/(marketing)/search/page.tsx");
 const searchDemo = read(

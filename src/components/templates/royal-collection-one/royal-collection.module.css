@@ -2594,3 +2594,197 @@
     grid-column: span 2;
   }
 }
+
+/* Royal Collection editorial search. Scoped so other templates keep their chrome. */
+.searchLive :global([data-surface="royal"]) {
+  color: var(--rc-navy);
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tabs]) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 2px 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tab]) {
+  display: inline-flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--rc-slate);
+  font-family: var(--rc-serif);
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tab][data-active="true"]) {
+  color: var(--rc-navy);
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tab]:hover) {
+  color: var(--rc-navy);
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tab]:focus-visible) {
+  outline: 1px solid var(--rc-gold);
+  outline-offset: 6px;
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-tab-mark]) {
+  display: block;
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.searchLive :global([data-surface="royal"] [data-active="true"] [data-rc-tab-mark]) {
+  background: var(--rc-gold);
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar]) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 56px;
+  margin: 0;
+  padding: 0 4px 0 0;
+  border: 1px solid var(--rc-gold);
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar]:focus-within) {
+  border-color: var(--rc-gold);
+  outline: 1px solid var(--rc-navy);
+  outline-offset: 3px;
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar] input) {
+  height: 56px;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding-left: 2.65rem;
+  color: var(--rc-navy);
+  font-family: var(--rc-sans);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar] input::placeholder) {
+  color: var(--rc-slate);
+  opacity: 1;
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar] input:focus),
+.searchLive :global([data-surface="royal"] [data-search-bar] input:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.searchLive :global([data-surface="royal"] [data-search-bar] svg) {
+  width: 14px;
+  height: 14px;
+  color: var(--rc-slate);
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-search-action]) {
+  height: 40px;
+  margin: 0;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--rc-navy);
+  font-family: var(--rc-sans);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-search-action]:hover) {
+  background: rgb(7 22 41 / 0.04);
+  color: var(--rc-navy);
+}
+
+.searchLive :global([data-surface="royal"] [data-rc-search-action]:focus-visible) {
+  outline: 1px solid var(--rc-gold);
+  outline-offset: 2px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (min-width: 390px) {
+  .searchLive :global([data-surface="royal"] [data-rc-tab]) {
+    font-size: 15px;
+  }
+}
+
+@media (min-width: 430px) {
+  .searchLive :global([data-surface="royal"] [data-rc-tab]) {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 768px) {
+  .searchLive :global([data-surface="royal"] [data-rc-tabs]) {
+    justify-content: flex-start;
+    gap: 2.75rem;
+    margin-bottom: 22px;
+  }
+
+  .searchLive :global([data-surface="royal"] [data-rc-tab]) {
+    font-size: 22px;
+    letter-spacing: -0.025em;
+  }
+
+  .searchLive :global([data-surface="royal"] [data-search-bar]),
+  .searchLive :global([data-surface="royal"] [data-search-bar] input) {
+    height: 68px;
+  }
+
+  .searchLive :global([data-surface="royal"] [data-search-bar] input) {
+    font-size: 16px;
+  }
+
+  .searchLive :global([data-surface="royal"] [data-search-bar] svg) {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .searchLive :global([data-surface="royal"] [data-rc-tabs]) {
+    gap: 3.25rem;
+  }
+
+  .searchLive :global([data-surface="royal"] [data-rc-tab]) {
+    font-size: 26px;
+  }
+}

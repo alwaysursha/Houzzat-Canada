@@ -154,6 +154,10 @@ export function AddressAutocomplete({
   initialQuery = "",
   className,
   inputClassName,
+  iconClassName,
+  clearClassName,
+  listboxClassName,
+  matchShellWidth = false,
   placeholder = "Search active or sold listings by MLS® #, address or neighbourhood",
   minChars = 1,
   transactionType,
@@ -177,6 +181,12 @@ export function AddressAutocomplete({
   initialQuery?: string;
   className?: string;
   inputClassName?: string;
+  iconClassName?: string;
+  clearClassName?: string;
+  /** Extra listbox classes. Later utilities override the default panel chrome. */
+  listboxClassName?: string;
+  /** Keep the desktop suggestion panel the same width as the search shell. */
+  matchShellWidth?: boolean;
   placeholder?: string;
   minChars?: number;
   /** When set, only suggest ACTIVE listings of this transaction type. */
@@ -335,10 +345,13 @@ export function AddressAutocomplete({
       const boxRect = box.getBoundingClientRect();
       const shellRect = (shell ?? box).getBoundingClientRect();
       const viewportPad = 16;
-      const minWidth = Math.min(42 * 16, window.innerWidth - viewportPad * 2);
+      const viewportMax = window.innerWidth - viewportPad * 2;
+      const minWidth = Math.min(42 * 16, viewportMax);
       const width = Math.min(
-        Math.max(shellRect.width, minWidth),
-        window.innerWidth - viewportPad * 2,
+        matchShellWidth
+          ? shellRect.width
+          : Math.max(shellRect.width, minWidth),
+        viewportMax,
       );
 
       if (portalDesktopSuggestions) {
@@ -392,7 +405,15 @@ export function AddressAutocomplete({
       window.removeEventListener("resize", syncPanel);
       window.removeEventListener("scroll", syncPanel, true);
     };
-  }, [open, query, suggestions.length, isMobile, portalDesktopSuggestions, fieldMenu]);
+  }, [
+    open,
+    query,
+    suggestions.length,
+    isMobile,
+    portalDesktopSuggestions,
+    fieldMenu,
+    matchShellWidth,
+  ]);
 
   /** Hero: dismiss desktop suggestions once the bar scrolls under the header. */
   useEffect(() => {
@@ -1668,6 +1689,7 @@ export function AddressAutocomplete({
       style={panelStyle}
       className={cn(
         "overflow-auto rounded-md border border-line bg-surface py-1.5 shadow-lg",
+        listboxClassName,
         !portalDesktopSuggestions &&
           "absolute z-50 mt-4 max-h-[min(28rem,70vh)] w-full",
       )}
@@ -1696,7 +1718,10 @@ export function AddressAutocomplete({
       */}
       <div className="relative">
         <Search
-          className="pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-ink/40"
+          className={cn(
+            "pointer-events-none absolute left-3 top-1/2 z-[1] size-4 -translate-y-1/2 text-ink/40",
+            iconClassName,
+          )}
           aria-hidden
         />
         <Input
@@ -1732,7 +1757,10 @@ export function AddressAutocomplete({
               event.stopPropagation();
               clearQuery();
             }}
-            className="absolute right-2 top-1/2 z-[1] inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70"
+            className={cn(
+              "absolute right-2 top-1/2 z-[1] inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-full text-ink/45 transition hover:bg-ink/5 hover:text-ink/70",
+              clearClassName,
+            )}
             aria-label="Clear search"
           >
             <X className="size-4" aria-hidden />
