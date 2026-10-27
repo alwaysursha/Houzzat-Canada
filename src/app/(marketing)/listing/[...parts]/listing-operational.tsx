@@ -273,6 +273,7 @@ export async function OperationalListingDetail({
         }),
   );
 
+  const synthetic = listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE;
   const galleryPhotos = resolveListingGalleryPhotos(listing);
   const presentationBrand = await resolveMarketingPresentationBrand();
   if (
@@ -289,8 +290,8 @@ export async function OperationalListingDetail({
       listing: listingForClient,
       photos: galleryPhotos.map((photo) => ({ url: photo.url })),
       viewer: {
-        signedIn: Boolean(user),
-        detailsLocked,
+        signedIn: synthetic || Boolean(user),
+        detailsLocked: synthetic ? false : detailsLocked,
       },
       site: {
         agentName: royal?.agentName ?? "",

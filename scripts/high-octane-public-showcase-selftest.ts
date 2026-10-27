@@ -137,6 +137,14 @@ assert.equal(detailRoute.includes("noindex"), false);
 assert.equal(detailRoute.includes("index: false, follow: false"), true);
 assert.equal(detailRoute.includes("decideHighOctanePublicShowcase"), true);
 assert.equal(detailRoute.includes("listingView.create"), true);
+assert.equal(detailRoute.includes("signedIn: synthetic || Boolean(user)"), true);
+assert.equal(detailRoute.includes("detailsLocked: synthetic ? false : detailsLocked"), true);
+const property = readFileSync(
+  join(root, "src/components/templates/royal-collection-one/RoyalCollectionOperationalProperty.tsx"),
+  "utf8",
+);
+assert.equal(property.includes("signedIn || demonstration"), true);
+assert.equal(property.includes("HIGH_OCTANE_DEMO_PROPERTY_NOTICE"), true);
 
 const development = readFileSync(
   join(root, "src/lib/tenancy/templates/high-octane-development-listings.ts"),

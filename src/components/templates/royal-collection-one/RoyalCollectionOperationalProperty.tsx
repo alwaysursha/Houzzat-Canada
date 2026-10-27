@@ -71,7 +71,7 @@ export function RoyalCollectionOperationalProperty({
     </RoyalCollectionPropertyView>
   );
 
-  if (signedIn) return page;
+  if (signedIn || demonstration) return page;
   return (
     <ListingAccessGate mlsNumber={mlsNumber} callbackPath={canonicalPath} signedIn={false}>
       {page}
