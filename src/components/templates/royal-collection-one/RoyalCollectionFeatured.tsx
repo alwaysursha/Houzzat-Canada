@@ -19,6 +19,7 @@ import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types"
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import { takeRoyalFeaturedListings } from "./royal-featured-listings";
+import { HIGH_OCTANE_DEMO_CARD_LABEL } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } from "@/lib/tenancy/templates/high-octane-development-listings";
 import styles from "./royal-collection.module.css";
 
@@ -76,7 +77,7 @@ export function RoyalCollectionFeatured({
       try {
         const citiesParam = citiesQueryParam(cities);
         const newest = await fetchNewListings(
-          new URLSearchParams({ cities: citiesParam, limit: "3" }),
+          new URLSearchParams({ cities: citiesParam, limit: "6" }),
           controller.signal,
         );
         if (cancelled) return;
@@ -184,7 +185,7 @@ function LiveFeaturedCard({ listing }: { listing: ListingCardData }) {
     <LuxuryCardFace
       badge={
         listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
-          ? "DEMO PROPERTY"
+          ? HIGH_OCTANE_DEMO_CARD_LABEL
           : listingStatusLabel(listing.status, listing.transactionType)
       }
       imageUrl={listing.primaryImageUrl}

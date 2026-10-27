@@ -24,6 +24,7 @@ import {
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
+import { isHighOctaneDevelopmentListingMls } from "@/lib/tenancy/templates/high-octane-development-listings";
 
 const schema = z.object({
   mlsNumber: z.string().min(3).max(32),
@@ -65,6 +66,12 @@ export async function POST(request: Request) {
       );
     }
     const data = parsed.data;
+    if (isHighOctaneDevelopmentListingMls(data.mlsNumber)) {
+      return NextResponse.json(
+        { error: "This demonstration property does not accept inquiries." },
+        { status: 403 },
+      );
+    }
     const contactName = customer.name?.trim() || customer.email;
     const contactEmail = customer.email;
     const contactPhone = customer.phone?.trim() || null;

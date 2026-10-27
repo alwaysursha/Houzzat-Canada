@@ -178,7 +178,7 @@ const featured = readFileSync(
   join(root, "src/components/templates/royal-collection-one/RoyalCollectionFeatured.tsx"),
   "utf8",
 );
-assert.equal(featured.includes("DEMO PROPERTY"), true);
+assert.equal(featured.includes("HIGH_OCTANE_DEMO_CARD_LABEL"), true);
 for (const file of [
   "src/components/listings/SearchResultCard.tsx",
   "src/components/listings/ListingDetailView.tsx",

@@ -30,6 +30,7 @@ import {
   highOctaneDevelopmentListingDetail,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
+import { decideHighOctanePublicShowcase } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
@@ -101,6 +102,11 @@ const loadListingByMlsCached = cache(async (mlsNumber: string) => {
     stagingSnapshotVisible: access.stagingSnapshotVisible,
   });
   if (listing || !isHighOctaneDevelopmentListingMls(mlsNumber)) return listing;
+  const showcase = decideHighOctanePublicShowcase({
+    workspaceSlug: access.workspaceSlug,
+    authorities: access.entitlement.authorities,
+  });
+  if (showcase.serve) return highOctaneDevelopmentListingDetail(mlsNumber);
   const session = await auth();
   const development = await loadHighOctaneDevelopmentListingAccess({
     workspaceSlug: access.workspaceSlug,
@@ -159,10 +165,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     path: canonicalPath,
   });
+  const synthetic =
+    listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE;
 
   return {
     ...pageMeta,
     title: { absolute: title },
+    robots: synthetic ? { index: false, follow: false } : pageMeta.robots,
     openGraph: {
       ...pageMeta.openGraph,
       url: url ?? undefined,
@@ -257,9 +266,11 @@ export async function OperationalListingDetail({
     serializeListingDetailClientModel(listing, canSeeRestricted);
 
   scheduleWorkerSideEffect(
-    prisma.listingView.create({
-      data: { userId: user?.id, mlsNumber: listing.mlsNumber },
-    }),
+    listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
+      ? Promise.resolve()
+      : prisma.listingView.create({
+          data: { userId: user?.id, mlsNumber: listing.mlsNumber },
+        }),
   );
 
   const galleryPhotos = resolveListingGalleryPhotos(listing);
@@ -293,7 +304,7 @@ export async function OperationalListingDetail({
       badge: highOctaneDevelopmentListingBadge(listing.dataSource),
     });
     const viewing =
-      user && model.kind === "listing"
+      user && model.kind === "listing" && listing.dataSource !== HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
         ? {
             mlsNumber: listingForClient.mlsNumber,
             callbackPath: canonicalPath,
@@ -440,14 +451,18 @@ export async function OperationalListingDetail({
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
-      />
+      {listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE ? null : (
+        <>
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+          />
+        </>
+      )}
       <ListingDetailView
         listing={listingForClient}
         galleryPhotos={galleryPhotos}

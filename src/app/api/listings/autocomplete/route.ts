@@ -54,6 +54,9 @@ export async function GET(request: Request) {
     stagingSnapshotVisible: stagingSnapshotVisibleFromResolution(
       context.resolution,
     ),
+    workspaceSlug: context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null,
   });
 
   if (!isClient) {

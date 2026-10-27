@@ -24,6 +24,7 @@ import {
   type ItsoSourceRequest,
 } from "@/lib/listings/itso/itso-sources";
 import { HIGH_OCTANE_PREVIEW_FIXTURE } from "@/lib/tenancy/templates/high-octane-preview-fixture";
+import { HIGH_OCTANE_DEMO_CARD_LABEL } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 
 export const HIGH_OCTANE_DEVELOPMENT_LISTINGS_SWITCH =
@@ -71,8 +72,10 @@ export function highOctaneDevelopmentListingsEnabled(
 
 export function highOctaneDevelopmentListingBadge(
   dataSource: string | null | undefined,
-): "DEMO PROPERTY" | null {
-  return dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE ? "DEMO PROPERTY" : null;
+): typeof HIGH_OCTANE_DEMO_CARD_LABEL | null {
+  return dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
+    ? HIGH_OCTANE_DEMO_CARD_LABEL
+    : null;
 }
 
 export function decideHighOctaneDevelopmentListingAccess(input: {

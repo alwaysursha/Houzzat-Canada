@@ -10,6 +10,10 @@ import {
 import { ownerListingTag } from "@/lib/owner/pricing";
 import { prisma } from "@/lib/prisma";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
+import {
+  HIGH_OCTANE_STAGING_FEATURED_CITIES,
+  HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+} from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { serviceAreaCityWhere } from "@/lib/listings/precise-property-search";
 import {
   addressQueryKeepsAllTokens,
@@ -585,6 +589,7 @@ export class DbListingProvider implements ListingProvider {
         city: options.city,
         lat: options.lat,
         lng: options.lng,
+        workspaceSlug: options.workspaceSlug,
       });
     }
 
@@ -846,14 +851,22 @@ export class DbListingProvider implements ListingProvider {
 
   private async emptyAutocomplete(
     txn?: "SALE" | "LEASE",
-    location?: { city?: string | null; lat?: number | null; lng?: number | null },
+    location?: {
+      city?: string | null;
+      lat?: number | null;
+      lng?: number | null;
+      workspaceSlug?: string | null;
+    },
   ): Promise<AutocompleteSuggestion[]> {
-    const suggested = suggestedCitiesForLocation({
-      city: location?.city,
-      lat: location?.lat,
-      lng: location?.lng,
-      limit: 6,
-    });
+    const suggested =
+      location?.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+        ? [...HIGH_OCTANE_STAGING_FEATURED_CITIES]
+        : suggestedCitiesForLocation({
+            city: location?.city,
+            lat: location?.lat,
+            lng: location?.lng,
+            limit: 6,
+          });
     const paramsBase = () => {
       const params = new URLSearchParams();
       if (txn) params.set("transactionType", txn);

@@ -202,6 +202,11 @@ export type AutocompleteOptions = {
   entitlementFilteringEnabled?: boolean;
   /** Server-resolved HIGH OCTANE staging snapshot channel. */
   stagingSnapshotVisible?: boolean;
+  /**
+   * Server-resolved workspace slug. Popular-city chips stay on the shared
+   * default list unless this is the HIGH OCTANE workspace.
+   */
+  workspaceSlug?: string | null;
 };
 
 export interface ListingProvider {

@@ -597,6 +597,17 @@
   text-transform: uppercase;
 }
 
+.demoNotice {
+  margin: 0 0 1.25rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--rc-gold, #c8a66a);
+  background: #f8f3ea;
+  color: var(--rc-navy, #071629);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
 .intro h1,
 .block h2,
 .aside h2,

@@ -1,6 +1,7 @@
 import type { ViewingContactDefaults } from "@/components/listings/ViewingBookingModal";
 import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
+import { HIGH_OCTANE_DEMO_PROPERTY_NOTICE } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { RoyalCollectionPropertyView } from "./RoyalCollectionPropertyView";
 import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
@@ -34,9 +35,20 @@ export function RoyalCollectionOperationalProperty({
   canonicalPath: string;
   viewing: RoyalCollectionViewingAction | null;
 }) {
+  const demonstration = Boolean(model.badge);
   const page = (
-    <RoyalCollectionPropertyView model={model} showDisclaimer={model.kind === "listing"}>
-      {viewing ? (
+    <RoyalCollectionPropertyView
+      model={model}
+      showDisclaimer={model.kind === "listing" && !demonstration}
+      notice={
+        demonstration ? (
+          <p className={styles.demoNotice}>{HIGH_OCTANE_DEMO_PROPERTY_NOTICE}</p>
+        ) : null
+      }
+    >
+      {demonstration ? (
+        <p className={styles.demoNotice}>{HIGH_OCTANE_DEMO_PROPERTY_NOTICE}</p>
+      ) : viewing ? (
         <div className={styles.listingActions}>
           <ViewingRequestPanel
             mlsNumber={viewing.mlsNumber}

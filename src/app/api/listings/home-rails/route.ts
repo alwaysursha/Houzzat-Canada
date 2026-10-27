@@ -12,6 +12,10 @@ import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listin
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
 import { searchHighOctaneDevelopmentListings } from "@/lib/tenancy/templates/high-octane-development-listings";
+import {
+  decideHighOctanePublicShowcase,
+  HIGH_OCTANE_PUBLIC_SHOWCASE_FEATURED_COUNT,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { typesenseHomeRails } from "@/lib/typesense/search";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -62,18 +66,28 @@ export async function GET(request: Request) {
     ? Number(searchParams.get("limit"))
     : 12;
 
+  const workspaceSlug = context.resolution.ok
+    ? context.resolution.host.workspaceSlug
+    : null;
   const developmentAccess = await loadHighOctaneDevelopmentListingAccessForRequest(
     request,
-    context.resolution.ok ? context.resolution.host.workspaceSlug : null,
+    workspaceSlug,
   );
-  if (developmentAccess.serveFixtures) {
+  const publicShowcase = decideHighOctanePublicShowcase({
+    workspaceSlug,
+    authorities: entitlement.authorities,
+  });
+  if (developmentAccess.serveFixtures || publicShowcase.serve) {
+    const featuredLimit = publicShowcase.serve
+      ? Math.max(limit, HIGH_OCTANE_PUBLIC_SHOWCASE_FEATURED_COUNT)
+      : limit;
     return NextResponse.json(
       {
         newListings: searchHighOctaneDevelopmentListings({
           cities,
           minPrice,
           maxPrice,
-          limit,
+          limit: featuredLimit,
           sort: "newest",
         }),
         openHouses: searchHighOctaneDevelopmentListings({

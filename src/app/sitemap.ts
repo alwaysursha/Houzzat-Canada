@@ -8,7 +8,11 @@ import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane
 
 /** Snapshot rows are never sitemap entries, including on the staging host. */
 const PUBLIC_SITEMAP_LISTING_WHERE = {
-  AND: [{ status: "ACTIVE" as const }, excludeStagingSnapshotWhere()],
+  AND: [
+    { status: "ACTIVE" as const },
+    excludeStagingSnapshotWhere(),
+    { mlsNumber: { not: { startsWith: "ITSODEMO" } } },
+  ],
 };
 
 /** Google allows 50k URLs/file; keep headroom for static + area rows. */

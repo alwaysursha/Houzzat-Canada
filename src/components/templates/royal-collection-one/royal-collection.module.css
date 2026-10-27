@@ -1203,14 +1203,16 @@
   top: 0.85rem;
   left: 0.85rem;
   z-index: 2;
+  max-width: calc(100% - 1.7rem);
   padding: 0.38rem 0.62rem;
   border: 1px solid rgb(200 166 106 / 0.85);
   background: rgb(7 22 41 / 0.82);
   color: var(--rc-gold);
   font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.16em;
-  line-height: 1;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  white-space: normal;
   text-transform: uppercase;
 }
 
@@ -2429,13 +2431,13 @@
 @media (min-width: 768px) and (max-width: 1023px) {
   .heroPortrait {
     right: 20px;
-    bottom: 7.6rem;
-    max-width: 48vw;
-    gap: 12px;
+    bottom: 2.5rem;
+    max-width: min(560px, 62vw);
+    gap: 16px;
   }
 
   .heroPortraitImage {
-    height: min(280px, 34vh);
+    height: min(460px, 54vh);
   }
 
   .heroPortraitName {
@@ -2481,6 +2483,25 @@
 
   .heroHasPortrait .heroPortrait {
     padding-right: 4.25rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 900px) {
+  .heroHasPortrait .heroPortrait {
+    align-items: flex-end;
+    margin-top: 0.5rem;
+  }
+
+  .heroHasPortrait .heroPortraitImage {
+    width: auto;
+    height: min(460px, 54vh);
+    max-width: 38vw;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .heroHasPortrait .heroPortraitCopy {
+    margin-bottom: 6.75rem;
   }
 }
 

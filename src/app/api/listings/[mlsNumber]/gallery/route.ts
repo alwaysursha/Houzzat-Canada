@@ -5,7 +5,13 @@ import { mayInvokePropTxOnDemandForDetail } from "@/lib/listings/load-listing-fo
 import { listingPhotoSrc } from "@/lib/listings/photo-src";
 import { fetchListingPhotosFromPropTx } from "@/lib/proptx/listing-photos";
 import { prisma } from "@/lib/prisma";
-import { classifyListingInventoryChannel } from "@/lib/tenancy/listing-entitlement";
+import { classifyListingInventoryChannel, resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
+import {
+  highOctaneDevelopmentListingDetail,
+  isHighOctaneDevelopmentListingMls,
+} from "@/lib/tenancy/templates/high-octane-development-listings";
+import { decideHighOctanePublicShowcase } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { isHighOctaneStagingSnapshotDataSource } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
@@ -20,6 +26,39 @@ type Params = { params: Promise<{ mlsNumber: string }> };
  */
 export async function GET(request: Request, { params }: Params) {
   const { mlsNumber: raw } = await params;
+  if (isHighOctaneDevelopmentListingMls(raw)) {
+    const context = await resolveListingEntitlementContextForRequest(request);
+    const workspaceSlug = context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null;
+    const development = await loadHighOctaneDevelopmentListingAccessForRequest(
+      request,
+      workspaceSlug,
+    );
+    const showcase = decideHighOctanePublicShowcase({
+      workspaceSlug,
+      authorities: context.entitlement.authorities,
+    });
+    const detail =
+      development.serveFixtures || showcase.serve
+        ? highOctaneDevelopmentListingDetail(raw)
+        : null;
+    if (!detail) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json({
+      photos: detail.media.map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+        sortOrder: photo.sortOrder,
+        isPrimary: photo.isPrimary,
+      })),
+      neonMediaCount: detail.media.length,
+      galleryCapped: false,
+      totalPhotoCount: detail.media.length,
+    });
+  }
+
   const gated = await loadListingDetailApiAccess(raw, request, {
     additionalCapabilities: ["MEDIA"],
     entitlementFilteringEnabled: true,
