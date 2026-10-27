@@ -252,7 +252,11 @@ assert.equal(
 );
 assert.equal(
   existsSync(
-    join(root, "public", HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL.replace(/^\//, "")),
+    join(
+      root,
+      "public",
+      HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL.replace(/^\//, "").replace(/\?.*$/, ""),
+    ),
   ),
   true,
 );

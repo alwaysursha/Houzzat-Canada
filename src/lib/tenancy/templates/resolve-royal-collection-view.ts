@@ -147,7 +147,7 @@ const HIGH_OCTANE_STORY_IMAGES = {
  * Another workspace never receives it.
  */
 export const HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL =
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png";
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=2";
 
 const HIGH_OCTANE_HERO_PORTRAIT_COPY = {
   name: "Saad Qureshi",
