@@ -4,11 +4,8 @@
  */
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  readItsoLiveSourceInput,
-  readItsoSourceRequest,
-} from "@/lib/listings/itso/itso-source-preference";
-import type { ItsoLiveSourceInput, ItsoSourceRequest } from "@/lib/listings/itso/itso-sources";
+import { readHighOctaneListingSourceRequest } from "@/lib/tenancy/templates/high-octane-listing-source-preference";
+import { fixtureRequestForStoredSource } from "@/lib/tenancy/templates/high-octane-proptx-source";
 import {
   decideHighOctaneDevelopmentListingAccess,
   highOctaneDevelopmentListingsEnabled,
@@ -16,23 +13,20 @@ import {
 } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 
-async function readSavedItsoSource(
+async function readSavedFixtureRequest(
   workspaceSlug: string | null,
-): Promise<{ requested: ItsoSourceRequest | null; live?: ItsoLiveSourceInput }> {
-  if (workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return { requested: null };
+): Promise<"demo" | "disabled" | null> {
+  if (workspaceSlug !== HIGH_OCTANE_STAGING_WORKSPACE_SLUG) return null;
   try {
     const workspace = await prisma.workspace.findUnique({
       where: { slug: workspaceSlug },
       select: { id: true },
     });
-    if (!workspace) return { requested: null };
-    const [requested, live] = await Promise.all([
-      readItsoSourceRequest(workspace.id),
-      readItsoLiveSourceInput(workspace.id),
-    ]);
-    return { requested, live };
+    if (!workspace) return null;
+    const stored = await readHighOctaneListingSourceRequest(workspace.id);
+    return fixtureRequestForStoredSource(stored);
   } catch {
-    return { requested: null };
+    return null;
   }
 }
 
@@ -43,14 +37,13 @@ export async function loadHighOctaneDevelopmentListingAccess(input: {
 }): Promise<HighOctaneDevelopmentListingDecision> {
   const env = input.env ?? process.env;
   const host = input.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
-  const saved = await readSavedItsoSource(input.workspaceSlug);
+  const requested = await readSavedFixtureRequest(input.workspaceSlug);
   if (!highOctaneDevelopmentListingsEnabled(env) || !host || !input.userId) {
     return decideHighOctaneDevelopmentListingAccess({
       env,
       workspaceSlug: input.workspaceSlug,
       actor: null,
-      requested: saved.requested,
-      live: saved.live,
+      requested,
     });
   }
 
@@ -76,8 +69,7 @@ export async function loadHighOctaneDevelopmentListingAccess(input: {
   return decideHighOctaneDevelopmentListingAccess({
     env,
     workspaceSlug: input.workspaceSlug,
-    requested: saved.requested,
-    live: saved.live,
+    requested,
     actor: {
       email: user?.email ?? null,
       masterAdminActive:

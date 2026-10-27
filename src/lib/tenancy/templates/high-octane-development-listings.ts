@@ -1,15 +1,16 @@
 /**
  * Reversible HIGH OCTANE development listings.
  *
- * TRREB use is not authorized for this workspace. The data-connection contract
- * forbids falling back to Houzzat credentials, and this module does not read
- * or copy MLS rows. Authorized testers receive in-memory fixtures through the
- * existing search, detail, and featured-listing responses.
+ * TRREB use is not authorized for this workspace until it has its own PropTx
+ * connection. The data-connection contract forbids falling back to Houzzat
+ * credentials, and this module does not read or copy MLS rows. Authorized
+ * testers receive in-memory fixtures through the existing search, detail, and
+ * featured-listing responses.
  *
  * Disable development mode by unsetting HIGH_OCTANE_DEVELOPMENT_LISTINGS.
- * Production always stays off. When Niagara is connected, leave the switch
- * unset and give this workspace its own listing entitlement. The existing
- * screens already follow that hostname entitlement.
+ * Production always stays off. When this workspace's PropTx entitlement is
+ * active, leave the switch unset. Search, property details, and featured
+ * listings already follow that hostname entitlement.
  */
 import type { ListingDetail, ListingCard, ListingSearchParams } from "@/lib/listings/types";
 import { mapResoListingPackage } from "@/lib/listings/itso/map-reso-listing";
@@ -37,7 +38,7 @@ export const HIGH_OCTANE_DEVELOPMENT_LISTINGS_DISABLE =
   "unset HIGH_OCTANE_DEVELOPMENT_LISTINGS" as const;
 
 export const HIGH_OCTANE_NIAGARA_LISTING_SOURCE_SWITCH =
-  "Create this workspace's own ACTIVE listing connection, then unset HIGH_OCTANE_DEVELOPMENT_LISTINGS. Search, property details, and featured listings already use the hostname entitlement." as const;
+  "Create this workspace's own ACTIVE PropTx connection for TRREB, then unset HIGH_OCTANE_DEVELOPMENT_LISTINGS. Search, property details, and featured listings already use the hostname entitlement." as const;
 
 const SAAD_EMAIL = HIGH_OCTANE_PREVIEW_FIXTURE.email.trim().toLowerCase();
 

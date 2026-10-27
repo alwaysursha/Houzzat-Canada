@@ -5,23 +5,30 @@ import {
   saveItsoSourceRequest,
   type ItsoSourceActionState,
 } from "@/app/platform/(shell)/workspaces/[workspaceId]/itso-source-action";
-import type { ItsoSourceRequest } from "@/lib/listings/itso/itso-sources";
+import type { HighOctaneListingSourceRequest } from "@/lib/tenancy/templates/high-octane-proptx-source";
 
-const OPTIONS: Array<{ value: ItsoSourceRequest; label: string; detail: string }> = [
+const OPTIONS: Array<{ value: HighOctaneListingSourceRequest; label: string; detail: string }> = [
   {
-    value: "demo",
-    label: "ITSO Demo",
-    detail: "Development and testing only. Public production stays empty.",
+    value: "proptx-idx",
+    label: "PropTx IDX",
+    detail:
+      "Saad's own TRREB IDX feed. It turns on only after his credential reference, verified participant membership, an ACTIVE connection, ACTIVE_LISTINGS entitlement, an ACTIVE primary domain, and TRREB IDX website approval. A PropTx subscription alone is not API access.",
   },
   {
-    value: "live",
-    label: "ITSO Live",
-    detail: "Turns on only after a credential reference, feed type, active connection, entitlement, and metadata check.",
+    value: "proptx-vow",
+    label: "PropTx VOW",
+    detail:
+      "Separate VOW agreement for registered clients. IDX approval does not include it.",
+  },
+  {
+    value: "demo",
+    label: "Protected demo",
+    detail: "Development and testing only. Public production stays empty.",
   },
   {
     value: "disabled",
     label: "Disabled",
-    detail: "No ITSO inventory.",
+    detail: "No listing inventory.",
   },
 ];
 
@@ -30,7 +37,7 @@ export function PlatformItsoSourceForm({
   requested,
 }: {
   workspaceId: string;
-  requested: ItsoSourceRequest | null;
+  requested: HighOctaneListingSourceRequest | null;
 }) {
   const [state, action, pending] = useActionState<ItsoSourceActionState | null, FormData>(
     saveItsoSourceRequest,

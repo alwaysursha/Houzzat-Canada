@@ -190,13 +190,13 @@ for (const file of [
     file,
   );
 }
-assert.equal(
-  readFileSync(
-    join(root, "src/components/platform/PlatformItsoListingSources.tsx"),
-    "utf8",
-  ).includes("ITSO Live"),
-  true,
+const sourcePanel = readFileSync(
+  join(root, "src/components/platform/PlatformItsoListingSources.tsx"),
+  "utf8",
 );
+assert.equal(sourcePanel.includes("ITSO Live"), false);
+assert.equal(sourcePanel.includes("PropTx IDX"), true);
+assert.equal(sourcePanel.includes("PropTx VOW"), true);
 assert.equal(
   readFileSync(
     join(root, "src/components/platform/PlatformItsoListingSources.tsx"),
