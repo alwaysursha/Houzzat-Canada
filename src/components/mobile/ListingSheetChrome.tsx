@@ -14,7 +14,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSavedListingToggle } from "@/components/account/useSavedListingToggle";
 import { LazyAddressAutocomplete } from "@/components/listings/LazyAddressAutocomplete";
 import { mlsNumberFromListingHref } from "@/lib/listings/gallery-client";
-import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
+import { useTenantBrand, useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
+import { HIGH_OCTANE_LOGO_URL } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { leaveListingSheetThenGo } from "@/lib/listings/navigate-listing";
 import {
   backListingSheet,
@@ -355,6 +357,8 @@ export function ListingSheetChrome({
   nextHref?: string | null;
 }) {
   const tenantDisplayName = useTenantDisplayName();
+  const highOctaneLockup =
+    useTenantBrand()?.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
   const isDesktop = useIsDesktopChrome();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const mlsNumber = href ? mlsNumberFromListingHref(href) : null;
@@ -461,6 +465,7 @@ export function ListingSheetChrome({
       <div
         className={cn(
           "pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-[1] flex h-[3.25rem] items-center justify-center transition-opacity duration-200 ease-out",
+          highOctaneLockup && "px-[5.75rem]",
           mobileSearchOpen ? "opacity-0" : "opacity-100",
         )}
         aria-hidden={mobileSearchOpen}
@@ -472,22 +477,39 @@ export function ListingSheetChrome({
             onClick={() => {
               if (previousHref) replaceListingSheet(previousHref);
             }}
-            className="inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2"
+            className={cn(
+              "inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2",
+              highOctaneLockup && "max-sm:hidden",
+            )}
             aria-label="Previous listing"
           >
             <ChevronLeft className="size-5" strokeWidth={2.2} aria-hidden />
             <span className="hidden sm:inline">Previous</span>
           </button>
-          <span className="listing-wordmark font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
-            {tenantDisplayName}
-          </span>
+          {highOctaneLockup ? (
+            // Homepage speedometer lockup. Sized to sit between Listing and Close.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={HIGH_OCTANE_LOGO_URL}
+              alt={tenantDisplayName}
+              className="block max-w-full object-contain"
+              style={{ width: 168, height: 26, flexShrink: 0 }}
+            />
+          ) : (
+            <span className="listing-wordmark font-display text-[1.7rem] font-semibold leading-none tracking-tight text-white sm:text-[1.85rem]">
+              {tenantDisplayName}
+            </span>
+          )}
           <button
             type="button"
             disabled={!nextHref}
             onClick={() => {
               if (nextHref) replaceListingSheet(nextHref);
             }}
-            className="inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2"
+            className={cn(
+              "inline-flex h-10 items-center gap-0.5 rounded-lg px-1.5 text-sm font-semibold text-white transition enabled:hover:bg-white/10 enabled:active:bg-white/15 disabled:cursor-not-allowed disabled:opacity-35 md:px-2",
+              highOctaneLockup && "max-sm:hidden",
+            )}
             aria-label="Next listing"
           >
             <span className="hidden sm:inline">Next</span>

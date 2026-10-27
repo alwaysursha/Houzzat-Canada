@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ArrowRight, Phone } from "lucide-react";
+import { ViewingBookingModal } from "@/components/listings/ViewingBookingModal";
 import styles from "./royal-property.module.css";
 
 const MOBILE_QUERY = "(max-width: 767px)";
@@ -29,7 +31,9 @@ export function RoyalCollectionConciergeBar({
   photoUrl: string | null;
 }) {
   const barRef = useRef<HTMLElement>(null);
+  const pathname = usePathname();
   const [mobile, setMobile] = useState(false);
+  const [bookingOpen, setBookingOpen] = useState(false);
   const [viewingNear, setViewingNear] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const viewingNearRef = useRef(false);
@@ -98,12 +102,8 @@ export function RoyalCollectionConciergeBar({
 
   if (!mobile || !agentName) return null;
 
-  function scrollToViewing() {
-    const target = document.getElementById("rc-contact");
-    if (!target) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-  }
+  const bookingPath = pathname.split("?")[0] || "/";
+  const mlsNumber = bookingPath.split("/").filter(Boolean).pop() ?? "";
 
   return (
     <aside
@@ -129,10 +129,18 @@ export function RoyalCollectionConciergeBar({
           <Phone aria-hidden />
         </a>
       ) : null}
-      <button type="button" className={styles.conciergeCta} onClick={scrollToViewing}>
+      <button type="button" className={styles.conciergeCta} onClick={() => setBookingOpen(true)}>
         Request Private Viewing
         <ArrowRight aria-hidden />
       </button>
+      {mlsNumber ? (
+        <ViewingBookingModal
+          open={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          mlsNumber={mlsNumber}
+          callbackPath={bookingPath}
+        />
+      ) : null}
     </aside>
   );
 }

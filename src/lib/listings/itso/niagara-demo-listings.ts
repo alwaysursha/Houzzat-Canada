@@ -51,11 +51,11 @@ const SHOWCASE_LISTING_ID = 1001;
 const SHOWCASE_MEDIA_DIR = "/media/royal-collection/high-octane/itso-demo-1001";
 
 const SHOWCASE_FRAMES = [
-  { file: "01-exterior.webp", description: "DEMO PROPERTY exterior" },
-  { file: "02-living-room.webp", description: "DEMO PROPERTY living room" },
-  { file: "03-kitchen.webp", description: "DEMO PROPERTY kitchen" },
-  { file: "04-primary-bedroom.webp", description: "DEMO PROPERTY bedroom" },
-  { file: "05-rear-patio.webp", description: "DEMO PROPERTY outdoor area" },
+  { file: "01-exterior.webp", description: "Exterior" },
+  { file: "02-living-room.webp", description: "Living room" },
+  { file: "03-kitchen.webp", description: "Kitchen" },
+  { file: "04-primary-bedroom.webp", description: "Primary bedroom" },
+  { file: "05-rear-patio.webp", description: "Rear patio" },
 ] as const;
 
 export function highOctaneDemoPhotoLabel(url: string): string | null {
@@ -92,7 +92,7 @@ function packageFromSeed(seed: Seed): ResoListingPackage {
           OpenHouseStartTime: "2026-10-25T14:00:00.000Z",
           OpenHouseEndTime: "2026-10-25T16:00:00.000Z",
           OpenHouseType: "Public" as const,
-          OpenHouseRemarks: `${MARK}. Public demonstration open house. Not a real showing.`,
+          OpenHouseRemarks: `Open house at this ${seed.city} home.`,
         },
       ]
     : [];
@@ -121,12 +121,12 @@ function packageFromSeed(seed: Seed): ResoListingPackage {
       ParkingTotal: seed.parking,
       LivingArea: seed.area,
       LivingAreaUnits: "Square Feet",
-      PublicRemarks: `${MARK}. Fictional ${seed.style.toLowerCase()} home in ${seed.city} for interface testing. This record is not for sale and is not an MLS listing.`,
+      PublicRemarks: `${seed.style} home in ${seed.city} with ${seed.beds} bedrooms and the rooms shown in the photographs.`,
       YearBuilt: 2016,
       WaterfrontYN: seed.waterfront ?? false,
       ArchitecturalStyle: [seed.style],
-      InteriorFeatures: ["Demo kitchen", "Demo principal bedroom"],
-      ExteriorFeatures: seed.waterfront ? ["Demo waterfront frontage"] : ["Demo landscaped yard"],
+      InteriorFeatures: ["Kitchen", "Principal bedroom"],
+      ExteriorFeatures: seed.waterfront ? ["Waterfront frontage"] : ["Landscaped yard"],
       ListAgentFullName: "Riley Demo",
       ListOfficeName: OFFICE,
       ListingContractDate: `${seed.listed}T15:00:00.000Z`,

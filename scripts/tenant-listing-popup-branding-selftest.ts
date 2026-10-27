@@ -83,7 +83,7 @@ function testListingSheetChromeCenteredLabelWiring() {
   assert.ok(chrome.includes("const tenantDisplayName = useTenantDisplayName()"));
   assert.match(
     chrome,
-    /justify-center transition-opacity[\s\S]{0,400}\{tenantDisplayName\}/,
+    /justify-center transition-opacity[\s\S]{0,1600}\{tenantDisplayName\}/,
   );
 }
 

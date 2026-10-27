@@ -26,7 +26,6 @@ import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high
 import { loadHighOctaneDevelopmentListingAccess } from "@/lib/tenancy/templates/high-octane-development-listing-access";
 import {
   HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE,
-  highOctaneDevelopmentListingBadge,
   highOctaneDevelopmentListingDetail,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
@@ -302,10 +301,10 @@ export async function OperationalListingDetail({
         role: royal?.title ?? null,
         photoUrl: royal?.resolvedAgentPortraitUrl ?? null,
       },
-      badge: highOctaneDevelopmentListingBadge(listing.dataSource),
+      badge: null,
     });
     const viewing =
-      user && model.kind === "listing" && listing.dataSource !== HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE
+      user && model.kind === "listing"
         ? {
             mlsNumber: listingForClient.mlsNumber,
             callbackPath: canonicalPath,
@@ -328,6 +327,8 @@ export async function OperationalListingDetail({
         mlsNumber={listingForClient.mlsNumber}
         canonicalPath={canonicalPath}
         viewing={viewing}
+        publicShowcase={synthetic}
+        sheet={isListingSheet}
       />
     );
   }

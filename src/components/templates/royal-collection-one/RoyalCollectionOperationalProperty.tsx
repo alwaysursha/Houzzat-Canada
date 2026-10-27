@@ -1,7 +1,6 @@
 import type { ViewingContactDefaults } from "@/components/listings/ViewingBookingModal";
 import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
-import { HIGH_OCTANE_DEMO_PROPERTY_NOTICE } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { RoyalCollectionPropertyView } from "./RoyalCollectionPropertyView";
 import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
@@ -28,27 +27,26 @@ export function RoyalCollectionOperationalProperty({
   mlsNumber,
   canonicalPath,
   viewing,
+  publicShowcase = false,
+  sheet = false,
 }: {
   model: RoyalCollectionPropertyModel;
   signedIn: boolean;
   mlsNumber: string;
   canonicalPath: string;
   viewing: RoyalCollectionViewingAction | null;
+  /** Public synthetic inventory stays readable without a sign-in wall. */
+  publicShowcase?: boolean;
+  /** Listing overlay iframe. The site header is not in this frame. */
+  sheet?: boolean;
 }) {
-  const demonstration = Boolean(model.badge);
   const page = (
     <RoyalCollectionPropertyView
       model={model}
-      showDisclaimer={model.kind === "listing" && !demonstration}
-      notice={
-        demonstration ? (
-          <p className={styles.demoNotice}>{HIGH_OCTANE_DEMO_PROPERTY_NOTICE}</p>
-        ) : null
-      }
+      showDisclaimer={model.kind === "listing"}
+      sheet={sheet}
     >
-      {demonstration ? (
-        <p className={styles.demoNotice}>{HIGH_OCTANE_DEMO_PROPERTY_NOTICE}</p>
-      ) : viewing ? (
+      {viewing ? (
         <div className={styles.listingActions}>
           <ViewingRequestPanel
             mlsNumber={viewing.mlsNumber}
@@ -71,7 +69,7 @@ export function RoyalCollectionOperationalProperty({
     </RoyalCollectionPropertyView>
   );
 
-  if (signedIn || demonstration) return page;
+  if (signedIn || publicShowcase) return page;
   return (
     <ListingAccessGate mlsNumber={mlsNumber} callbackPath={canonicalPath} signedIn={false}>
       {page}

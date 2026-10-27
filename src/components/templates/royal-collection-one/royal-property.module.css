@@ -21,6 +21,10 @@
   font-family: var(--rc-sans);
 }
 
+.pageInSheet {
+  padding-top: 0;
+}
+
 .scroll {
   overflow: visible;
   padding-bottom: 72px;
@@ -1295,6 +1299,10 @@
 
   .gallery {
     margin-top: 8px;
+  }
+
+  .aside {
+    display: none;
   }
 
   .stageNav,

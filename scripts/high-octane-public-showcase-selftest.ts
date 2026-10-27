@@ -108,7 +108,8 @@ assert.equal(
 const detail = highOctaneDevelopmentListingDetail("ITSODEMO1001");
 assert.ok(detail);
 assert.equal(detail.media.length, 5);
-assert.equal(detail.description?.includes("DEMO PROPERTY"), true);
+assert.equal(detail.description?.includes("Niagara Falls"), true);
+assert.equal(detail.description?.includes("DEMO PROPERTY"), false);
 assert.equal(HIGH_OCTANE_DEMO_PROPERTY_NOTICE.includes("not available for purchase or viewing"), true);
 
 const leads = readFileSync(join(root, "src/app/api/leads/route.ts"), "utf8");
@@ -143,8 +144,8 @@ const property = readFileSync(
   join(root, "src/components/templates/royal-collection-one/RoyalCollectionOperationalProperty.tsx"),
   "utf8",
 );
-assert.equal(property.includes("signedIn || demonstration"), true);
-assert.equal(property.includes("HIGH_OCTANE_DEMO_PROPERTY_NOTICE"), true);
+assert.equal(property.includes("signedIn || publicShowcase"), true);
+assert.equal(property.includes("HIGH_OCTANE_DEMO_PROPERTY_NOTICE"), false);
 
 const development = readFileSync(
   join(root, "src/lib/tenancy/templates/high-octane-development-listings.ts"),

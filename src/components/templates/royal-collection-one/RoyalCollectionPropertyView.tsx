@@ -88,6 +88,7 @@ export function RoyalCollectionPropertyView({
   notice,
   trailer,
   showDisclaimer = false,
+  sheet = false,
 }: {
   model: RoyalCollectionPropertyModel;
   children?: ReactNode;
@@ -96,9 +97,11 @@ export function RoyalCollectionPropertyView({
   /** Extra harness controls placed with the story, below the gallery. */
   trailer?: ReactNode;
   showDisclaimer?: boolean;
+  /** Overlay iframe has no site header, so the header offset would be an empty band. */
+  sheet?: boolean;
 }) {
   return (
-    <div className={styles.page}>
+    <div className={sheet ? `${styles.page} ${styles.pageInSheet}` : styles.page}>
       <div className={styles.scroll}>
         {notice}
         {model.kind === "withheld" ? null : (
