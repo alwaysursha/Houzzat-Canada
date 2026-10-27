@@ -60,7 +60,13 @@ export type RoyalCollectionView = {
   title: string | null;
   tagline: string | null;
   bio: string | null;
+  /** Uploaded primary-agent photo, before the HIGH OCTANE approved-cutout fallback. */
   photoUrl: string | null;
+  /**
+   * The one portrait URL for hero, about, property, concierge, and viewing.
+   * An upload replaces the approved cutout. Null keeps each placement's empty state.
+   */
+  resolvedAgentPortraitUrl: string | null;
   phone: string | null;
   email: string | null;
   markets: string[];
@@ -137,17 +143,36 @@ const HIGH_OCTANE_STORY_IMAGES = {
 };
 
 /**
- * Saad’s cutout belongs to the HIGH OCTANE workspace slug.
- * Another Royal Collection tenant does not receive this block.
+ * Approved HIGH OCTANE cutout. The only copy of this path.
+ * Another workspace never receives it.
  */
-const HIGH_OCTANE_HERO_PORTRAIT: RoyalCollectionHeroPortrait = {
-  imageUrl: "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+export const HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL =
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png";
+
+const HIGH_OCTANE_HERO_PORTRAIT_COPY = {
   name: "Saad Qureshi",
   role: "Real Estate Agent",
   phone: "(289) 501-7755",
   phoneHref: "tel:+12895017755",
   team: "Niagara Real Estate Team",
-};
+} as const;
+
+/**
+ * One portrait for every Royal Collection placement.
+ * A primary-agent upload replaces the approved cutout.
+ * Other workspaces use only their own upload.
+ */
+export function resolveRoyalCollectionAgentPortraitUrl(input: {
+  workspaceSlug: string | null | undefined;
+  uploadedPhotoUrl: string | null | undefined;
+}): string | null {
+  const uploaded = input.uploadedPhotoUrl?.trim() || null;
+  if (uploaded) return uploaded;
+  if (usesHighOctaneRoyalCollectionMedia(input.workspaceSlug)) {
+    return HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL;
+  }
+  return null;
+}
 
 export const HIGH_OCTANE_LOGO_URL = "/media/royal-collection/high-octane/logo.svg";
 export const HIGH_OCTANE_FAVICON_URL = "/media/royal-collection/high-octane/favicon.svg";
@@ -204,6 +229,7 @@ function highOctaneView(): RoyalCollectionView {
     tagline: fixture.tagline,
     bio: null,
     photoUrl: null,
+    resolvedAgentPortraitUrl: null,
     phone: fixture.phone,
     email: fixture.email,
     markets: [fixture.marketLabel],
@@ -285,6 +311,11 @@ export function resolveRoyalCollectionView(
   const stagingDefaultMarket = stagingWorkspace && markets.length === 0;
   const agentName =
     professional.agent.name?.trim() || brand.agent?.name?.trim() || null;
+  const uploadedPhotoUrl = professional.agent.photoUrl ?? null;
+  const resolvedAgentPortraitUrl = resolveRoyalCollectionAgentPortraitUrl({
+    workspaceSlug: brand.workspaceSlug,
+    uploadedPhotoUrl,
+  });
   const brandName = brand.displayName?.trim() || agentName || "Real Estate";
   const brokerage: PublicBrokerageIdentity = {
     name: professional.brokerage.name ?? brand.agent?.brokerageName ?? null,
@@ -307,7 +338,8 @@ export function resolveRoyalCollectionView(
     title: professional.agent.designation ?? brand.agent?.title ?? null,
     tagline: brand.tagline?.trim() || null,
     bio: brand.agent?.bio?.trim() || null,
-    photoUrl: professional.agent.photoUrl ?? null,
+    photoUrl: uploadedPhotoUrl,
+    resolvedAgentPortraitUrl,
     phone: professional.agent.cellPhone ?? brand.agent?.phone ?? null,
     email: royalCollectionPublicEmail(brand),
     markets: stagingDefaultMarket ? [HIGH_OCTANE_STAGING_MARKET_LABEL] : markets,
@@ -326,7 +358,10 @@ export function resolveRoyalCollectionView(
         : markets
       : null,
     posterUrl: null,
-    heroPortrait: stagingWorkspace ? HIGH_OCTANE_HERO_PORTRAIT : null,
+    heroPortrait:
+      stagingWorkspace && resolvedAgentPortraitUrl
+        ? { ...HIGH_OCTANE_HERO_PORTRAIT_COPY, imageUrl: resolvedAgentPortraitUrl }
+        : null,
     scenes: stagingWorkspace ? HIGH_OCTANE_HERO_SCENES : [],
     storyMainUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.mainUrl : null,
     storyInsetUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.insetUrl : null,

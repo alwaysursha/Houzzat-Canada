@@ -288,7 +288,7 @@ export async function OperationalListingDetail({
         phone: royal?.phone ?? null,
         email: royal?.email ?? null,
         role: royal?.title ?? null,
-        photoUrl: royal?.photoUrl ?? royal?.heroPortrait?.imageUrl ?? null,
+        photoUrl: royal?.resolvedAgentPortraitUrl ?? null,
       },
       badge: highOctaneDevelopmentListingBadge(listing.dataSource),
     });

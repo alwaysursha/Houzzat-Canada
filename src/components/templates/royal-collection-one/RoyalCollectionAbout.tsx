@@ -21,9 +21,9 @@ export function RoyalCollectionAbout({ view }: { view: RoyalCollectionView }) {
       aria-label={view.agentName ? `About ${view.agentName}` : `About ${view.brandName}`}
     >
       <RoyalCollectionReveal className={styles.aboutImage}>
-        {view.photoUrl ? (
+        {view.resolvedAgentPortraitUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- tenant portrait URL
-          <img className={styles.aboutPhoto} src={view.photoUrl} alt="" />
+          <img className={styles.aboutPhoto} src={view.resolvedAgentPortraitUrl} alt="" />
         ) : (
           <div className={styles.aboutMonogram} aria-hidden="true">
             {initials(name)}

@@ -19,6 +19,7 @@ import {
 } from "../src/lib/tenancy/templates";
 import { resolveDevOnlyTemplatePreviewThemeId } from "../src/lib/tenancy/template-preview";
 import {
+  HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL,
   isHighOctaneRoyalPreview,
   resolveRoyalCollectionView,
 } from "../src/lib/tenancy/templates/resolve-royal-collection-view";
@@ -199,6 +200,7 @@ assert.equal(fixtureView.phone, "289-501-7755");
 assert.equal(fixtureView.email, "saad@highoctaneniagara.ca");
 assert.equal(fixtureView.actionsDisabled, true);
 assert.equal(fixtureView.photoUrl, null);
+assert.equal(fixtureView.resolvedAgentPortraitUrl, null);
 assert.equal(fixtureView.heroPortrait, null);
 assert.equal(fixtureView.bio, null);
 assert.equal(fixtureView.logoUrl, null);
@@ -227,6 +229,11 @@ const highOctaneWorkspace = resolveRoyalCollectionView({
   workspaceSlug: "high-octane-real-estate",
   isHouzzatWorkspace: false,
   templatePreview: null,
+  agent: { ...tenantBrand.agent!, photoUrl: null },
+  professionalIdentity: {
+    ...tenantBrand.professionalIdentity,
+    agent: { ...tenantBrand.professionalIdentity.agent, photoUrl: null },
+  },
 });
 assert.equal(highOctaneWorkspace.displayFixtureId, null);
 assert.equal(highOctaneWorkspace.heroPortrait?.name, "Saad Qureshi");
@@ -234,13 +241,18 @@ assert.equal(highOctaneWorkspace.heroPortrait?.role, "Real Estate Agent");
 assert.equal(highOctaneWorkspace.heroPortrait?.phone, "(289) 501-7755");
 assert.equal(highOctaneWorkspace.heroPortrait?.phoneHref, "tel:+12895017755");
 assert.equal(highOctaneWorkspace.heroPortrait?.team, "Niagara Real Estate Team");
+assert.equal(highOctaneWorkspace.photoUrl, null);
+assert.equal(
+  highOctaneWorkspace.resolvedAgentPortraitUrl,
+  HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL,
+);
 assert.equal(
   highOctaneWorkspace.heroPortrait?.imageUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+  highOctaneWorkspace.resolvedAgentPortraitUrl,
 );
 assert.equal(
   existsSync(
-    join(root, "public/media/royal-collection/high-octane/saad-qureshi-portrait.png"),
+    join(root, "public", HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL.replace(/^\//, "")),
   ),
   true,
 );
@@ -322,6 +334,7 @@ const ordinary = resolveRoyalCollectionView({
   templatePreview: null,
 });
 assert.equal(ordinary.heroPortrait, null);
+assert.equal(ordinary.resolvedAgentPortraitUrl, "/ali.jpg");
 assert.equal(ordinary.agentName, "Ali Syed");
 assert.equal(ordinary.storyMainUrl, null);
 assert.equal(ordinary.storyInsetUrl, null);

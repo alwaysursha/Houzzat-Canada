@@ -25,7 +25,10 @@ import {
   HIGH_OCTANE_STAGING_OWNER_EMAIL,
   HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
 } from "../src/lib/tenancy/templates/high-octane-staging-slug";
-import { resolveRoyalCollectionView } from "../src/lib/tenancy/templates/resolve-royal-collection-view";
+import {
+  HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL,
+  resolveRoyalCollectionView,
+} from "../src/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "../src/lib/tenancy/templates/types";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -114,9 +117,24 @@ assert.deepEqual(stagingView.featuredCities, [...HIGH_OCTANE_STAGING_FEATURED_CI
 assert.equal(stagingView.markets[0], "Niagara Region");
 assert.equal(stagingView.navCommunities.some((place) => place.name === "Niagara-on-the-Lake"), true);
 assert.equal(stagingView.photoUrl, null);
+assert.equal(stagingView.resolvedAgentPortraitUrl, HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL);
+assert.equal(stagingView.heroPortrait?.imageUrl, stagingView.resolvedAgentPortraitUrl);
+const replacedPortrait = resolveRoyalCollectionView({
+  ...brand(),
+  professionalIdentity: {
+    ...brand().professionalIdentity,
+    agent: {
+      ...brand().professionalIdentity.agent,
+      photoUrl: "https://cdn.example/saad-next.jpg",
+    },
+  },
+});
+assert.equal(replacedPortrait.photoUrl, "https://cdn.example/saad-next.jpg");
+assert.equal(replacedPortrait.resolvedAgentPortraitUrl, replacedPortrait.photoUrl);
+assert.equal(replacedPortrait.heroPortrait?.imageUrl, replacedPortrait.resolvedAgentPortraitUrl);
 assert.equal(
-  stagingView.heroPortrait?.imageUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+  replacedPortrait.resolvedAgentPortraitUrl === HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL,
+  false,
 );
 assert.equal(stagingView.heroPortrait?.name, "Saad Qureshi");
 assert.equal(
@@ -238,6 +256,7 @@ assert.equal(houzzat.listingDisclosure, "unconnected");
 assert.equal(houzzat.featuredCities, null);
 assert.equal(houzzat.collectionCards, null);
 assert.equal(houzzat.heroPortrait, null);
+assert.equal(houzzat.resolvedAgentPortraitUrl, null);
 assert.equal(houzzat.storyMainUrl, null);
 assert.equal(houzzat.storyInsetUrl, null);
 assert.equal(JSON.stringify(houzzat.markets), JSON.stringify(["Mississauga"]));

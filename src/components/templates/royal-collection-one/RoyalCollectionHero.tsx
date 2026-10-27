@@ -169,13 +169,15 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
             </a>
             <p className={styles.heroPortraitTeam}>{view.heroPortrait.team}</p>
           </figcaption>
-          {/* Keep the transparent cutout unoptimized so the portrait is not recompressed. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className={styles.heroPortraitImage}
-            src={view.heroPortrait.imageUrl}
-            alt=""
-          />
+          {view.resolvedAgentPortraitUrl ? (
+            // Keep the transparent cutout unoptimized so the portrait is not recompressed.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              className={styles.heroPortraitImage}
+              src={view.resolvedAgentPortraitUrl}
+              alt=""
+            />
+          ) : null}
         </figure>
       ) : null}
       <div className={styles.heroVertical}>

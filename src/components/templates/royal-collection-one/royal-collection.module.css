@@ -1411,10 +1411,14 @@
 
 .aboutPhoto {
   position: absolute;
-  inset: 12% 16%;
+  left: 50%;
+  bottom: 0;
   width: auto;
-  height: auto;
-  object-fit: cover;
+  height: 94%;
+  max-width: 78%;
+  object-fit: contain;
+  object-position: center bottom;
+  transform: translateX(-50%);
 }
 
 .aboutPortrait {

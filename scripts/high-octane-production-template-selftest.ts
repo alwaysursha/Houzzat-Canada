@@ -20,6 +20,7 @@ import {
 } from "../src/lib/platform/provisioning/slug";
 import { selectRoyalCollectionOperationalPresentation } from "../src/lib/tenancy/templates/royal-collection-operational-listing";
 import {
+  HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL,
   resolveRoyalCollectionView,
   usesHighOctaneRoyalCollectionMedia,
 } from "../src/lib/tenancy/templates/resolve-royal-collection-view";
@@ -143,6 +144,7 @@ assert.equal(otherTenant.brandName, "Harbour & Co.");
 assert.equal(otherTenant.scenes.length, 0);
 assert.equal(otherTenant.storyMainUrl, null);
 assert.equal(otherTenant.heroPortrait, null);
+assert.equal(otherTenant.resolvedAgentPortraitUrl, "/mina.jpg");
 assert.equal(JSON.stringify(otherTenant).includes("/media/royal-collection/high-octane/"), false);
 assert.equal(JSON.stringify(otherTenant).includes("Saad Qureshi"), false);
 assert.equal(JSON.stringify(otherTenant).includes("saad-qureshi-portrait"), false);
@@ -156,12 +158,14 @@ const highOctane = resolveRoyalCollectionView({
     name: "Saad Qureshi",
     email: "saad@highoctaneniagara.ca",
     markets: ["Niagara"],
+    photoUrl: null,
   },
   professionalIdentity: {
     ...brand.professionalIdentity,
     agent: {
       ...brand.professionalIdentity.agent,
       name: "Saad Qureshi",
+      photoUrl: null,
     },
   },
 });
@@ -174,10 +178,50 @@ assert.equal(highOctane.heroPortrait?.role, "Real Estate Agent");
 assert.equal(highOctane.heroPortrait?.phone, "(289) 501-7755");
 assert.equal(highOctane.heroPortrait?.team, "Niagara Real Estate Team");
 assert.equal(highOctane.heroPortrait?.phoneHref, "tel:+12895017755");
-assert.equal(
-  highOctane.heroPortrait?.imageUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png",
+assert.equal(highOctane.photoUrl, null);
+assert.equal(highOctane.resolvedAgentPortraitUrl, HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL);
+assert.equal(highOctane.heroPortrait?.imageUrl, highOctane.resolvedAgentPortraitUrl);
+const uploaded = resolveRoyalCollectionView({
+  ...brand,
+  displayName: "HIGH OCTANE Real Estate",
+  workspaceSlug: HIGH_OCTANE_STAGING_WORKSPACE_SLUG,
+  professionalIdentity: {
+    ...brand.professionalIdentity,
+    agent: {
+      ...brand.professionalIdentity.agent,
+      name: "Saad Qureshi",
+      photoUrl: "https://cdn.example/saad-uploaded.jpg",
+    },
+  },
+});
+assert.equal(uploaded.resolvedAgentPortraitUrl, "https://cdn.example/saad-uploaded.jpg");
+assert.equal(uploaded.heroPortrait?.imageUrl, uploaded.resolvedAgentPortraitUrl);
+const about = readFileSync(
+  join(root, "src/components/templates/royal-collection-one/RoyalCollectionAbout.tsx"),
+  "utf8",
 );
+const hero = readFileSync(
+  join(root, "src/components/templates/royal-collection-one/RoyalCollectionHero.tsx"),
+  "utf8",
+);
+const property = readFileSync(
+  join(root, "src/components/templates/royal-collection-one/RoyalCollectionPropertyView.tsx"),
+  "utf8",
+);
+const concierge = readFileSync(
+  join(root, "src/components/templates/royal-collection-one/RoyalCollectionConciergeBar.tsx"),
+  "utf8",
+);
+const listing = readFileSync(
+  join(root, "src/app/(marketing)/listing/[...parts]/listing-operational.tsx"),
+  "utf8",
+);
+for (const source of [about, hero, property, concierge, listing]) {
+  assert.equal(source.includes("saad-qureshi-portrait"), false);
+}
+assert.ok(about.includes("resolvedAgentPortraitUrl"));
+assert.ok(listing.includes("resolvedAgentPortraitUrl"));
+assert.equal(listing.includes("heroPortrait?.imageUrl"), false);
 process.env.NODE_ENV = previous;
 
 const plan = buildHighOctaneProductionProvisionPlan();
