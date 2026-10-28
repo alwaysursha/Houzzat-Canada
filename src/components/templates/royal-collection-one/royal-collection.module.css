@@ -220,6 +220,35 @@
   gap: 18px;
 }
 
+.accountLinks {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+}
+
+.accountLinks a,
+.accountLinks button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: rgb(247 244 238 / 0.88);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.accountLinks a:last-child,
+.accountLinks button:last-child {
+  color: var(--rc-gold);
+}
+
+.accountLinks a:hover,
+.accountLinks button:hover {
+  color: #f6e7c8;
+}
+
 .mastPhone {
   letter-spacing: 0.13em;
   font-size: 10px;
@@ -254,7 +283,11 @@
 .navButton:focus-visible,
 .menuButton:focus-visible,
 .utilityLink:focus-visible,
-.utilityLogin:focus-visible {
+.utilityLogin:focus-visible,
+.accountLinks a:focus-visible,
+.accountLinks button:focus-visible,
+.drawerAccount a:focus-visible,
+.drawerAccount button:focus-visible {
   outline: 2px solid var(--rc-gold);
   outline-offset: 3px;
 }
@@ -485,6 +518,26 @@
 .drawerSubLink {
   padding-left: 0.8rem !important;
   color: var(--rc-gold) !important;
+}
+
+.drawerAccount {
+  display: flex;
+  align-items: center;
+  gap: 1.6rem;
+  margin-top: 0.85rem;
+}
+
+.drawerAccount a,
+.drawerAccount button {
+  width: auto;
+  min-height: 44px;
+  border-bottom: 0;
+  padding: 0.65rem 0 0.2rem;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rc-gold);
 }
 
 .hero {
@@ -1794,7 +1847,8 @@
   }
 
   .nav,
-  .mastRight .button {
+  .mastRight .button,
+  .accountLinks {
     display: none;
   }
 

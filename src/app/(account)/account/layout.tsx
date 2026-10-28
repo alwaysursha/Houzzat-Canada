@@ -9,6 +9,11 @@ import { MobileBottomNav } from "@/components/site/MobileBottomNav";
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
 import { TenantBrandProvider } from "@/components/tenancy/TenantBrandProvider";
 import { TenantThemeStyle } from "@/components/tenancy/TenantThemeStyle";
+import { RoyalCollectionFooter } from "@/components/templates/royal-collection-one/RoyalCollectionFooter";
+import { royalCollectionFonts } from "@/components/templates/royal-collection-one/royal-collection-fonts";
+import royalCollectionStyles from "@/components/templates/royal-collection-one/royal-collection.module.css";
+import { isRoyalCollectionOneTemplateId } from "@/lib/tenancy/templates";
+import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { requireCustomerUser } from "@/lib/account";
 import { accountSignInHref } from "@/lib/account/account-sign-in-callback";
 import { auth } from "@/lib/auth";
@@ -163,6 +168,11 @@ export default async function AccountLayout({
         <AccountVerifiedSuccessSlot />
         {children}
       </main>
+      {chromeBrand && isRoyalCollectionOneTemplateId(chromeBrand.templateId) ? (
+        <div className={`${royalCollectionFonts} ${royalCollectionStyles.shell}`}>
+          <RoyalCollectionFooter view={resolveRoyalCollectionView(chromeBrand)} />
+        </div>
+      ) : null}
       <MobileBottomNav chromeBrand={chromeBrand ?? undefined} />
       {chromeBrand ? <CustomerChatFab /> : null}
     </div>

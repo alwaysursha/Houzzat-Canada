@@ -47,6 +47,13 @@ export function MarketingBelowHeader({
     pathname.startsWith("/search?") ||
     isPro;
   const listingSheet = params.get("sheet") === "1";
+  const royalCollection = isRoyalCollectionOneTemplateId(chromeBrand.templateId);
+  // Search fills the first screen. The Royal Collection footer still follows it
+  // so every public page ends with the same brokerage footer.
+  const showFooter =
+    !listingSheet &&
+    !framed &&
+    (royalCollection ? !isPro : !immersive);
 
   useEffect(() => {
     try {
@@ -74,7 +81,7 @@ export function MarketingBelowHeader({
           {children}
         </main>
         {/* Bottom-nav clearance after footer — not on main (avoids a blank band above the footer). */}
-        {!hideChrome ? (
+        {showFooter ? (
           <div className="pb-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px))] md:pb-0">
             {!isAgentSignatureTemplateId(chromeBrand.templateId) &&
             !isTeamSignatureTemplateId(chromeBrand.templateId) &&
