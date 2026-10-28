@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import {
   HIGH_OCTANE_LOGO_URL,
@@ -11,6 +12,49 @@ import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types"
 import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
+
+function HeaderAccountLinks({
+  className,
+  disabled,
+  onNavigate,
+}: {
+  className: string;
+  disabled: boolean;
+  onNavigate?: () => void;
+}) {
+  const { status } = useSession();
+  if (status === "authenticated") {
+    return (
+      <div className={className}>
+        <RoyalCollectionPreviewLink
+          href="/account"
+          disabled={disabled}
+          onNavigate={onNavigate}
+        >
+          Account
+        </RoyalCollectionPreviewLink>
+      </div>
+    );
+  }
+  return (
+    <div className={className}>
+      <RoyalCollectionPreviewLink
+        href="/auth/sign-in"
+        disabled={disabled}
+        onNavigate={onNavigate}
+      >
+        Log in
+      </RoyalCollectionPreviewLink>
+      <RoyalCollectionPreviewLink
+        href="/auth/sign-up"
+        disabled={disabled}
+        onNavigate={onNavigate}
+      >
+        Sign up
+      </RoyalCollectionPreviewLink>
+    </div>
+  );
+}
 
 const DISCOVER = [
   { href: "/search", label: "Explore Homes" },
@@ -245,6 +289,10 @@ export function RoyalCollectionHeader({
           </Link>
         </nav>
         <div className={styles.mastRight}>
+          <HeaderAccountLinks
+            className={styles.accountLinks}
+            disabled={view.actionsDisabled}
+          />
           <Link className={`${styles.button} ${styles.buttonGold}`} href="#rc-contact" data-rc-allow="">
             Let&apos;s Connect ↗
           </Link>
@@ -377,6 +425,11 @@ export function RoyalCollectionHeader({
           <Link href={sellHref} data-rc-allow="" onClick={closeMenus}>
             Sell With Us
           </Link>
+          <HeaderAccountLinks
+            className={styles.drawerAccount}
+            disabled={view.actionsDisabled}
+            onNavigate={closeMenus}
+          />
         </div>
       </div>
     </header>
