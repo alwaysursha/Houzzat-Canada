@@ -255,7 +255,9 @@ export function RoyalCollectionPropertyView({
                   {model.attribution.paragraphs.map((paragraph) => (
                     <p key={paragraph}>{paragraph}</p>
                   ))}
-                  {showDisclaimer ? <MlsDisclaimer /> : null}
+                  {showDisclaimer ? (
+                    <MlsDisclaimer compact className={styles.mlsDisclosure} />
+                  ) : null}
                 </section>
               ) : null}
             </div>

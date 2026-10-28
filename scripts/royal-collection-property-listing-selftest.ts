@@ -341,6 +341,7 @@ assert.ok(concierge.includes("Request Private Viewing"));
 assert.ok(concierge.includes("IntersectionObserver"));
 assert.ok(concierge.includes("prefers-reduced-motion"));
 assert.ok(concierge.includes('aria-label={`Call ${agentName}`}'));
+assert.ok(concierge.includes('aria-label="Open chat"'));
 assert.ok(concierge.includes('getElementById("rc-contact")'));
 assert.ok(concierge.includes("(max-width: 767px)"));
 assert.ok(css.includes(".concierge"));

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
-import { ROYAL_COLLECTION_PREVIEW_ACTION_NOTE } from "./preview-action-note";
 import { RoyalCollectionBrokerageMark } from "./RoyalCollectionBrokerageMark";
 import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPlatformAttribution } from "./RoyalCollectionPlatformAttribution";
@@ -109,15 +108,7 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
           © {new Date().getFullYear()} {view.brandName}
           {view.actionsDisabled ? " · Design concept only" : ""}
         </span>
-        <span>
-          <em>HOUZZATPRO</em> / ROYAL COLLECTION — SIGNATURE ONE
-        </span>
-        <span>
-          {view.footerLegalText ||
-            (view.actionsDisabled
-              ? ROYAL_COLLECTION_PREVIEW_ACTION_NOTE
-              : "Legal disclosures use the verified tenant configuration.")}
-        </span>
+        {view.footerLegalText ? <span>{view.footerLegalText}</span> : null}
       </div>
       <RoyalCollectionPlatformAttribution />
       <div className={styles.footerLegal}>

@@ -6,9 +6,12 @@ import styles from "./royal-collection.module.css";
 export function RoyalCollectionReveal({
   children,
   className,
+  early = false,
 }: {
   children: ReactNode;
   className?: string;
+  /** Fade as the block nears the screen. A tall section otherwise waits until a slice of it is already in view. */
+  early?: boolean;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [shown, setShown] = useState(false);
@@ -21,11 +24,11 @@ export function RoyalCollectionReveal({
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) setShown(true);
       },
-      { threshold: 0.16 },
+      early ? { threshold: 0, rootMargin: "0px 0px 10% 0px" } : { threshold: 0.16 },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, []);
+  }, [early]);
 
   return (
     <div

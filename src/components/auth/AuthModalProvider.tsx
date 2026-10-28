@@ -18,6 +18,7 @@ import { TourThisHomePrompt } from "@/components/auth/lead-funnel/TourThisHomePr
 import { SignInForm } from "@/components/auth/SignInForm";
 import { SignUpForm } from "@/components/auth/SignUpForm";
 import { TenantHeaderBrand } from "@/components/tenancy/TenantHeaderBrand";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import {
   getPresentedTenantBrand,
   getPresentedTenantBrandServerSnapshot,
@@ -272,26 +273,39 @@ function AuthModalPanel({
               )}
             >
               <div className="min-w-0 flex-1">
-                <TenantHeaderBrand
-                  displayName={brand?.displayName?.trim() || ""}
-                  logoUrl={brand?.logoUrl ?? null}
-                  primaryColor={brand?.colors.primary}
-                  showLogoMark={Boolean(brand && !brand.isHouzzatWorkspace)}
-                />
+                {brand?.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src="/media/royal-collection/high-octane/logo-ink.svg"
+                    alt="HIGH OCTANE"
+                    className="block h-8 w-auto max-w-full object-contain object-left sm:h-9"
+                  />
+                ) : (
+                  <TenantHeaderBrand
+                    displayName={brand?.displayName?.trim() || ""}
+                    logoUrl={brand?.logoUrl ?? null}
+                    primaryColor={brand?.colors.primary}
+                    showLogoMark={Boolean(brand && !brand.isHouzzatWorkspace)}
+                  />
+                )}
                 <h2
                   id="auth-modal-title"
                   className={cn(
-                    "mt-1.5 font-display leading-tight text-ink sm:mt-2 sm:text-xl",
-                    listingGate ? "text-base sm:text-xl" : "text-lg",
+                    mode === "sign-in"
+                      ? "sr-only"
+                      : "mt-1.5 font-display leading-tight text-ink sm:mt-2 sm:text-xl",
+                    mode !== "sign-in" && (listingGate ? "text-base sm:text-xl" : "text-lg"),
                   )}
                 >
-                  {copy.headline}
+                  {mode === "sign-in" ? copy.subhead : copy.headline}
                 </h2>
                 <p
                   className={cn(
-                    "mt-0.5 leading-snug text-ink/65 sm:mt-1 sm:leading-relaxed",
-                    listingGate ? "text-[13px] sm:text-sm" : "text-sm",
+                    "leading-snug text-ink/65 sm:leading-relaxed",
+                    mode === "sign-in" ? "mt-2 text-sm" : "mt-0.5 sm:mt-1",
+                    mode !== "sign-in" && (listingGate ? "text-[13px] sm:text-sm" : "text-sm"),
                   )}
+                  aria-hidden={mode === "sign-in" ? true : undefined}
                 >
                   {copy.subhead}
                 </p>

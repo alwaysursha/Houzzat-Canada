@@ -157,17 +157,7 @@ export function SearchResultsPane({
                 : emptyHint}
             </p>
             {emptyActions && emptyActions.length > 0 ? (
-              <div
-                className="mt-4 flex flex-col items-stretch gap-2 sm:mt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center"
-                style={
-                  mobileChatClearance
-                    ? {
-                        // Keep full-width empty actions out of the Chat FAB column.
-                        paddingRight: "3.5rem",
-                      }
-                    : undefined
-                }
-              >
+              <div className="mt-4 flex flex-col items-stretch gap-2 sm:mt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
                 {emptyActions.map((action) => (
                   <button
                     key={action.label}

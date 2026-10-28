@@ -24,6 +24,7 @@ export function CustomerChatFab() {
   const chat = useOptionalCustomerChatController();
   const role = data?.user?.role;
   const [houzzatProShell, setHouzzatProShell] = useState(false);
+  const [listingConcierge, setListingConcierge] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +36,25 @@ export function CustomerChatFab() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!pathname.startsWith("/listing/")) {
+      setListingConcierge(false);
+      return;
+    }
+    const sync = () => {
+      setListingConcierge(Boolean(document.querySelector("[data-rc-concierge]:not([hidden])")));
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["hidden"],
+    });
+    return () => observer.disconnect();
+  }, [pathname]);
+
   const isStaff =
     status === "authenticated" &&
     (role === "ADMIN" || role === "AGENT");
@@ -43,7 +63,7 @@ export function CustomerChatFab() {
     pathname.startsWith(`${CUSTOMER_CHAT_PAGE_HREF}/`);
   const onPro = pathname === "/pro" || pathname.startsWith("/pro/");
 
-  if (houzzatProShell || isStaff || onChatPage || onPro) return null;
+  if (houzzatProShell || isStaff || onChatPage || onPro || listingConcierge) return null;
   if (status === "loading") return null;
   if (status === "authenticated" && chat?.mode === "open") return null;
 

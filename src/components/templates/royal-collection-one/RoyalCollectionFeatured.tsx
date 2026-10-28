@@ -101,7 +101,7 @@ export function RoyalCollectionFeatured({
 
   return (
     <section className={`${styles.section} ${styles.collection}`} aria-labelledby="rc-featured-heading">
-      <RoyalCollectionReveal>
+      <RoyalCollectionReveal early>
         <div className={styles.sectionHead}>
           <div>
             <div className={styles.sectionMeta}>Selected homes</div>
