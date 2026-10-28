@@ -9,6 +9,7 @@ import {
   type RoyalCollectionView,
 } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types";
+import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
@@ -36,22 +37,26 @@ function HeaderAccountLinks({
       </div>
     );
   }
+  if (disabled) {
+    return (
+      <div className={className}>
+        <RoyalCollectionPreviewLink href="/auth/sign-in" disabled onNavigate={onNavigate}>
+          Log in
+        </RoyalCollectionPreviewLink>
+        <RoyalCollectionPreviewLink href="/auth/sign-up" disabled onNavigate={onNavigate}>
+          Sign up
+        </RoyalCollectionPreviewLink>
+      </div>
+    );
+  }
   return (
     <div className={className}>
-      <RoyalCollectionPreviewLink
-        href="/auth/sign-in"
-        disabled={disabled}
-        onNavigate={onNavigate}
-      >
+      <AuthOpenButton mode="sign-in" onClick={onNavigate}>
         Log in
-      </RoyalCollectionPreviewLink>
-      <RoyalCollectionPreviewLink
-        href="/auth/sign-up"
-        disabled={disabled}
-        onNavigate={onNavigate}
-      >
+      </AuthOpenButton>
+      <AuthOpenButton mode="sign-up" onClick={onNavigate}>
         Sign up
-      </RoyalCollectionPreviewLink>
+      </AuthOpenButton>
     </div>
   );
 }

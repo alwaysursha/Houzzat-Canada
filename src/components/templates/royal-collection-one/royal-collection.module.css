@@ -164,6 +164,7 @@
 .nav {
   display: flex;
   align-items: center;
+  align-self: stretch;
   gap: clamp(18px, 2vw, 40px);
 }
 
@@ -440,12 +441,15 @@
 }
 
 .navGroup {
-  position: static;
+  position: relative;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
 }
 
 .communitiesMenu {
-  left: auto;
-  right: clamp(24px, 5vw, 104px);
+  left: 0;
+  right: auto;
   width: min(28rem, calc(100vw - 48px));
   display: grid;
   grid-template-columns: 1fr 1fr;
