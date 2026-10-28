@@ -269,10 +269,29 @@ assert.equal(
   highOctaneWorkspace.storyInsetUrl,
   "/media/royal-collection/high-octane/niagara-falls-inset.webp",
 );
+assert.equal(
+  highOctaneWorkspace.valuationImageUrl,
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp",
+);
+assert.equal(
+  highOctaneWorkspace.mobileAboutPortraitUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+);
+assert.equal(
+  highOctaneWorkspace.brokerage.logoUrl,
+  "/media/royal-collection/high-octane/right-at-home-brokerage.png",
+);
 assert.equal(highOctaneWorkspace.collectionCards, null);
+assert.deepEqual(
+  highOctaneWorkspace.mobileCommunityCards?.map((card) => card.name),
+  ["Niagara Falls", "Niagara-on-the-Lake", "St. Catharines", "Grimsby"],
+);
 for (const rel of [
   highOctaneWorkspace.storyMainUrl,
   highOctaneWorkspace.storyInsetUrl,
+  highOctaneWorkspace.valuationImageUrl,
+  highOctaneWorkspace.mobileAboutPortraitUrl,
+  highOctaneWorkspace.brokerage.logoUrl,
 ]) {
   const file = rel.slice(1);
   assert.equal(existsSync(join(root, "public", file)), true, rel);
@@ -306,7 +325,13 @@ assert.equal(houzzatWorkspace.heroPortrait, null);
 assert.equal(houzzatWorkspace.scenes.length, 0);
 assert.equal(houzzatWorkspace.storyMainUrl, null);
 assert.equal(houzzatWorkspace.storyInsetUrl, null);
+assert.equal(houzzatWorkspace.valuationImageUrl, null);
+assert.equal(houzzatWorkspace.mobileAboutPortraitUrl, null);
+assert.equal(houzzatWorkspace.brokerage.logoUrl, null);
 assert.equal(houzzatWorkspace.collectionCards, null);
+assert.equal(houzzatWorkspace.mobileCommunityCards, null);
+assert.equal(houzzatWorkspace.communityGuides, false);
+assert.equal(highOctaneWorkspace.communityGuides, true);
 assert.equal(
   read("src/components/templates/royal-collection-one/RoyalCollectionFooter.tsx").includes(
     "CityXcape",

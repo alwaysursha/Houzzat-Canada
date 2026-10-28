@@ -20,6 +20,7 @@ import {
   organizationJsonLdForTenancy,
 } from "../src/lib/tenancy/tenant-seo";
 import { isHighOctaneStagingAnalyticsSuppressed } from "../src/lib/tenancy/templates/high-octane-staging-analytics";
+import { HIGH_OCTANE_COMMUNITY_GUIDES } from "../src/lib/tenancy/templates/high-octane-community-guides";
 import {
   HIGH_OCTANE_STAGING_FEATURED_CITIES,
   HIGH_OCTANE_STAGING_OWNER_EMAIL,
@@ -110,6 +111,11 @@ assert.equal(stagingView.email, "saad@highoctaneniagara.ca");
 assert.equal(stagingView.agentName, "Saad Qureshi");
 assert.equal(stagingView.phone, "289-501-7755");
 assert.equal(stagingView.brokerage.name, "Right at Home Realty Brokerage");
+assert.equal(stagingView.brokerage.address, "5111 New St.\nBurlington, ON, L7L1V2");
+assert.equal(
+  stagingView.brokerage.logoUrl,
+  "/media/royal-collection/high-octane/right-at-home-brokerage.png",
+);
 assert.equal(JSON.stringify(stagingView).includes(HIGH_OCTANE_STAGING_OWNER_EMAIL), false);
 assert.equal(stagingView.listingDisclosure, "unconnected");
 assert.equal(stagingView.featuredCities?.includes("Mississauga"), false);
@@ -145,6 +151,14 @@ assert.equal(
   stagingView.storyInsetUrl,
   "/media/royal-collection/high-octane/niagara-falls-inset.webp",
 );
+assert.equal(
+  stagingView.valuationImageUrl,
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp",
+);
+assert.equal(
+  stagingView.mobileAboutPortraitUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+);
 assert.deepEqual(
   stagingView.collectionCards?.map((card) => ({
     name: card.name,
@@ -173,6 +187,14 @@ assert.deepEqual(
     },
   ],
 );
+assert.deepEqual(
+  stagingView.mobileCommunityCards?.map((card) => card.name),
+  ["Niagara Falls", "Niagara-on-the-Lake", "St. Catharines", "Grimsby"],
+);
+assert.equal(
+  stagingView.mobileCommunityCards?.every((card) => card.imageUrl?.startsWith("/media/royal-collection/high-octane/")),
+  true,
+);
 
 const persistedMarket = resolveRoyalCollectionView(
   brand({
@@ -185,6 +207,10 @@ const persistedMarket = resolveRoyalCollectionView(
 assert.deepEqual(persistedMarket.featuredCities, ["Welland"]);
 assert.deepEqual(persistedMarket.markets, ["Welland"]);
 assert.equal(persistedMarket.collectionCards, null);
+assert.deepEqual(
+  persistedMarket.mobileCommunityCards?.map((card) => card.name),
+  ["Niagara Falls", "Niagara-on-the-Lake", "St. Catharines", "Grimsby"],
+);
 assert.equal(
   persistedMarket.storyMainUrl,
   "/media/royal-collection/high-octane/notl-house.webp",
@@ -255,10 +281,35 @@ assert.equal(houzzat.email, "hello@houzzat.com");
 assert.equal(houzzat.listingDisclosure, "unconnected");
 assert.equal(houzzat.featuredCities, null);
 assert.equal(houzzat.collectionCards, null);
+assert.equal(houzzat.mobileCommunityCards, null);
+assert.equal(houzzat.communityGuides, false);
+assert.equal(stagingView.communityGuides, true);
+assert.deepEqual(
+  HIGH_OCTANE_COMMUNITY_GUIDES.map((guide) => guide.slug),
+  [
+    "niagara-falls",
+    "niagara-on-the-lake",
+    "st-catharines",
+    "welland",
+    "thorold",
+    "grimsby",
+    "fort-erie",
+    "lincoln",
+    "fonthill-pelham",
+  ],
+);
+assert.equal(
+  HIGH_OCTANE_COMMUNITY_GUIDES.every(
+    (guide) => guide.history.length > 40 && guide.attractions.length >= 4 && guide.highlights.length >= 4,
+  ),
+  true,
+);
 assert.equal(houzzat.heroPortrait, null);
 assert.equal(houzzat.resolvedAgentPortraitUrl, null);
 assert.equal(houzzat.storyMainUrl, null);
 assert.equal(houzzat.storyInsetUrl, null);
+assert.equal(houzzat.valuationImageUrl, null);
+assert.equal(houzzat.mobileAboutPortraitUrl, null);
 assert.equal(JSON.stringify(houzzat.markets), JSON.stringify(["Mississauga"]));
 assert.equal(JSON.stringify(houzzat).includes("/media/royal-collection/high-octane/"), false);
 assert.equal(

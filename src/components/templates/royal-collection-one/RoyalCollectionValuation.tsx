@@ -29,12 +29,22 @@ export function RoyalCollectionValuation({ view }: { view: RoyalCollectionView }
           <p className={styles.previewNote}>{ROYAL_COLLECTION_PREVIEW_ACTION_NOTE}</p>
         ) : null}
       </RoyalCollectionReveal>
-      <RoyalCollectionReveal className={styles.insightArt}>
-        <svg viewBox="0 0 100 100" aria-hidden="true">
-          <path d="M13 48L50 17l37 31M22 42v42h56V42M41 84V59h20v25" />
-        </svg>
-        <small>THE NEXT CHAPTER STARTS HERE</small>
-      </RoyalCollectionReveal>
+      {view.valuationImageUrl ? (
+        <RoyalCollectionReveal className={styles.insightPhoto}>
+          <img
+            src={view.valuationImageUrl}
+            alt="Luxury home in the Niagara region"
+          />
+          <small>The next chapter starts here</small>
+        </RoyalCollectionReveal>
+      ) : (
+        <RoyalCollectionReveal className={styles.insightArt}>
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <path d="M13 48L50 17l37 31M22 42v42h56V42M41 84V59h20v25" />
+          </svg>
+          <small>THE NEXT CHAPTER STARTS HERE</small>
+        </RoyalCollectionReveal>
+      )}
     </section>
   );
 }

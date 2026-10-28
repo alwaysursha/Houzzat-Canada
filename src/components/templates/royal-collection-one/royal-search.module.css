@@ -379,17 +379,24 @@
 .price {
   margin: 0;
   color: var(--rc-navy);
-  font-family: var(--rc-serif);
+  font-family: var(--rc-sans);
   font-size: clamp(1.55rem, 2vw, 2rem);
-  font-weight: 500;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   line-height: 1.05;
 }
 
 .address {
   margin: 0;
   color: var(--rc-ink);
-  font-family: var(--rc-serif);
+  font-family: var(--font-rc-address), "Fraunces", Georgia, serif;
   font-size: 1.05rem;
+  font-weight: 460;
+  font-variation-settings: "SOFT" 100, "opsz" 48, "wght" 460;
+  font-variant-numeric: lining-nums;
+  font-feature-settings: "lnum" 1;
+  letter-spacing: -0.02em;
   line-height: 1.3;
 }
 

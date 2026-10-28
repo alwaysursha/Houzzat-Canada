@@ -75,7 +75,7 @@
 
 .gallery {
   width: min(1180px, calc(100% - 2 * clamp(20px, 5vw, 80px)));
-  margin: 28px auto 0;
+  margin: 40px auto 0;
 }
 
 .galleryBar {

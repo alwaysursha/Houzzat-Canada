@@ -3,6 +3,19 @@ import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import styles from "./royal-collection.module.css";
 
+function communityLabel(name: string) {
+  if (name === "Niagara-on-the-Lake") {
+    return (
+      <>
+        Niagara-on-
+        <br />
+        the-Lake
+      </>
+    );
+  }
+  return name;
+}
+
 function placeSlug(name: string): string {
   return name
     .trim()
@@ -23,9 +36,11 @@ export function RoyalCollectionCommunities({ view }: { view: RoyalCollectionView
       imageUrl: null,
     }));
 
+  const mobileCards = view.mobileCommunityCards;
+
   return (
     <section
-      className={`${styles.section} ${styles.collection}`}
+      className={`${styles.section} ${styles.collection}${mobileCards?.length ? ` ${styles.collectionHasSquares}` : ""}`}
       id="rc-communities"
       aria-labelledby="rc-communities-heading"
     >
@@ -71,6 +86,34 @@ export function RoyalCollectionCommunities({ view }: { view: RoyalCollectionView
           </RoyalCollectionPreviewLink>
         ))}
       </div>
+      {mobileCards?.length ? (
+        <div className={styles.communitySquares}>
+          {mobileCards.map((card) => (
+            <RoyalCollectionPreviewLink
+              key={card.name}
+              href={`/communities/${placeSlug(card.name)}`}
+              className={styles.communitySquare}
+              disabled={view.actionsDisabled}
+            >
+              <div
+                className={styles.collectionImage}
+                style={
+                  card.imageUrl
+                    ? {
+                        backgroundImage: `url(${card.imageUrl})`,
+                        ...(card.name === "Grimsby" ? { backgroundPosition: "12% center" } : {}),
+                      }
+                    : undefined
+                }
+              />
+              <div className={styles.collectionInside}>
+                <h3>{communityLabel(card.name)}</h3>
+                <div className={styles.circleArrow}>↗</div>
+              </div>
+            </RoyalCollectionPreviewLink>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
