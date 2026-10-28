@@ -11,7 +11,13 @@ export function RoyalCollectionJournal({ view }: { view: RoyalCollectionView }) 
         { n: "03", title: "Discovering Niagara neighbourhoods", href: "/communities" },
       ]
     : [
-        { n: "01", title: "Buying a home", href: "/search?transactionType=SALE" },
+        {
+          n: "01",
+          title: view.communityGuides
+            ? "Step by Step Home Buying Guide"
+            : "Buying a home",
+          href: view.communityGuides ? "/guides/home-buying" : "/search?transactionType=SALE",
+        },
         { n: "02", title: "Preparing to sell with confidence", href: "/home-valuation" },
         { n: "03", title: "Discovering neighbourhoods", href: "/communities" },
       ];
