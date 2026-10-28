@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_PREVIEW_ACTION_NOTE } from "./preview-action-note";
+import { RoyalCollectionBrokerageMark } from "./RoyalCollectionBrokerageMark";
 import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPlatformAttribution } from "./RoyalCollectionPlatformAttribution";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
@@ -42,9 +43,10 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
           ) : null}
         </div>
         <div>
-          <div className={styles.wordmark} style={{ marginBottom: 25 }}>
+          <div className={styles.wordmark} style={{ marginBottom: 22 }}>
             <RoyalCollectionLockup view={view} />
           </div>
+          <RoyalCollectionBrokerageMark view={view} />
           <p className={styles.footerSub}>
             {view.agentName}
             {view.brokerage.name ? (
@@ -53,19 +55,22 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
                 {view.brokerage.name}
               </>
             ) : null}
-            {view.markets[0] ? (
-              <>
-                <br />
-                {view.markets[0]}
-                {view.displayFixtureId ? ", Ontario" : ""}
-              </>
-            ) : null}
-            {view.brokerage.address ? (
-              <>
-                <br />
-                {view.brokerage.address}
-              </>
-            ) : null}
+            {view.brokerage.address
+              ? view.brokerage.address.split("\n").map((line) => (
+                  <span key={line}>
+                    <br />
+                    {line}
+                  </span>
+                ))
+              : view.markets[0]
+                ? (
+                    <>
+                      <br />
+                      {view.markets[0]}
+                      {view.displayFixtureId ? ", Ontario" : ""}
+                    </>
+                  )
+                : null}
           </p>
           <p className={styles.footerSub}>
             {view.phone ? (

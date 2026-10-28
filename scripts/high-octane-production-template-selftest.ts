@@ -143,6 +143,10 @@ assert.equal(otherTenant.agentName, "Mina Harbour");
 assert.equal(otherTenant.brandName, "Harbour & Co.");
 assert.equal(otherTenant.scenes.length, 0);
 assert.equal(otherTenant.storyMainUrl, null);
+assert.equal(otherTenant.valuationImageUrl, null);
+assert.equal(otherTenant.mobileAboutPortraitUrl, null);
+assert.equal(otherTenant.mobileCommunityCards, null);
+assert.equal(otherTenant.communityGuides, false);
 assert.equal(otherTenant.heroPortrait, null);
 assert.equal(otherTenant.resolvedAgentPortraitUrl, "/mina.jpg");
 assert.equal(JSON.stringify(otherTenant).includes("/media/royal-collection/high-octane/"), false);
@@ -172,6 +176,25 @@ const highOctane = resolveRoyalCollectionView({
 assert.equal(usesHighOctaneRoyalCollectionMedia(HIGH_OCTANE_STAGING_WORKSPACE_SLUG), true);
 assert.equal(highOctane.agentName, "Saad Qureshi");
 assert.equal(highOctane.storyMainUrl, "/media/royal-collection/high-octane/notl-house.webp");
+assert.equal(
+  highOctane.valuationImageUrl,
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp",
+);
+assert.equal(
+  highOctane.mobileAboutPortraitUrl,
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+);
+assert.equal(
+  highOctane.brokerage.logoUrl,
+  "/media/royal-collection/high-octane/right-at-home-brokerage.png",
+);
+assert.equal(highOctane.brokerage.address, "5111 New St.\nBurlington, ON, L7L1V2");
+assert.deepEqual(
+  highOctane.mobileCommunityCards?.map((card) => card.name),
+  ["Niagara Falls", "Niagara-on-the-Lake", "St. Catharines", "Grimsby"],
+);
+assert.equal(highOctane.communityGuides, true);
+assert.equal(otherTenant.brokerage.address, null);
 assert.equal(highOctane.scenes.length, 3);
 assert.equal(highOctane.heroPortrait?.name, "Saad Qureshi");
 assert.equal(highOctane.heroPortrait?.role, "Real Estate Agent");
@@ -195,6 +218,7 @@ const uploaded = resolveRoyalCollectionView({
   },
 });
 assert.equal(uploaded.resolvedAgentPortraitUrl, "https://cdn.example/saad-uploaded.jpg");
+assert.equal(uploaded.mobileAboutPortraitUrl, null);
 assert.equal(uploaded.heroPortrait?.imageUrl, uploaded.resolvedAgentPortraitUrl);
 const about = readFileSync(
   join(root, "src/components/templates/royal-collection-one/RoyalCollectionAbout.tsx"),

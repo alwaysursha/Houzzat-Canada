@@ -16,14 +16,23 @@ export function RoyalCollectionAbout({ view }: { view: RoyalCollectionView }) {
   const name = view.agentName || view.brandName;
   return (
     <section
-      className={`${styles.section} ${styles.about}`}
+      className={
+        view.mobileAboutPortraitUrl
+          ? `${styles.section} ${styles.about} ${styles.aboutHasFullPortrait}`
+          : `${styles.section} ${styles.about}`
+      }
       id="about-the-agent"
       aria-label={view.agentName ? `About ${view.agentName}` : `About ${view.brandName}`}
     >
       <RoyalCollectionReveal className={styles.aboutImage}>
         {view.resolvedAgentPortraitUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- tenant portrait URL
-          <img className={styles.aboutPhoto} src={view.resolvedAgentPortraitUrl} alt="" />
+          <picture>
+            {view.mobileAboutPortraitUrl ? (
+              <source media="(max-width: 767px)" srcSet={view.mobileAboutPortraitUrl} />
+            ) : null}
+            {/* eslint-disable-next-line @next/next/no-img-element -- tenant portrait URL */}
+            <img className={styles.aboutPhoto} src={view.resolvedAgentPortraitUrl} alt="" />
+          </picture>
         ) : (
           <div className={styles.aboutMonogram} aria-hidden="true">
             {initials(name)}

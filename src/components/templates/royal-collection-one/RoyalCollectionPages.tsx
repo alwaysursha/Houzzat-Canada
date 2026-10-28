@@ -1,7 +1,14 @@
 import { notFound } from "next/navigation";
+import {
+  HIGH_OCTANE_COMMUNITY_GUIDES,
+  highOctaneCommunityGuideBySlug,
+  type HighOctaneCommunityGuide,
+} from "@/lib/tenancy/templates/high-octane-community-guides";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { RoyalCollectionAbout } from "./RoyalCollectionAbout";
+import { RoyalCollectionBrokerageMark } from "./RoyalCollectionBrokerageMark";
 import { RoyalCollectionCommunities } from "./RoyalCollectionCommunities";
+import { RoyalCollectionCommunityListings } from "./RoyalCollectionCommunityListings";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
@@ -18,6 +25,7 @@ const PLACE_NOTES: Record<string, string> = {
   "Niagara Falls": "The falls, the gorge, and the neighbourhoods that sit beside them.",
   "Niagara-on-the-Lake": "Heritage streets, vineyards, and the shore of Lake Ontario.",
   "St. Catharines": "The urban centre of Niagara, with Port Dalhousie on the lake.",
+  Grimsby: "Escarpment neighbourhoods above the lake.",
 };
 
 type PlaceCard = {
@@ -28,14 +36,20 @@ type PlaceCard = {
 };
 
 function placesFor(view: RoyalCollectionView): PlaceCard[] {
-  if (view.collectionCards) {
-    return view.collectionCards.map((card) => ({
+  const seen = new Set<string>();
+  const cards: PlaceCard[] = [];
+  for (const card of [...(view.collectionCards ?? []), ...(view.mobileCommunityCards ?? [])]) {
+    const key = card.name.trim().toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cards.push({
       name: card.name,
       href: card.href,
       imageUrl: card.imageUrl,
       caption: card.caption || PLACE_NOTES[card.name] || "",
-    }));
+    });
   }
+  if (cards.length > 0) return cards;
   return view.navCommunities.map((place) => ({
     name: place.name,
     href: place.href,
@@ -61,10 +75,39 @@ export function RoyalCollectionCommunitiesPage({ view }: { view: RoyalCollection
         Places, <em>considered.</em>
       </h1>
       <p className={styles.pageLead}>
-        A closer look at the communities this practice serves. Licensed photography appears only
-        for this workspace. Each place continues into the existing home search.
+        {view.communityGuides
+          ? "A guide to the communities this practice serves, with the homes currently published in each one."
+          : "A closer look at the communities this practice serves. Licensed photography appears only for this workspace. Each place continues into the existing home search."}
       </p>
-      <RoyalCollectionCommunities view={view} />
+      {view.communityGuides ? (
+        <CommunityGuideDirectory />
+      ) : (
+        <RoyalCollectionCommunities view={view} />
+      )}
+    </div>
+  );
+}
+
+function CommunityGuideDirectory() {
+  return (
+    <div className={styles.guideDirectory}>
+      {HIGH_OCTANE_COMMUNITY_GUIDES.map((guide) => (
+        <RoyalCollectionPreviewLink
+          key={guide.slug}
+          href={`/communities/${guide.slug}`}
+          className={styles.guideDirectoryCard}
+          disabled={false}
+        >
+          <div
+            className={styles.guideDirectoryMedia}
+            style={guide.imageUrl ? { backgroundImage: `url(${guide.imageUrl})` } : undefined}
+          />
+          <div className={styles.guideDirectoryCopy}>
+            <h2>{guide.name}</h2>
+            <p>{guide.summary}</p>
+          </div>
+        </RoyalCollectionPreviewLink>
+      ))}
     </div>
   );
 }
@@ -76,6 +119,9 @@ export function RoyalCollectionCommunityPage({
   view: RoyalCollectionView;
   slug: string;
 }) {
+  const guide = view.communityGuides ? highOctaneCommunityGuideBySlug(slug) : null;
+  if (guide) return <CommunityGuidePage view={view} guide={guide} />;
+
   const place = placesFor(view).find((entry) => royalCollectionPlaceSlug(entry.name) === slug);
   if (!place) notFound();
 
@@ -110,6 +156,67 @@ export function RoyalCollectionCommunityPage({
   );
 }
 
+function CommunityGuidePage({
+  view,
+  guide,
+}: {
+  view: RoyalCollectionView;
+  guide: HighOctaneCommunityGuide;
+}) {
+  return (
+    <div className={styles.page}>
+      <p className={styles.pageKicker}>Communities</p>
+      <h1>{guide.name}</h1>
+      <p className={styles.pageLead}>{guide.overview}</p>
+      <div className={styles.guideWrap}>
+        <div
+          className={styles.guideHero}
+          style={guide.imageUrl ? { backgroundImage: `url(${guide.imageUrl})` } : undefined}
+          role={guide.imageUrl ? "img" : undefined}
+          aria-label={guide.imageUrl ? guide.name : undefined}
+        />
+        <div className={styles.guideColumns}>
+          <section>
+            <h2>History</h2>
+            <p>{guide.history}</p>
+          </section>
+          <section>
+            <h2>Attractions</h2>
+            <ul>
+              {guide.attractions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+          <section>
+            <h2>Highlights</h2>
+            <ul>
+              {guide.highlights.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </section>
+        </div>
+        <RoyalCollectionCommunityListings
+          city={guide.city}
+          placeName={guide.name}
+          searchHref={guide.searchHref}
+          actionsDisabled={view.actionsDisabled}
+        />
+        <div className={styles.placeActions}>
+          <RoyalCollectionPreviewLink
+            className={`${styles.button} ${styles.buttonEmerald}`}
+            href="/communities"
+            disabled={view.actionsDisabled}
+          >
+            All communities
+          </RoyalCollectionPreviewLink>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RoyalCollectionContactPage({ view }: { view: RoyalCollectionView }) {
   const name = view.agentName || view.brandName;
   return (
@@ -122,6 +229,7 @@ export function RoyalCollectionContactPage({ view }: { view: RoyalCollectionView
       </h1>
       <div className={styles.contactGrid}>
         <div className={styles.contactPanel}>
+          <RoyalCollectionBrokerageMark view={view} />
           <p>
             <strong>{name}</strong>
             {view.title ? (

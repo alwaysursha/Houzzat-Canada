@@ -3,6 +3,7 @@
  * Live tenants use their own identity. The HIGH OCTANE fixture is display-only
  * during an explicit development preview and never replaces workspace records.
  */
+import { homesForSalePath } from "@/lib/geo/area-paths";
 import type { MarketingPresentationBrand } from "@/lib/tenancy/marketing-presentation-brand";
 import type { PublicBrokerageIdentity } from "@/lib/tenancy/professional-identity";
 import { HIGH_OCTANE_HERO_SCENES } from "@/lib/tenancy/templates/high-octane-hero-media";
@@ -86,9 +87,20 @@ export type RoyalCollectionView = {
    */
   storyMainUrl: string | null;
   storyInsetUrl: string | null;
+  /** Luxury home still for the valuation panel. Null keeps the line drawing. */
+  valuationImageUrl: string | null;
+  /**
+   * Full-body cutout for the about panel on a phone.
+   * Null keeps the shared portrait at every size.
+   */
+  mobileAboutPortraitUrl: string | null;
   editorialCommunities: readonly RoyalCollectionCommunityLink[] | null;
   navCommunities: readonly RoyalCollectionCommunityLink[];
   collectionCards: readonly RoyalCollectionCollectionCard[] | null;
+  /** Phone-only squares. Null on every other workspace. */
+  mobileCommunityCards: readonly RoyalCollectionCollectionCard[] | null;
+  /** Community guide pages. HIGH OCTANE workspace only. */
+  communityGuides: boolean;
 };
 
 /**
@@ -142,12 +154,23 @@ const HIGH_OCTANE_STORY_IMAGES = {
   insetUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.storyInset.file,
 };
 
+/** Luxury Niagara home for the valuation panel. HIGH OCTANE workspace only. */
+const HIGH_OCTANE_VALUATION_HOME_URL =
+  "/media/royal-collection/high-octane/itso-demo-1001/01-exterior.webp";
+export const HIGH_OCTANE_BROKERAGE_LOGO_URL =
+  "/media/royal-collection/high-octane/right-at-home-brokerage.png";
+const HIGH_OCTANE_BROKERAGE_ADDRESS = "5111 New St.\nBurlington, ON, L7L1V2";
+
 /**
  * Approved HIGH OCTANE cutout. The only copy of this path.
  * Another workspace never receives it.
  */
 export const HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL =
   "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=3";
+
+/** Full-length cutout. Phone about panel only. */
+const HIGH_OCTANE_FULL_BODY_PORTRAIT_URL =
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png";
 
 const HIGH_OCTANE_HERO_PORTRAIT_COPY = {
   name: "Saad Qureshi",
@@ -182,6 +205,40 @@ const HIGH_OCTANE_COMMUNITY_IMAGES: Record<string, string | null> = {
   "Niagara-on-the-Lake": HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraOnTheLake.file,
   "St. Catharines": HIGH_OCTANE_PLACE_PHOTOGRAPHY.stCatharines.file,
 };
+
+/** Most-searched Niagara places for the phone community grid. */
+const HIGH_OCTANE_POPULAR_COMMUNITIES = [
+  {
+    name: "Niagara Falls",
+    city: "Niagara Falls",
+    imageUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraFalls.file,
+  },
+  {
+    name: "Niagara-on-the-Lake",
+    city: "Niagara-on-the-Lake",
+    imageUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.niagaraOnTheLake.file,
+  },
+  {
+    name: "St. Catharines",
+    city: "St. Catharines",
+    imageUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.stCatharines.file,
+  },
+  {
+    name: "Grimsby",
+    city: "Grimsby",
+    imageUrl: HIGH_OCTANE_PLACE_PHOTOGRAPHY.storyMain.file,
+  },
+] as const;
+
+function highOctanePopularCommunityCards(): RoyalCollectionCollectionCard[] {
+  return HIGH_OCTANE_POPULAR_COMMUNITIES.map((place) => ({
+    name: place.name,
+    href: homesForSalePath({ city: place.city }),
+    kicker: "",
+    caption: "",
+    imageUrl: place.imageUrl,
+  }));
+}
 
 function firstNameFrom(name: string): string {
   const part = name.trim().split(/\s+/)[0];
@@ -252,9 +309,13 @@ function highOctaneView(): RoyalCollectionView {
       fixture.scenes.find((scene) => scene.id === "niagara-on-the-lake")?.conceptStill ?? null,
     storyInsetUrl:
       fixture.scenes.find((scene) => scene.id === "niagara-falls")?.conceptStill ?? null,
+    valuationImageUrl: HIGH_OCTANE_VALUATION_HOME_URL,
+    mobileAboutPortraitUrl: null,
     editorialCommunities: fixture.editorialCommunities,
     navCommunities: fixture.navCommunities,
     collectionCards: fixture.collectionCards,
+    mobileCommunityCards: null,
+    communityGuides: false,
   };
 }
 
@@ -319,10 +380,15 @@ export function resolveRoyalCollectionView(
   const brandName = brand.displayName?.trim() || agentName || "Real Estate";
   const brokerage: PublicBrokerageIdentity = {
     name: professional.brokerage.name ?? brand.agent?.brokerageName ?? null,
-    address: professional.brokerage.address,
+    address:
+      professional.brokerage.address ??
+      (stagingWorkspace ? HIGH_OCTANE_BROKERAGE_ADDRESS : null),
     phone: professional.brokerage.phone,
     fax: professional.brokerage.fax,
-    logoUrl: professional.brokerage.logoUrl ?? brand.brokerageLogoUrl ?? null,
+    logoUrl:
+      professional.brokerage.logoUrl ??
+      brand.brokerageLogoUrl ??
+      (stagingWorkspace ? HIGH_OCTANE_BROKERAGE_LOGO_URL : null),
   };
 
   return {
@@ -365,6 +431,12 @@ export function resolveRoyalCollectionView(
     scenes: stagingWorkspace ? HIGH_OCTANE_HERO_SCENES : [],
     storyMainUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.mainUrl : null,
     storyInsetUrl: stagingWorkspace ? HIGH_OCTANE_STORY_IMAGES.insetUrl : null,
+    valuationImageUrl: stagingWorkspace ? HIGH_OCTANE_VALUATION_HOME_URL : null,
+    mobileAboutPortraitUrl:
+      stagingWorkspace &&
+      resolvedAgentPortraitUrl === HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL
+        ? HIGH_OCTANE_FULL_BODY_PORTRAIT_URL
+        : null,
     editorialCommunities: stagingDefaultMarket
       ? HIGH_OCTANE_PREVIEW_FIXTURE.editorialCommunities
       : null,
@@ -380,5 +452,7 @@ export function resolveRoyalCollectionView(
           imageUrl: HIGH_OCTANE_COMMUNITY_IMAGES[place.name] ?? null,
         }))
       : null,
+    mobileCommunityCards: stagingWorkspace ? highOctanePopularCommunityCards() : null,
+    communityGuides: stagingWorkspace,
   };
 }
