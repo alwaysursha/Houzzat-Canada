@@ -2,8 +2,15 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ArrowRight, Phone } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { ArrowRight, MessageCircle, Phone } from "lucide-react";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
+import { useOptionalCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { ViewingBookingModal } from "@/components/listings/ViewingBookingModal";
+import { openGuestStartChatIntent } from "@/lib/auth/start-chat-intent";
+import { CUSTOMER_CHAT_PAGE_HREF } from "@/lib/customer-chat/query";
+import { resolveAppShell } from "@/lib/mobile/app-shell";
 import styles from "./royal-property.module.css";
 
 const MOBILE_QUERY = "(max-width: 767px)";
@@ -32,12 +39,26 @@ export function RoyalCollectionConciergeBar({
 }) {
   const barRef = useRef<HTMLElement>(null);
   const pathname = usePathname();
+  const { status, data } = useSession();
+  const { openAuth } = useAuthModal();
+  const chat = useOptionalCustomerChatController();
   const [mobile, setMobile] = useState(false);
+  const [houzzatProShell, setHouzzatProShell] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [viewingNear, setViewingNear] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const viewingNearRef = useRef(false);
   const concealed = viewingNear || dialogOpen;
+
+  useEffect(() => {
+    let cancelled = false;
+    void resolveAppShell().then((shell) => {
+      if (!cancelled) setHouzzatProShell(shell === "houzzatpro");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_QUERY);
@@ -102,8 +123,28 @@ export function RoyalCollectionConciergeBar({
 
   if (!mobile || !agentName) return null;
 
+  const roleName = data?.user?.role;
+  const isStaff = status === "authenticated" && (roleName === "ADMIN" || roleName === "AGENT");
+  const showChat = status !== "loading" && !houzzatProShell && !isStaff;
   const bookingPath = pathname.split("?")[0] || "/";
   const mlsNumber = bookingPath.split("/").filter(Boolean).pop() ?? "";
+
+  function openChat() {
+    if (status === "authenticated") {
+      if (chat) {
+        chat.open({ forceExpand: true });
+        return;
+      }
+      window.location.assign(CUSTOMER_CHAT_PAGE_HREF);
+      return;
+    }
+    openGuestStartChatIntent({
+      host: window.location.hostname,
+      now: Date.now(),
+      store: browserCaptureIntentStore(),
+      openAuth,
+    });
+  }
 
   return (
     <aside
@@ -124,10 +165,25 @@ export function RoyalCollectionConciergeBar({
         {role ? <p className={styles.conciergeRole}>{role}</p> : null}
         {brokerageName ? <p className={styles.conciergeBrokerage}>{brokerageName}</p> : null}
       </div>
-      {phone ? (
-        <a className={styles.conciergeCall} href={phoneHref(phone)} aria-label={`Call ${agentName}`}>
-          <Phone aria-hidden />
-        </a>
+      {showChat || phone ? (
+        <div className={styles.conciergeActions}>
+          {showChat ? (
+            <button
+              type="button"
+              className={styles.conciergeCall}
+              aria-label="Open chat"
+              data-customer-chat-entry=""
+              onClick={openChat}
+            >
+              <MessageCircle aria-hidden />
+            </button>
+          ) : null}
+          {phone ? (
+            <a className={styles.conciergeCall} href={phoneHref(phone)} aria-label={`Call ${agentName}`}>
+              <Phone aria-hidden />
+            </a>
+          ) : null}
+        </div>
       ) : null}
       <button type="button" className={styles.conciergeCta} onClick={() => setBookingOpen(true)}>
         Request Private Viewing
