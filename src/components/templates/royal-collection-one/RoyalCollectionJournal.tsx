@@ -18,7 +18,11 @@ export function RoyalCollectionJournal({ view }: { view: RoyalCollectionView }) 
             : "Buying a home",
           href: view.communityGuides ? "/guides/home-buying" : "/search?transactionType=SALE",
         },
-        { n: "02", title: "Preparing to sell with confidence", href: "/home-valuation" },
+        {
+          n: "02",
+          title: "Preparing to sell with confidence",
+          href: view.communityGuides ? "/guides/preparing-to-sell" : "/home-valuation",
+        },
         { n: "03", title: "Discovering neighbourhoods", href: "/communities" },
       ];
 
