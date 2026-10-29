@@ -2541,6 +2541,18 @@
   line-height: 1.6;
 }
 
+.guidePhotoCredit {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  color: #8a8175;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.guidePhotoCredit a {
+  color: inherit;
+}
+
 .guideWrap {
   padding: 28px clamp(22px, 6vw, 104px) 56px;
 }

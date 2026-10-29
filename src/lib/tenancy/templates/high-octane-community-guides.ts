@@ -100,7 +100,7 @@ const GUIDES = [
   {
     name: "Welland",
     city: "Welland",
-    imageUrl: null,
+    imageUrl: "/media/royal-collection/high-octane/welland-canal-bridge.webp",
     summary: "The Rose City, built along the Welland Canal.",
     overview:
       "Welland is the city the canal runs through. Ships climbing between Lake Ontario and Lake Erie pass the downtown, and the recreational canal has become a park through the centre of the city.",
@@ -122,7 +122,7 @@ const GUIDES = [
   {
     name: "Thorold",
     city: "Thorold",
-    imageUrl: null,
+    imageUrl: "/media/royal-collection/high-octane/thorold-lock-7.webp",
     summary: "A canal city on the rise of the Niagara Escarpment.",
     overview:
       "Thorold is where the Welland Canal climbs the escarpment. The locks, the older downtown, and the streets above the canal make it a smaller city with a very particular setting.",
@@ -166,7 +166,7 @@ const GUIDES = [
   {
     name: "Fort Erie",
     city: "Fort Erie",
-    imageUrl: null,
+    imageUrl: "/media/royal-collection/high-octane/fort-erie-shore.webp",
     summary: "Where the Niagara River opens onto Lake Erie.",
     overview:
       "Fort Erie is the southern end of the Niagara River. The old fort, the Peace Bridge, and the Lake Erie beaches at Crystal Beach give the town its outline.",
@@ -188,7 +188,7 @@ const GUIDES = [
   {
     name: "Lincoln",
     city: "Lincoln",
-    imageUrl: null,
+    imageUrl: "/media/royal-collection/high-octane/lincoln-balls-falls.webp",
     summary: "Beamsville, Jordan, and Vineland on the wine bench.",
     overview:
       "Lincoln is a town of villages. Beamsville, Jordan, and Vineland sit between Lake Ontario and the escarpment, on one of Niagara's defining wine benches.",
@@ -210,7 +210,7 @@ const GUIDES = [
   {
     name: "Fonthill / Pelham",
     city: "Pelham",
-    imageUrl: null,
+    imageUrl: "/media/royal-collection/high-octane/pelham-tulips.webp",
     summary: "Fonthill and the villages of Pelham, set on the kame.",
     overview:
       "Pelham is the town; Fonthill is its main centre. It sits on the Fonthill Kame, a glacial hill between the canal cities and the escarpment.",
@@ -244,3 +244,29 @@ export function highOctaneCommunityGuideBySlug(
 ): HighOctaneCommunityGuide | null {
   return HIGH_OCTANE_COMMUNITY_GUIDES.find((guide) => guide.slug === slug) ?? null;
 }
+
+/**
+ * Covers added for the communities that had an empty frame.
+ * Welland's lift bridge is public domain (Radtek67).
+ * Ball's Falls is CC0 (Kaleb Dortono). The Pelham tulip rows are CC0 (Gogerr).
+ * Thorold and Fort Erie stay under CC BY-SA 2.0 and are credited on the page.
+ */
+export const HIGH_OCTANE_COMMUNITY_PHOTO_CREDITS: Readonly<
+  Record<string, { label: string; author: string; sourceUrl: string }>
+> = {
+  thorold: {
+    label: "Thorold",
+    author: "bgilliard",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Lock_7_(238984698).jpg",
+  },
+  "fort-erie": {
+    label: "Fort Erie",
+    author: "Adam Moss",
+    sourceUrl: "https://commons.wikimedia.org/wiki/File:Fort_Erie_(26779822694).jpg",
+  },
+};
+
+export const HIGH_OCTANE_COMMUNITY_PHOTO_LICENSE = {
+  name: "CC BY-SA 2.0",
+  url: "https://creativecommons.org/licenses/by-sa/2.0",
+} as const;
