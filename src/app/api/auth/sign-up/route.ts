@@ -234,7 +234,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error:
-              "This account has been disabled. Contact Houzzat support if you need help.",
+              `This account has been disabled. Contact ${tenancy.brand.displayName.trim() || "support"} if you need help.`,
           },
           { status: 403 },
         );

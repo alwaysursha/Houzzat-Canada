@@ -1,3 +1,6 @@
+"use client";
+
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 /** Approved IDX / CREA / VOW disclosure — do not paraphrase for display. */
@@ -21,6 +24,8 @@ export function MlsDisclaimer({
   className?: string;
   compact?: boolean;
 }) {
+  const brandName = useTenantDisplayName("Houzzat");
+  const disclaimer = MLS_DISCLAIMER_TEXT.replaceAll("Houzzat", brandName);
   if (compact) {
     return (
       <aside className={cn("text-[10px] leading-snug text-ink/45", className)}>
@@ -37,7 +42,7 @@ export function MlsDisclaimer({
             </span>
           </summary>
           <p className="mt-1.5 text-[10px] leading-snug text-ink/40">
-            {MLS_DISCLAIMER_TEXT}
+            {disclaimer}
           </p>
         </details>
       </aside>
@@ -51,7 +56,7 @@ export function MlsDisclaimer({
         className,
       )}
     >
-      {MLS_DISCLAIMER_TEXT}
+      {disclaimer}
     </aside>
   );
 }

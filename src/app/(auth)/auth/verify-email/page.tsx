@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { getSession, signIn, useSession } from "next-auth/react";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { stashVerificationSuccessSignal } from "@/lib/auth/verification-success-signal";
 import { VERIFY_EMAIL_PROVIDER_ID } from "@/lib/auth/verify-email-constants";
@@ -22,13 +23,13 @@ function verifyErrorMessage(code: string | null): string {
   }
 }
 
-function mapAuthError(error: string | undefined): string {
+function mapAuthError(error: string | undefined, brandName: string): string {
   const normalized = error?.trim() ?? "";
   if (
     normalized === "ACCOUNT_DISABLED" ||
     normalized.includes("DISABLED")
   ) {
-    return "This account has been disabled. Contact Houzzat support.";
+    return `This account has been disabled. Contact ${brandName} support.`;
   }
   if (normalized === "STAFF_ACCOUNT" || normalized.includes("STAFF")) {
     return "Use your team sign-in page for this account.";
@@ -50,6 +51,7 @@ async function readContactStatus(): Promise<{ emailVerified: boolean } | null> {
 
 function VerifyEmailInner() {
   const router = useRouter();
+  const brandName = useTenantDisplayName("Houzzat");
   const { update } = useSession();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -108,7 +110,7 @@ function VerifyEmailInner() {
         if (body?.error?.includes("disabled")) {
           setStatus("error");
           setError(
-            "This account has been disabled. Contact Houzzat support.",
+            `This account has been disabled. Contact ${brandName} support.`,
           );
           return;
         }
@@ -163,7 +165,7 @@ function VerifyEmailInner() {
           return;
         }
         setStatus("error");
-        setError(mapAuthError(signInError));
+        setError(mapAuthError(signInError, brandName));
         return;
       }
 

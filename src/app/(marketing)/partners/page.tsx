@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 export async function generateMetadata() {
   return { title: "Referral partners" };
@@ -12,6 +13,7 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 export default async function PartnersPage() {
+  const brandName = await currentPublicBrandName();
   const partners = await prisma.referralPartner.findMany({
     where: { active: true },
     orderBy: [{ type: "asc" }, { name: "asc" }],
@@ -22,7 +24,7 @@ export default async function PartnersPage() {
       <div>
         <h1 className="font-display text-4xl text-ink">Referral partners</h1>
         <p className="mt-2 max-w-2xl text-ink/70">
-          Mortgage, legal, and inspection partners Houzzat agents can introduce
+          Mortgage, legal, and inspection partners {brandName} agents can introduce
           you to — tracked handoffs, no surprise spam.
         </p>
       </div>

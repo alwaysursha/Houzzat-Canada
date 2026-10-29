@@ -150,8 +150,10 @@ export type AccessGateCopy = {
 export function accessGateCopy(
   kind: ClientAccessKind | ResolvedClientAccess,
   surface: AccessGateSurface = "generic",
+  brandName = "Houzzat",
 ): AccessGateCopy {
   const resolved = typeof kind === "string" ? kind : kind.kind;
+  const brand = brandName.trim() || "Houzzat";
 
   if (resolved === "unverified_locked") {
     const bodies: Record<AccessGateSurface, string> = {
@@ -173,13 +175,13 @@ export function accessGateCopy(
 
   // Visitor (and any non-client fallback that isn't verify-locked)
   const bodies: Record<AccessGateSurface, string> = {
-    sold: "Sign in as a Houzzat client to view sold and leased prices.",
-    details: "Sign in as a Houzzat client to view full listing details.",
-    insights: "Sign in as a Houzzat client to unlock market insights.",
-    photos: "Sign in as a Houzzat client to view the full gallery.",
-    history: "Sign in as a Houzzat client to view listing history.",
-    search: "Sign in as a Houzzat client to view sold and restricted results.",
-    generic: "Sign in as a Houzzat client to unlock this information.",
+    sold: `Sign in as a ${brand} client to view sold and leased prices.`,
+    details: `Sign in as a ${brand} client to view full listing details.`,
+    insights: `Sign in as a ${brand} client to unlock market insights.`,
+    photos: `Sign in as a ${brand} client to view the full gallery.`,
+    history: `Sign in as a ${brand} client to view listing history.`,
+    search: `Sign in as a ${brand} client to view sold and restricted results.`,
+    generic: `Sign in as a ${brand} client to unlock this information.`,
   };
   return {
     title: "Sign in required",

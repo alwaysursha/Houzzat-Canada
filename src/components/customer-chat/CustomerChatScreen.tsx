@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { ArrowLeft, Minus, Send, X } from "lucide-react";
-import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmailAction";
 import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
 import { ChatEmojiPicker } from "@/components/chat/ChatEmojiPicker";
@@ -133,6 +133,7 @@ export function CustomerChatScreen({
     searchMessages,
     ensureMessageLoaded,
   } = useCustomerChatThread({ chatVisible, enabled: true });
+  const brandName = useTenantDisplayName("Houzzat");
   const [localDraft, setLocalDraft] = useState("");
   const draft = controlledDraft ?? localDraft;
   const setDraft = onDraftChange ?? setLocalDraft;
@@ -198,7 +199,7 @@ export function CustomerChatScreen({
     payload?.messages ?? [],
     dividerMessageId,
   );
-  const agentName = presentCustomerChatAgentName(payload?.agent);
+  const agentName = presentCustomerChatAgentName(payload?.agent, brandName);
   const agentInitials = presentCustomerChatAgentInitials(payload?.agent);
   const agentPhoto = payload?.agent?.photoUrl?.trim() || null;
   const agentAvailability = presentCustomerChatAgentAvailability(
@@ -832,6 +833,7 @@ function CustomerChatRow({
   onReact: (key: string) => void;
   onNavigateQuote: (messageId: string) => void;
 }) {
+  const brandName = useTenantDisplayName("Houzzat");
   const align = customerChatBubbleAlign(message.senderKind, message.kind);
   if (align === "center") {
     const label = customerChatMessageBody(message) || "Update";
@@ -849,7 +851,7 @@ function CustomerChatRow({
   const automationBadge = customerSmsAutomationBadge(message.payload);
   const label = mine
     ? "You"
-    : message.senderName?.trim() || presentCustomerChatAgentName(null);
+    : message.senderName?.trim() || presentCustomerChatAgentName(null, brandName);
   const body = customerChatMessageBody(message);
   const deleted = Boolean(message.deletedAt);
   const voice = deleted

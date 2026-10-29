@@ -5,10 +5,7 @@ import { RoyalCollectionBrokerageMark } from "./RoyalCollectionBrokerageMark";
 import { RoyalCollectionLockup } from "./RoyalCollectionLockup";
 import { RoyalCollectionPlatformAttribution } from "./RoyalCollectionPlatformAttribution";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
-import {
-  royalCollectionSnapshotDisclosure,
-  royalCollectionUnconnectedDisclosure,
-} from "./unconnected-disclosure";
+import { royalCollectionUnconnectedDisclosure } from "./unconnected-disclosure";
 import styles from "./royal-collection.module.css";
 
 const EXPLORE = [
@@ -111,20 +108,20 @@ export function RoyalCollectionFooter({ view }: { view: RoyalCollectionView }) {
         {view.footerLegalText ? <span>{view.footerLegalText}</span> : null}
       </div>
       <RoyalCollectionPlatformAttribution />
-      <div className={styles.footerLegal}>
-        {view.listingDisclosure === "preview" ? (
-          <p>
-            Design preview only. No listing board is connected for this subscriber.
-            Board attribution must be configured from the authorized feed before publication.
-          </p>
-        ) : view.listingDisclosure === "unconnected" ? (
-          <p>{royalCollectionUnconnectedDisclosure(view.brokerage.name)}</p>
-        ) : view.listingDisclosure === "snapshot" ? (
-          <p>{royalCollectionSnapshotDisclosure(view.brokerage.name)}</p>
-        ) : (
-          <MlsDisclaimer />
-        )}
-      </div>
+      {view.listingDisclosure === "snapshot" ? null : (
+        <div className={styles.footerLegal}>
+          {view.listingDisclosure === "preview" ? (
+            <p>
+              Design preview only. No listing board is connected for this subscriber.
+              Board attribution must be configured from the authorized feed before publication.
+            </p>
+          ) : view.listingDisclosure === "unconnected" ? (
+            <p>{royalCollectionUnconnectedDisclosure(view.brokerage.name)}</p>
+          ) : (
+            <MlsDisclaimer />
+          )}
+        </div>
+      )}
     </footer>
   );
 }

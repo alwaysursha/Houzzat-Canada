@@ -87,7 +87,7 @@ function templateListingNarrative(
     amenityBits.length
       ? `Around the home you’ll find ${amenityBits.join("; ")}.`
       : "Area amenity data for this pin is still being imported.",
-    "This summary is grounded only in listing fields and nearby points of interest stored in Houzzat — not a formal appraisal or school ranking.",
+    "This summary is grounded only in listing fields and nearby points of interest on file — not a formal appraisal or school ranking.",
   ].join(" ");
 }
 
@@ -117,8 +117,8 @@ function templateCommunityNarrative(
 
   return [
     isCityPage
-      ? `${displayName} is a Greater Toronto Area market tracked on Houzzat with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`
-      : `${displayName} is a ${city} neighbourhood tracked on Houzzat with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`,
+      ? `${displayName} is a Greater Toronto Area market with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`
+      : `${displayName} is a ${city} neighbourhood with ${listingCount} active listing${listingCount === 1 ? "" : "s"} in our current inventory.`,
     amenityLine
       ? `Mapped amenities nearby include ${amenityLine}.`
       : "Amenity import for this area is still warming up.",
@@ -186,6 +186,7 @@ export async function getListingNarrative(
     listing.propertyType,
     listing.yearBuilt,
     listing.listPrice,
+    "public-brand-v2",
     pois.map((p) => [p.id, p.type, p.name, p.distanceKm.toFixed(2)]),
   ]);
 
@@ -247,6 +248,7 @@ export async function getCommunityNarrative(opts: {
   const counts = summarizePoiCounts(pois);
   const contentHash = hashPayload([
     opts.slug,
+    "public-brand-v2",
     opts.listingCount,
     counts,
     pois.map((p) => [p.type, p.name]),

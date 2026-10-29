@@ -27,6 +27,7 @@ export async function getMarketPulse(opts: {
   city: string;
   community?: string | null;
   includeSold: boolean;
+  brandName?: string;
 }): Promise<MarketPulse> {
   const placeFilter = {
     city: { equals: opts.city, mode: "insensitive" as const },
@@ -86,7 +87,7 @@ export async function getMarketPulse(opts: {
     sampleNote: opts.includeSold
       ? sold.length < 3
         ? "Thin sold sample in this area — treat as directional only."
-        : "Computed from Houzzat inventory (demo/synced solds)."
+        : `Computed from ${opts.brandName?.trim() || "our"} inventory (demo/synced solds).`
       : "Sold medians locked — accept VOW to unlock sold pulse.",
     soldRestricted: !opts.includeSold,
   };

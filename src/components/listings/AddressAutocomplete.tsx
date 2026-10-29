@@ -157,6 +157,7 @@ export function AddressAutocomplete({
   iconClassName,
   clearClassName,
   listboxClassName,
+  menuTone,
   matchShellWidth = false,
   placeholder = "Search active or sold listings by MLS® #, address or neighbourhood",
   minChars = 1,
@@ -185,6 +186,8 @@ export function AddressAutocomplete({
   clearClassName?: string;
   /** Extra listbox classes. Later utilities override the default panel chrome. */
   listboxClassName?: string;
+  /** Royal Collection address menu. Search menus stay on the default tone. */
+  menuTone?: "royal";
   /** Keep the desktop suggestion panel the same width as the search shell. */
   matchShellWidth?: boolean;
   placeholder?: string;
@@ -251,6 +254,7 @@ export function AddressAutocomplete({
   const access = useClientAccess();
   const sessionToken = useId().replace(/:/g, "");
   const listboxId = useId();
+  const royalMenu = menuTone === "royal";
   const [query, setQuery] = useState(initialQuery);
   const [open, setOpen] = useState(false);
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -1424,8 +1428,9 @@ export function AddressAutocomplete({
             <div className="flex items-center justify-between gap-3 px-4 py-2">
               <p
                 className={cn(
-                  "font-semibold uppercase tracking-[0.06em] text-ink/50",
-                  large ? "text-sm" : "text-xs",
+                  "font-semibold uppercase text-ink/50",
+                  royalMenu ? "text-[10px] tracking-[0.18em] text-[#8d6b32]" : "tracking-[0.06em]",
+                  !royalMenu && (large ? "text-sm" : "text-xs"),
                 )}
               >
                 {section.label}
@@ -1483,12 +1488,13 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "w-full px-4 text-left transition hover:bg-mist/80",
+                        "w-full px-4 text-left transition",
+                        royalMenu ? "hover:bg-[#f6f1e8]" : "hover:bg-mist/80",
                         isListingRich
                           ? "block"
                           : "flex items-stretch gap-3.5",
                         large ? "py-3.5" : "py-3",
-                        active && "bg-mist/80",
+                        active && (royalMenu ? "bg-[#f6f1e8]" : "bg-mist/80"),
                       )}
                       onMouseDown={(event) => {
                         // Keep input focus so the panel doesn't dismiss before click.
@@ -1507,6 +1513,7 @@ export function AddressAutocomplete({
                         <SuggestionSimpleRow
                           suggestion={suggestion}
                           large={large}
+                          royal={royalMenu}
                         />
                       )}
                     </button>
@@ -1524,9 +1531,11 @@ export function AddressAutocomplete({
               role="option"
               aria-selected={activeIndex === flat.length - 1}
               className={cn(
-                "flex w-full items-start gap-3 px-4 text-left transition hover:bg-mist/80",
+                "flex w-full items-start gap-3 px-4 text-left transition",
+                royalMenu ? "hover:bg-[#f6f1e8]" : "hover:bg-mist/80",
                 large ? "py-3.5" : "py-3",
-                activeIndex === flat.length - 1 && "bg-mist/80",
+                activeIndex === flat.length - 1 &&
+                  (royalMenu ? "bg-[#f6f1e8]" : "bg-mist/80"),
               )}
               onMouseDown={(event) => {
                 // Keep input focus so the panel doesn't dismiss before click.
@@ -1550,7 +1559,8 @@ export function AddressAutocomplete({
             >
               <Search
                 className={cn(
-                  "mt-0.5 shrink-0 text-canopy",
+                  "mt-0.5 shrink-0",
+                  royalMenu ? "text-[#c8a66a]" : "text-canopy",
                   large ? "size-6" : "size-5",
                 )}
               />
@@ -1604,15 +1614,25 @@ export function AddressAutocomplete({
                 ? "translate-x-0 opacity-100"
                 : "translate-x-full opacity-0",
             )}
-            style={{
-              background:
-                "radial-gradient(1600px 1100px at 8% -12%, rgb(var(--tenant-primary-rgb) / 0.12), rgb(var(--tenant-primary-rgb) / 0) 72%), radial-gradient(1400px 1000px at 92% -8%, rgb(var(--tenant-accent-rgb) / 0.1), rgb(var(--tenant-accent-rgb) / 0) 70%), var(--mist)",
-            }}
+            style={
+              royalMenu
+                ? { background: "#f6f1e8" }
+                : {
+                    background:
+                      "radial-gradient(1600px 1100px at 8% -12%, rgb(var(--tenant-primary-rgb) / 0.12), rgb(var(--tenant-primary-rgb) / 0) 72%), radial-gradient(1400px 1000px at 92% -8%, rgb(var(--tenant-accent-rgb) / 0.1), rgb(var(--tenant-accent-rgb) / 0) 70%), var(--mist)",
+                  }
+            }
             role="dialog"
             aria-modal="true"
             aria-label="Search homes"
           >
-            <div className="shrink-0 border-b border-white/15 bg-canopy px-3 pb-3.5 pt-[max(0.85rem,env(safe-area-inset-top))] text-white">
+            <div
+              className={cn(
+                "shrink-0 border-b px-3 pb-3.5 pt-[max(0.85rem,env(safe-area-inset-top))]",
+                royalMenu ? "border-[#c8a66a]/40 text-[#f7f4ee]" : "border-white/15 bg-canopy text-white",
+              )}
+              style={royalMenu ? { background: "#071629" } : undefined}
+            >
               <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
@@ -1688,7 +1708,10 @@ export function AddressAutocomplete({
       data-ac-portal={listboxId}
       style={panelStyle}
       className={cn(
-        "overflow-auto rounded-md border border-line bg-surface py-1.5 shadow-lg",
+        "overflow-auto border py-1.5 shadow-lg",
+        royalMenu
+          ? "rounded-none border-[#e6dccb] bg-[#fffdf8] shadow-[0_24px_48px_-28px_rgba(7,22,41,0.5)]"
+          : "rounded-md border-line bg-surface",
         listboxClassName,
         !portalDesktopSuggestions &&
           "absolute z-50 mt-4 max-h-[min(28rem,70vh)] w-full",
@@ -1776,7 +1799,10 @@ export function AddressAutocomplete({
           id={listboxId}
           role="listbox"
           className={cn(
-            "overflow-auto rounded-xl border border-line/80 bg-white py-1",
+            "overflow-auto border py-1",
+            royalMenu
+              ? "rounded-none border-[#e6dccb] bg-[#fffdf8]"
+              : "rounded-xl border-line/80 bg-white",
             fieldMenuExpand
               ? "relative mt-1.5 max-h-[13.5rem] shadow-none"
               : "absolute left-0 right-0 top-full z-30 mt-1 max-h-56 shadow-[0_12px_28px_-16px_rgba(16,28,24,0.45)]",
@@ -1796,8 +1822,9 @@ export function AddressAutocomplete({
                       role="option"
                       aria-selected={active}
                       className={cn(
-                        "flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition hover:bg-canopy/5",
-                        active && "bg-canopy/5",
+                        "flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition",
+                        royalMenu ? "hover:bg-[#f6f1e8]" : "hover:bg-canopy/5",
+                        active && (royalMenu ? "bg-[#f6f1e8]" : "bg-canopy/5"),
                       )}
                       onMouseDown={(event) => {
                         event.preventDefault();
@@ -1806,7 +1833,10 @@ export function AddressAutocomplete({
                       onClick={() => onSuggestionActivate(suggestion)}
                     >
                       <MapPin
-                        className="mt-0.5 size-3.5 shrink-0 text-canopy"
+                        className={cn(
+                          "mt-0.5 size-3.5 shrink-0",
+                          royalMenu ? "text-[#c8a66a]" : "text-canopy",
+                        )}
                         aria-hidden
                       />
                       <span className="min-w-0 flex-1">
@@ -1878,9 +1908,11 @@ function suggestionKindLabel(suggestion: AutocompleteSuggestion): string | null 
 function SuggestionSimpleRow({
   suggestion,
   large = false,
+  royal = false,
 }: {
   suggestion: AutocompleteSuggestion;
   large?: boolean;
+  royal?: boolean;
 }) {
   const kind = suggestionKindLabel(suggestion);
   const isRecent = suggestion.group === "recent";
@@ -1889,7 +1921,8 @@ function SuggestionSimpleRow({
     <>
       <Icon
         className={cn(
-          "mt-0.5 shrink-0 text-canopy",
+          "mt-0.5 shrink-0",
+          royal ? "text-[#c8a66a]" : "text-canopy",
           large ? "size-5" : "size-4",
         )}
         aria-hidden

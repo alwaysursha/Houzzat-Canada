@@ -22,6 +22,8 @@ import {
   summarizePersonalization,
 } from "@/lib/listings/homepage-personalization";
 import { SITE_MESSAGES } from "@/lib/site-messages";
+import { useTenantBrand } from "@/components/tenancy/TenantBrandProvider";
+import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
 import { cn } from "@/lib/utils";
 
 type ActiveSearch = {
@@ -43,6 +45,8 @@ export function HomeCustomerToolsStrip({
   cities?: string[];
 }) {
   const router = useRouter();
+  const brand = useTenantBrand();
+  const accountLabel = brand ? tenantAccountLabel(brand) : "Your account";
   const { confirm, toast } = useSiteAlert();
   const routePlanner = useRoutePlanner();
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -253,7 +257,7 @@ export function HomeCustomerToolsStrip({
                 <p className="font-display text-lg tracking-tight text-ink">
                   {customized
                     ? "Your custom search is applied"
-                    : "Your Houzzat"}
+                    : accountLabel}
                 </p>
                 {customized && activeSearch ? (
                   <>

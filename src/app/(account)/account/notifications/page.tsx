@@ -4,6 +4,7 @@ import { NotificationPreferencesForm } from "@/components/notifications/Notifica
 import { requireCustomerUser } from "@/lib/account";
 import { catalogForAudience, isPushTypeEnabled } from "@/lib/notifications/catalog";
 import { prisma } from "@/lib/prisma";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 export const metadata = { title: "Notifications" };
 
@@ -15,6 +16,8 @@ export default async function AccountNotificationsPage() {
   const customer = await requireCustomerUser();
   if (!customer) redirect("/auth/sign-in?callbackUrl=/account/notifications");
 
+  const brand = await resolveMarketingPresentationBrand();
+  const brandName = brand?.displayName?.trim() || "this site";
   const user = await prisma.user.findUnique({
     where: { id: customer.id },
     select: { pushNotificationPrefs: true },
@@ -32,7 +35,7 @@ export default async function AccountNotificationsPage() {
           Notifications
         </h1>
         <p className="mt-2 max-w-xl text-sm text-ink/60">
-          Choose which Houzzat alerts reach your phone. Email categories and
+          Choose which {brandName} alerts reach your phone. Email categories and
           unsubscribe controls are in{" "}
           <Link
             href="/preferences/email"

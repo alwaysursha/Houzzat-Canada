@@ -7,6 +7,7 @@ import { ChatVoicePlayer } from "@/components/chat/ChatVoicePlayer";
 import { ChatVoiceRecorder } from "@/components/chat/ChatVoiceRecorder";
 import { useCustomerChatController } from "@/components/customer-chat/CustomerChatProvider";
 import { useCustomerChatThread } from "@/components/customer-chat/useCustomerChatThread";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import {
   chatComposerHasSendableText,
   chatComposerTrailingAction,
@@ -50,6 +51,7 @@ export function CustomerChatUnreadPreview({
     chatVisible: false,
     enabled: true,
   });
+  const brandName = useTenantDisplayName("Houzzat");
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export function CustomerChatUnreadPreview({
   const agentName = presentCustomerChatAgentName({
     name: preview.agentName,
     photoUrl: preview.agentPhotoUrl,
-  });
+  }, brandName);
   const initials = presentCustomerChatAgentInitials({
     name: preview.agentName,
     photoUrl: preview.agentPhotoUrl,

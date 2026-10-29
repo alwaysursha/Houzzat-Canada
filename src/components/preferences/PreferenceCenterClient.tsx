@@ -11,6 +11,8 @@ import { PREFERENCE_CENTER_EMAIL_CATEGORIES } from "@/lib/communications/prefere
 import { derivePreferenceCenterUiState } from "@/lib/communications/preference-center-ui-state";
 import type { CustomerOptionalEmailCategory } from "@/lib/communications/classification";
 import { catalogForAudience } from "@/lib/notifications/catalog";
+import { useTenantBrand, useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
+import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
 import { cn } from "@/lib/utils";
 
 type PushItem = {
@@ -46,6 +48,9 @@ export function PreferenceCenterClient({
   initialAction: string | null;
 }) {
   const { status: sessionStatus } = useSession();
+  const brandName = useTenantDisplayName("Houzzat");
+  const brand = useTenantBrand();
+  const accountLabel = brand ? tenantAccountLabel(brand) : "Your account";
   const { confirm, toast } = useSiteAlert();
   const tokenRef = useRef<string | null>(
     initialToken && initialToken.trim().length >= 16 ? initialToken.trim() : null,
@@ -360,7 +365,7 @@ export function PreferenceCenterClient({
           Communication Preferences
         </h1>
         <p className="mt-3 max-w-xl text-sm leading-relaxed text-ink/65">
-          Sign in to choose which updates you’d like to receive from Houzzat.
+          Sign in to choose which updates you’d like to receive from {brandName}.
         </p>
         <Link
           href="/auth/sign-in?callbackUrl=%2Fpreferences%2Femail"
@@ -408,13 +413,13 @@ export function PreferenceCenterClient({
     <Shell>
       <header className="max-w-2xl">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-canopy">
-          Your Houzzat
+          {accountLabel}
         </p>
         <h1 className="mt-2 font-display text-3xl tracking-tight text-ink sm:text-4xl">
           Communication Preferences
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-ink/65 sm:text-[15px]">
-          Choose which updates you’d like to receive from Houzzat.
+          Choose which updates you’d like to receive from {brandName}.
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink/50">
           Important account and security messages may still be sent.
@@ -601,7 +606,7 @@ export function PreferenceCenterClient({
             <NotificationPreferencesForm
               items={pushItems}
               showDeviceActions
-              intro="Choose which Houzzat alerts reach your phone. Push is separate from email."
+              intro={`Choose which ${brandName} alerts reach your phone. Push is separate from email.`}
             />
           </div>
         ) : (
@@ -624,7 +629,7 @@ export function PreferenceCenterClient({
         <p className="mt-10 text-sm text-ink/45">
           Phone and SMS settings remain on{" "}
           <Link href="/account" className="font-semibold text-canopy hover:underline">
-            Your Houzzat
+            {accountLabel}
           </Link>
           .
         </p>
@@ -634,6 +639,7 @@ export function PreferenceCenterClient({
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const brandName = useTenantDisplayName("Houzzat");
   return (
     <main className="relative min-h-[100dvh] overflow-x-hidden bg-[linear-gradient(180deg,#f3faf6_0%,#ffffff_42%,#f7fbf9_100%)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-[radial-gradient(circle_at_20%_0%,rgba(15,107,76,0.12),transparent_55%)]" />
@@ -643,7 +649,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             href="/"
             className="text-sm font-semibold text-canopy hover:underline"
           >
-            Houzzat
+            {brandName}
           </Link>
           <Link
             href="/account"

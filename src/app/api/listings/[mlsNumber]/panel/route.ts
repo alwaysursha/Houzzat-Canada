@@ -5,6 +5,7 @@ import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
@@ -60,7 +61,12 @@ export async function GET(request: Request, { params }: Params) {
         }
       : null;
 
-    const result = buildListingPanelPayload(listing, user, sessionContact);
+    const result = buildListingPanelPayload(
+      listing,
+      user,
+      sessionContact,
+      await currentPublicBrandName(),
+    );
     if (!result.ok) {
       return NextResponse.json(result.body, {
         status: result.status,

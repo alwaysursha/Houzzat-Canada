@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { EMAIL_VERIFIED_EVENT } from "@/lib/auth/verification-success-signal";
 import { readJsonResponse } from "@/lib/http/fetch-json";
 import { scheduleAfterFirstPaint } from "@/lib/mobile/schedule-idle";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 const SNOOZE_KEY = "houzzat:contact-reminder-snooze";
@@ -79,6 +80,7 @@ export function ContactUpdateReminder() {
   const { status, data: session } = useSession();
   const role = session?.user?.role;
   const { toast } = useSiteAlert();
+  const brandName = useTenantDisplayName("Houzzat");
   const aboveListingBar = pathname.startsWith("/listing/");
   const [mode, setMode] = useState<ViewMode | null>(null);
   const [info, setInfo] = useState<ContactStatus | null>(null);
@@ -467,7 +469,7 @@ export function ContactUpdateReminder() {
         />
         <div className="px-6 pb-6 pt-6 sm:px-8 sm:pt-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-canopy">
-            {requested ? "Requested by your agent" : "Houzzat account"}
+            {requested ? "Requested by your agent" : `${brandName} account`}
           </p>
           <div className="mt-4 flex items-start gap-4">
             <span className="mt-0.5 flex size-12 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(160deg,#0f6b4c_0%,#0a4d38_100%)] text-white shadow-[0_10px_24px_rgba(15,107,76,0.28)]">
@@ -562,7 +564,7 @@ export function ContactUpdateReminder() {
             </Button>
           </div>
           <p className="mt-4 text-center text-[11px] leading-relaxed text-ink/40">
-            Saved privately to your Houzzat account. You can change this anytime.
+            Saved privately to your {brandName} account. You can change this anytime.
           </p>
         </div>
       </form>

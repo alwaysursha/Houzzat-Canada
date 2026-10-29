@@ -14,6 +14,8 @@ import {
   type WorkspaceListingEntitlement,
 } from "@/lib/tenancy/listing-entitlement";
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { vowAccountRequiredError } from "@/lib/vow";
 
 export type ListingDetailApiListing = {
   id: string;
@@ -139,7 +141,8 @@ export async function loadListingDetailApiAccess(
       })
     : null;
 
-  const access = resolveListingDetailAccess(user, listing);
+  const brandName = await currentPublicBrandName();
+  const access = resolveListingDetailAccess(user, listing, brandName);
   if (access.vowBlocked) {
     if (access.needsEmailVerification) {
       return {
@@ -161,7 +164,7 @@ export async function loadListingDetailApiAccess(
       ok: false,
       response: NextResponse.json(
         {
-          error: "VOW access requires a Houzzat account.",
+          error: vowAccountRequiredError(brandName),
           vowBlocked: true,
           requiresAuth: true,
         },

@@ -4,9 +4,10 @@ import { MlsDisclaimer } from "@/components/compliance/MlsDisclaimer";
 import { HomeValuationForm } from "@/components/valuation/HomeValuationForm";
 import { ValuationFaqSection } from "@/components/valuation/ValuationFaqSection";
 import {
-  ESTIMATOR_FAQS,
+  estimatorFaqs,
   SELLING_FAQS,
 } from "@/components/valuation/valuation-faqs";
+import styles from "@/components/templates/royal-collection-one/home-valuation-royal.module.css";
 import { splitCustomerDisplayName } from "@/lib/agent/lead-info-change";
 import { LEAD_IDENTITY_SENTINEL_EMAILS } from "@/lib/agent/lead-identity";
 import { auth } from "@/lib/auth";
@@ -16,6 +17,7 @@ import { isConsumerRole } from "@/lib/roles";
 import { resolveListingEntitlementContextForServerPage } from "@/lib/tenancy/listing-entitlement";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
 import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { isRoyalCollectionOneTemplateId } from "@/lib/tenancy/templates";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 
 const PAGE_TITLE = "What's Your Home Worth? Free Home Value Estimate";
@@ -35,7 +37,7 @@ function faqJsonLd(input: {
   pageUrl: string;
   siteUrl: string;
 }) {
-  const entities = [...ESTIMATOR_FAQS, ...SELLING_FAQS].map((faq) => ({
+  const entities = [...estimatorFaqs(input.siteName), ...SELLING_FAQS].map((faq) => ({
     "@type": "Question",
     name: faq.question,
     acceptedAnswer: { "@type": "Answer", text: faq.answer },
@@ -117,16 +119,117 @@ export default async function HomeValuationPage({ searchParams }: PageProps) {
     }
   }
 
+  const royal = isRoyalCollectionOneTemplateId(brand?.templateId);
+  const estimateFaqs = estimatorFaqs(siteName);
+
+  const form = (
+    <Suspense
+      fallback={
+        <div className="py-10 text-center text-sm text-ink/50">Loading…</div>
+      }
+    >
+      <HomeValuationForm
+        tone={royal ? "royal" : undefined}
+        initialContact={initialContact}
+        verifiedPrefill={
+          verifiedPrefill
+            ? {
+                address: verifiedPrefill.address,
+                city: verifiedPrefill.city,
+                community: verifiedPrefill.community,
+                lat: verifiedPrefill.lat,
+                lng: verifiedPrefill.lng,
+                unitNumber: verifiedPrefill.unitNumber,
+              }
+            : null
+        }
+      />
+    </Suspense>
+  );
+
+  const jsonLd = (
+    <script
+      type="application/ld+json"
+      dangerouslySetInnerHTML={{
+        __html: JSON.stringify(
+          faqJsonLd({ siteName, pageUrl, siteUrl: siteUrl.replace(/\/$/, "") }),
+        ),
+      }}
+    />
+  );
+
+  if (royal) {
+    return (
+      <div className={styles.page}>
+        {jsonLd}
+        <header className={styles.hero}>
+          <p className={styles.kicker}>{siteName}</p>
+          <h1>
+            What&apos;s your
+            <br />
+            <em>home worth?</em>
+          </h1>
+          <p className={styles.lede}>
+            Thinking of selling—or just curious? Enter your address for a free
+            estimate based on local market activity.
+          </p>
+        </header>
+        <div className={styles.board}>
+          {form}
+          <p className={styles.note}>
+            Stay in the know in under a minute. Your estimate uses {siteName}{" "}
+            inventory and is not a formal appraisal.
+          </p>
+        </div>
+        <section className={styles.features} aria-labelledby="valuation-benefits">
+          <h2 id="valuation-benefits">What you get</h2>
+          <div className={styles.featureGrid}>
+            {[
+              {
+                title: "An accurate starting range",
+                body: "A personalized report estimate based on market data and nearby trends.",
+              },
+              {
+                title: "Recently sold context",
+                body: "Understand what similar homes in your neighbourhood have sold for.",
+              },
+              {
+                title: "Neighbourhood Pulse",
+                body: "Optional updates so you stay on top of sales activity around your home.",
+              },
+            ].map((item) => (
+              <article className={styles.feature} key={item.title}>
+                <h3>{item.title}</h3>
+                <p>{item.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+        <div className={styles.faqs}>
+          <ValuationFaqSection
+            title="About the home value estimate"
+            items={estimateFaqs}
+          />
+          <ValuationFaqSection
+            title="About selling your home"
+            items={[...SELLING_FAQS]}
+          />
+        </div>
+        <div className={styles.fine}>
+          <p>
+            Estimates may be incomplete or change as the market moves. This is not
+            a substitute for a professional appraisal or advice from a licensed
+            real estate professional.
+          </p>
+          <MlsDisclaimer />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pb-20">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(
-            faqJsonLd({ siteName, pageUrl, siteUrl: siteUrl.replace(/\/$/, "") }),
-          ),
-        }}
-      />
+      {jsonLd}
 
       <section className="relative overflow-hidden border-b border-line/60">
         <div
@@ -149,29 +252,7 @@ export default async function HomeValuationPage({ searchParams }: PageProps) {
           </p>
 
           <div className="mx-auto mt-10 rounded-2xl border border-line/80 bg-white/90 p-5 shadow-[0_20px_50px_-28px_rgba(20,32,28,0.35)] backdrop-blur-sm sm:p-8">
-            <Suspense
-              fallback={
-                <div className="py-10 text-center text-sm text-ink/50">
-                  Loading…
-                </div>
-              }
-            >
-              <HomeValuationForm
-                initialContact={initialContact}
-                verifiedPrefill={
-                  verifiedPrefill
-                    ? {
-                        address: verifiedPrefill.address,
-                        city: verifiedPrefill.city,
-                        community: verifiedPrefill.community,
-                        lat: verifiedPrefill.lat,
-                        lng: verifiedPrefill.lng,
-                        unitNumber: verifiedPrefill.unitNumber,
-                      }
-                    : null
-                }
-              />
-            </Suspense>
+            {form}
           </div>
 
           <p className="mx-auto mt-5 max-w-lg text-center text-xs leading-relaxed text-ink/45">
@@ -216,7 +297,7 @@ export default async function HomeValuationPage({ searchParams }: PageProps) {
       <div className="mx-auto grid max-w-5xl gap-12 px-4 py-6 sm:px-6 lg:grid-cols-2 lg:gap-14">
         <ValuationFaqSection
           title="About the home value estimate"
-          items={[...ESTIMATOR_FAQS]}
+          items={estimateFaqs}
         />
         <ValuationFaqSection
           title="About selling your home"
