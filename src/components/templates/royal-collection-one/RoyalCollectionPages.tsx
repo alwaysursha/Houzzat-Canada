@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import {
   HIGH_OCTANE_COMMUNITY_GUIDES,
+  HIGH_OCTANE_COMMUNITY_PHOTO_CREDITS,
+  HIGH_OCTANE_COMMUNITY_PHOTO_LICENSE,
   highOctaneCommunityGuideBySlug,
   type HighOctaneCommunityGuide,
 } from "@/lib/tenancy/templates/high-octane-community-guides";
@@ -108,7 +110,29 @@ function CommunityGuideDirectory() {
           </div>
         </RoyalCollectionPreviewLink>
       ))}
+      <CommunityPhotoCredits slugs={HIGH_OCTANE_COMMUNITY_GUIDES.map((guide) => guide.slug)} />
     </div>
+  );
+}
+
+function CommunityPhotoCredits({ slugs }: { slugs: readonly string[] }) {
+  const credits = slugs.flatMap((slug) => {
+    const credit = HIGH_OCTANE_COMMUNITY_PHOTO_CREDITS[slug];
+    return credit ? [{ slug, ...credit }] : [];
+  });
+  if (credits.length === 0) return null;
+  return (
+    <p className={styles.guidePhotoCredit}>
+      {credits.map((credit) => (
+        <span key={credit.slug}>
+          {credit.label} by <a href={credit.sourceUrl}>{credit.author}</a>.{" "}
+        </span>
+      ))}
+      <a href={HIGH_OCTANE_COMMUNITY_PHOTO_LICENSE.url}>
+        {HIGH_OCTANE_COMMUNITY_PHOTO_LICENSE.name}
+      </a>
+      .
+    </p>
   );
 }
 
@@ -175,6 +199,7 @@ function CommunityGuidePage({
           role={guide.imageUrl ? "img" : undefined}
           aria-label={guide.imageUrl ? guide.name : undefined}
         />
+        <CommunityPhotoCredits slugs={[guide.slug]} />
         <div className={styles.guideColumns}>
           <section>
             <h2>History</h2>
