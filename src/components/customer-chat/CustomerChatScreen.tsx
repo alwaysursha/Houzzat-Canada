@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { ArrowLeft, Minus, Send, X } from "lucide-react";
+import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { AccountVerifyEmailAction } from "@/components/account/AccountVerifyEmailAction";
 import { ChatConversationSearch } from "@/components/chat/ChatConversationSearch";
