@@ -378,6 +378,8 @@ assert.equal(
 assert.equal(ordinary.actionsDisabled, false);
 assert.equal(hero.includes("Saad Qureshi"), false);
 assert.equal(hero.includes("view.heroPortrait"), true);
+assert.equal(hero.includes("RoyalCollectionHeroChat"), true);
+assert.equal(hero.includes("view.heroPortrait ? <RoyalCollectionHeroChat /> : null"), true);
 process.env.NODE_ENV = previousNode;
 
 const layout = read("src/app/(marketing)/layout.tsx");

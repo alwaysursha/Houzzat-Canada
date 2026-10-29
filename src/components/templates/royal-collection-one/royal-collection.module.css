@@ -2777,10 +2777,6 @@
     max-width: min(880px, 62vw);
   }
 
-  .heroHasPortrait .heroChat {
-    display: none;
-  }
-
   .heroPortrait {
     bottom: 0;
   }
