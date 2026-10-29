@@ -7,7 +7,12 @@ export function RoyalCollectionPlatformAttribution() {
   return (
     <p className={styles.platformAttribution}>
       <span className={styles.platformAttributionMuted}>Powered by </span>
-      <a className={styles.platformAttributionLink} href={HOUZZATPRO_HOME}>
+      <a
+        className={styles.platformAttributionLink}
+        href={HOUZZATPRO_HOME}
+        target="_blank"
+        rel="noreferrer"
+      >
         HouzzatPRO.com
       </a>
     </p>

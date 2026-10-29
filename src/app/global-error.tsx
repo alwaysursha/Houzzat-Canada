@@ -16,7 +16,7 @@ export default function GlobalError({
         <RouteError
           error={error}
           reset={reset}
-          title="Houzzat hit a snag"
+          title="This page hit a snag"
           className="min-h-screen"
         />
       </body>

@@ -9,6 +9,7 @@ import { FreeSwipeRail } from "@/components/home/FreeSwipeRail";
 import { HomeRailCardsSkeleton } from "@/components/home/HomeRailCardsSkeleton";
 import { ListingCard } from "@/components/listings/ListingCard";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { VOW_PUBLIC_NOTE } from "@/lib/vow";
 
 function WhyHiddenPopup({
@@ -21,6 +22,7 @@ function WhyHiddenPopup({
   needsEmailVerification: boolean;
 }) {
   const titleId = useId();
+  const brandName = useTenantDisplayName("Houzzat");
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +77,7 @@ function WhyHiddenPopup({
           </p>
         ) : (
           <p className="mt-3 text-sm leading-relaxed text-ink/75">
-            By registering, you become a Houzzat client and agree to VOW display
+            By registering, you become a {brandName} client and agree to VOW display
             terms.{" "}
             <AuthOpenButton
               mode="sign-up"

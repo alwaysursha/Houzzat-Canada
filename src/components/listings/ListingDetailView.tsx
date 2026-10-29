@@ -620,7 +620,7 @@ export function ListingDetailView({
             addressLine={streetLine}
             city={listing.city}
             title="Quick question?"
-            hint="Ask about this home in HouzzatPRO Chat. Your draft is kept until you send it."
+            hint="Ask about this home. Your draft is kept until you send it."
           />
           <DriveTimePanel
             mlsNumber={listing.mlsNumber}

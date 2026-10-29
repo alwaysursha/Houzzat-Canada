@@ -242,7 +242,7 @@ export async function OperationalListingDetail({
 
   // Board entitlement already applied in loadListingByMls (G.10C1).
   // VOW/session access is a second layer — never substitutes for board rights.
-  const panelAccess = resolveListingDetailAccess(user, listing);
+  const panelAccess = resolveListingDetailAccess(user, listing, siteName);
   const developmentFixture =
     listing.dataSource === HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE;
   if (panelAccess.vowBlocked && !developmentFixture) {

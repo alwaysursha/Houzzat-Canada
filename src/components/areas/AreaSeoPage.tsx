@@ -26,6 +26,7 @@ import { prisma } from "@/lib/prisma";
 import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { resolveClientAccess } from "@/lib/account-access";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 const LISTING_PREVIEW_LIMIT = 24;
 
@@ -71,6 +72,7 @@ export async function AreaSeoPage({ place }: Props) {
     : null;
   const access = resolveClientAccess(user);
   const vowOk = access.hasClientAccess;
+  const brandName = await currentPublicBrandName();
 
   const [nearby, narrative, pulse, related] = await Promise.all([
     findNearbyPois({
@@ -91,6 +93,7 @@ export async function AreaSeoPage({ place }: Props) {
       city: place.city,
       community: place.community,
       includeSold: vowOk,
+      brandName,
     }),
     place.isCityPage
       ? listRelatedCommunities(place.city, null, 16)
@@ -103,6 +106,7 @@ export async function AreaSeoPage({ place }: Props) {
     activeCount,
     pulse,
     amenityCounts,
+    brandName,
   });
   const searchHref = `/search?city=${encodeURIComponent(place.city)}${
     place.community

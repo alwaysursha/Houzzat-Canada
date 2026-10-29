@@ -12,6 +12,7 @@ import {
   resolveLeadIntent,
 } from "@/lib/agent/lead-intake";
 import { recordActivityEvent } from "@/lib/analytics/record-activity";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 import {
   AGENT_CONTACT_CONSENT_KIND,
   AGENT_CONTACT_CONSENT_VERSION,
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error: parsed.error.issues.some((i) => i.path[0] === "contactConsent")
-          ? "Please agree to be contacted by a Houzzat agent."
+          ? `Please agree to be contacted by a ${(await currentPublicBrandName())} agent.`
           : "Invalid request.",
       },
       { status: 400 },

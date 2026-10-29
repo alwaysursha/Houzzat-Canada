@@ -78,9 +78,10 @@ export function customerChatFloatingStorageKeys(userId: string) {
 
 export function presentCustomerChatAgentName(
   agent: CustomerChatAgentIdentity | null | undefined,
+  brandName?: string | null,
 ): string {
   const name = agent?.name?.trim();
-  return name || CUSTOMER_CHAT_FALLBACK_AGENT_NAME;
+  return name || brandName?.trim() || CUSTOMER_CHAT_FALLBACK_AGENT_NAME;
 }
 
 export function presentCustomerChatAgentInitials(
@@ -330,6 +331,7 @@ export function customerChatUnreadPreviewBody(input: {
   kind?: string | null;
   hasVoiceAttachment?: boolean;
   isListingShare?: boolean;
+  brandName?: string | null;
 }): string {
   if (input.hasVoiceAttachment || input.body === "Voice note") {
     return "Sent you a voice message";
@@ -338,7 +340,10 @@ export function customerChatUnreadPreviewBody(input: {
     return "Shared a property with you";
   }
   const normalized = (input.body ?? "").replace(/\s+/g, " ").trim();
-  if (!normalized) return CUSTOMER_CHAT_GENERIC_UNREAD_COPY;
+  if (!normalized) {
+    const brand = input.brandName?.trim();
+    return brand ? `You have a new message from ${brand}` : CUSTOMER_CHAT_GENERIC_UNREAD_COPY;
+  }
   if (normalized.length <= 160) return normalized;
   return `${normalized.slice(0, 157).trimEnd()}…`;
 }

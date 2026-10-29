@@ -5,8 +5,17 @@ import {
 
 export const VOW_VERSION = "2026-07-1";
 
-export const VOW_SUMMARY =
-  "Registering with Houzzat makes you a Houzzat client. Clients may view sold and leased prices and listing history under Virtual Office Website (VOW) terms. Your registration is recorded for board compliance.";
+export function vowSummary(brandName: string): string {
+  const brand = brandName.trim() || "this site";
+  return `Registering with ${brand} makes you a ${brand} client. Clients may view sold and leased prices and listing history under Virtual Office Website (VOW) terms. Your registration is recorded for board compliance.`;
+}
+
+export const VOW_SUMMARY = vowSummary("Houzzat");
+
+export function vowAccountRequiredError(brandName?: string | null): string {
+  const brand = brandName?.trim() || "this site";
+  return `VOW access requires a ${brand} account.`;
+}
 
 /** Short public note for sold locks — plain language, not full legal text. */
 export const VOW_PUBLIC_NOTE =

@@ -6,6 +6,7 @@ import {
   dispatchEmailVerifiedRefresh,
   takeVerificationSuccessSignal,
 } from "@/lib/auth/verification-success-signal";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 const DISMISS_MS = 220;
@@ -14,6 +15,7 @@ export function AccountVerifiedSuccessBanner({ className }: { className?: string
   const [visible, setVisible] = useState(false);
   const [entered, setEntered] = useState(false);
   const [dismissing, setDismissing] = useState(false);
+  const brandName = useTenantDisplayName("Houzzat");
 
   useEffect(() => {
     if (!takeVerificationSuccessSignal()) return;
@@ -78,7 +80,7 @@ export function AccountVerifiedSuccessBanner({ className }: { className?: string
               Email verified ✓
             </p>
             <h2 className="mt-1 font-display text-lg leading-tight text-ink sm:text-xl">
-              Your Houzzat account is ready.
+              Your {brandName} account is ready.
             </h2>
             <p className="mt-1.5 text-sm leading-relaxed text-ink/65">
               Your email has been successfully verified. You can now use all

@@ -23,6 +23,7 @@ import {
   scheduleNewLeadStaffEmail,
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
 import { isHighOctaneDevelopmentListingMls } from "@/lib/tenancy/templates/high-octane-development-listings";
 
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
           {
             error: consentMissing
-              ? "Please agree to be contacted by a Houzzat agent."
+              ? `Please agree to be contacted by a ${(await currentPublicBrandName())} agent.`
               : "Please choose a valid listing.",
           },
         { status: 400 },

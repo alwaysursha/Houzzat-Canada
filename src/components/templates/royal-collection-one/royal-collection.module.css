@@ -3220,3 +3220,10 @@
     font-size: 26px;
   }
 }
+
+/* Mobile tab bar covers the last footer line once the staging note is gone. */
+@media (max-width: 767px) {
+  .footer {
+    padding-bottom: calc(28px + var(--mobile-bottom-nav, 4.25rem) + var(--rc-concierge-bar, 0px));
+  }
+}

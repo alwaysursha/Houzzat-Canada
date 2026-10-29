@@ -296,7 +296,7 @@ export function RoyalCollectionContactPage({ view }: { view: RoyalCollectionView
         <div className={styles.contactPanel}>
           <p>
             A home value request opens the existing estimate. That is how a new conversation
-            begins, with the same lead capture used across HouzzatPRO.
+            begins, with the same lead capture used across {view.brandName}.
           </p>
           <RoyalCollectionPreviewLink
             className={`${styles.button} ${styles.buttonEmerald}`}

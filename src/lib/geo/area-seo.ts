@@ -195,8 +195,8 @@ export async function resolveHomesForSalePlace(opts: {
     lng = needsCoords || needsCreate ? coords.lng : lng;
     summary = summary ?? coords.summary;
     const defaultSummary = community
-      ? `${community} in ${city} — homes for sale, amenities, and market context on Houzzat.`
-      : `Homes for sale in ${city} — live MLS inventory, neighbourhood guides, and market context on Houzzat.`;
+      ? `${community} in ${city} — homes for sale, amenities, and market context.`
+      : `Homes for sale in ${city} — live MLS inventory, neighbourhood guides, and market context.`;
 
     await prisma.geoPlace.upsert({
       where: { slug },
@@ -250,6 +250,7 @@ export function buildAreaPageCopy(input: {
   activeCount: number;
   pulse: MarketPulse;
   amenityCounts: Record<string, number>;
+  brandName?: string;
 }): {
   h1: string;
   intro: string;
@@ -257,6 +258,7 @@ export function buildAreaPageCopy(input: {
   faqs: Array<{ question: string; answer: string }>;
 } {
   const { place, activeCount, pulse, amenityCounts } = input;
+  const site = input.brandName?.trim() || "this site";
   const label = place.displayName;
   const median =
     pulse.medianListPrice != null
@@ -272,7 +274,7 @@ export function buildAreaPageCopy(input: {
 
   const intro = place.isCityPage
     ? [
-        `${label} currently has ${activeCount} active home${activeCount === 1 ? "" : "s"} for sale on Houzzat`,
+        `${label} currently has ${activeCount} active home${activeCount === 1 ? "" : "s"} for sale on ${site}`,
         median ? ` with a median list price around ${median}` : "",
         pulse.avgDaysOnMarket != null
           ? `. Listings in this sample are averaging about ${pulse.avgDaysOnMarket} days on market`
@@ -283,7 +285,7 @@ export function buildAreaPageCopy(input: {
         `. Browse live inventory below, open the full map search, or explore neighbourhood guides across ${label}.`,
       ].join("")
     : [
-        `${label} in ${place.city} currently has ${activeCount} active listing${activeCount === 1 ? "" : "s"} on Houzzat`,
+        `${label} in ${place.city} currently has ${activeCount} active listing${activeCount === 1 ? "" : "s"} on ${site}`,
         median ? ` with a median list price around ${median}` : "",
         pulse.avgDaysOnMarket != null
           ? `. Recent actives average about ${pulse.avgDaysOnMarket} days on market`
@@ -298,7 +300,7 @@ export function buildAreaPageCopy(input: {
     `${activeCount} home${activeCount === 1 ? "" : "s"} for sale in ${label}`,
     place.isCityPage ? "" : `, ${place.city}`,
     median ? `. Median list price ${median}` : "",
-    ". Live MLS inventory, market pulse, and neighbourhood context on Houzzat.",
+    `. Live MLS inventory, market pulse, and neighbourhood context on ${site}.`,
   ].join("");
 
   const searchHref = `/search?city=${encodeURIComponent(place.city)}${
@@ -312,8 +314,8 @@ export function buildAreaPageCopy(input: {
       question: `Are there homes for sale in ${label}?`,
       answer:
         activeCount > 0
-          ? `Yes — Houzzat currently shows ${activeCount} active listing${activeCount === 1 ? "" : "s"} in ${label}. Inventory changes throughout the day as MLS updates arrive.`
-          : `There are no active listings in ${label} in Houzzat’s current inventory. Check back soon or broaden your search across ${place.city}.`,
+          ? `Yes — ${site} currently shows ${activeCount} active listing${activeCount === 1 ? "" : "s"} in ${label}. Inventory changes throughout the day as MLS updates arrive.`
+          : `There are no active listings in ${label} in ${site}'s current inventory. Check back soon or broaden your search across ${place.city}.`,
     },
     {
       question: `What is the median list price in ${label}?`,
@@ -330,7 +332,7 @@ export function buildAreaPageCopy(input: {
         ? `Which neighbourhoods are in ${label}?`
         : `Where is ${label} located?`,
       answer: place.isCityPage
-        ? `${label} neighbourhood guides on Houzzat group MLS communities with amenity and market context. Use the neighbourhood links on this page when available.`
+        ? `${label} neighbourhood guides on ${site} group MLS communities with amenity and market context. Use the neighbourhood links on this page when available.`
         : `${label} is a ${place.city} community tracked from MLS location fields. Listing pins and nearby amenities on this page use mapped coordinates for the area.`,
     },
   ];

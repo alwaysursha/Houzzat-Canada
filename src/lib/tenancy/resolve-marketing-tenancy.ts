@@ -316,3 +316,9 @@ export const resolveMarketingPresentationBrand = cache(
   });
   },
 );
+
+/** Visitor-facing brand. Houzzat stays Houzzat; every other host uses its display name. */
+export async function currentPublicBrandName(): Promise<string> {
+  const tenancy = await resolveMarketingTenancy();
+  return tenancy?.brand.displayName?.trim() || "this site";
+}

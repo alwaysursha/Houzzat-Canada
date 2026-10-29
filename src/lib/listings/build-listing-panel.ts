@@ -13,7 +13,7 @@ import { resolveListingGalleryPhotos } from "@/lib/listings/resolve-gallery";
 import type { ListingDetail } from "@/lib/listings/types";
 import type { PublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
-import { hasVowAccess } from "@/lib/vow";
+import { hasVowAccess, vowAccountRequiredError } from "@/lib/vow";
 
 export type ListingPanelAccess = {
   signedIn: boolean;
@@ -122,6 +122,7 @@ function toIsoRequired(value: Date | string): string {
 export function resolveListingDetailAccess(
   user: AccessUser | null | undefined,
   listing: Pick<ListingDetail, "status" | "dataSource">,
+  brandName?: string | null,
 ): ListingPanelAccess {
   const access = resolveClientAccess(user);
   const canSeeRestricted = access.hasClientAccess;
@@ -139,8 +140,8 @@ export function resolveListingDetailAccess(
     detailsLocked,
     needsEmailVerification: verifyLocked,
     vowBlocked,
-    gateDetails: accessGateCopy(access, "details"),
-    gateSold: accessGateCopy(access, "sold"),
+    gateDetails: accessGateCopy(access, "details", brandName ?? undefined),
+    gateSold: accessGateCopy(access, "sold", brandName ?? undefined),
   };
 }
 
@@ -316,8 +317,9 @@ export function buildListingPanelPayload(
   listing: ListingDetail,
   user: AccessUser | null | undefined,
   sessionContact?: ListingPanelSessionContact | null,
+  brandName?: string | null,
 ): ListingPanelResult {
-  const panelAccess = resolveListingDetailAccess(user, listing);
+  const panelAccess = resolveListingDetailAccess(user, listing, brandName);
 
   if (panelAccess.vowBlocked) {
     if (needsEmailVerification(user)) {
@@ -335,7 +337,7 @@ export function buildListingPanelPayload(
       ok: false,
       status: 401,
       body: {
-        error: "VOW access requires a Houzzat account.",
+        error: vowAccountRequiredError(brandName),
         vowBlocked: true,
         requiresAuth: true,
       },

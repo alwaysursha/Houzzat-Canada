@@ -11,6 +11,8 @@ import {
   resolveListingEntitlementContextForRequest,
 } from "@/lib/tenancy/listing-entitlement";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
+import { vowAccountRequiredError } from "@/lib/vow";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
 
@@ -70,7 +72,8 @@ export async function GET(request: Request, { params }: Params) {
         .catch(() => null)
     : null;
 
-  const panelAccess = resolveListingDetailAccess(user, listing);
+  const brandName = await currentPublicBrandName();
+  const panelAccess = resolveListingDetailAccess(user, listing, brandName);
   if (panelAccess.vowBlocked) {
     if (panelAccess.needsEmailVerification) {
       return NextResponse.json(
@@ -87,7 +90,7 @@ export async function GET(request: Request, { params }: Params) {
     }
     return NextResponse.json(
       {
-        error: "VOW access requires a Houzzat account.",
+        error: vowAccountRequiredError(brandName),
         vowBlocked: true,
         requiresAuth: true,
       },
@@ -112,6 +115,7 @@ export async function GET(request: Request, { params }: Params) {
         city: listing.city,
         community: listing.community,
         includeSold: signedIn,
+        brandName,
       }),
     ]);
 

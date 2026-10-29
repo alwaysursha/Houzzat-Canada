@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
-import { VOW_SUMMARY } from "@/lib/vow";
+import { vowSummary } from "@/lib/vow";
 
 /** Shown when sold / history is locked for guests or unverified accounts. */
 export function VowAcceptCard({
@@ -18,6 +19,7 @@ export function VowAcceptCard({
   const { status } = useSession();
   const router = useRouter();
   const { openAuth } = useAuthModal();
+  const brandName = useTenantDisplayName("Houzzat");
   const [pending, setPending] = useState(false);
   const [needsVerify, setNeedsVerify] = useState(false);
 
@@ -63,9 +65,9 @@ export function VowAcceptCard({
   return (
     <div className="rounded-2xl border border-canopy/25 bg-canopy/5 p-5">
       <h3 className="font-semibold text-ink">
-        Sold prices & history for Houzzat clients
+        Sold prices & history for {brandName} clients
       </h3>
-      <p className="mt-2 text-sm text-ink/70">{VOW_SUMMARY}</p>
+      <p className="mt-2 text-sm text-ink/70">{vowSummary(brandName)}</p>
       {status === "authenticated" && needsVerify ? (
         <div className="mt-5 rounded-3xl border border-white/70 bg-white p-6 shadow-[0_20px_50px_-28px_rgba(15,61,46,0.3)] sm:p-8">
           <EmailVerificationRequired

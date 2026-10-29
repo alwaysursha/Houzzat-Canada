@@ -23,6 +23,7 @@ import type { CaptureIntentType } from "@/lib/auth/capture-intent";
 import { peekPendingIntent } from "@/lib/auth/capture-intent";
 import { browserCaptureIntentStore } from "@/components/auth/capture-intent-browser";
 import { useSiteAlert } from "@/components/feedback/SiteAlertProvider";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EXISTING_ACCOUNT_SIGN_IN_MESSAGE } from "@/lib/auth/existing-account-message";
@@ -112,6 +113,7 @@ export function SignUpForm({
   afterConsent?: ReactNode;
 }) {
   const router = useRouter();
+  const brandName = useTenantDisplayName("Houzzat");
   const { confirm } = useSiteAlert();
   const submitRef = useRef<HTMLButtonElement>(null);
   const [name, setName] = useState(initialName);
@@ -237,7 +239,7 @@ export function SignUpForm({
       });
     } catch {
       setPending(false);
-      setError("Could not reach Houzzat. Check your connection and try again.");
+      setError(`Could not reach ${brandName}. Check your connection and try again.`);
       return;
     }
 
@@ -281,7 +283,7 @@ export function SignUpForm({
       if (response.status === 403) {
         setError(
           data.error ??
-            "This account cannot be created. Contact Houzzat support.",
+            `This account cannot be created. Contact ${brandName} support.`,
         );
         return;
       }

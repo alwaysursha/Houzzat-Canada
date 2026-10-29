@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AccountProfileHeader } from "@/components/account/AccountProfileHeader";
@@ -11,11 +12,16 @@ import {
 } from "@/lib/account/customer-workspace-scope";
 import { requireCustomerUser } from "@/lib/account";
 import { prisma } from "@/lib/prisma";
+import { tenantAccountLabel } from "@/lib/tenancy/marketing-presentation-brand";
+import { resolveMarketingPresentationBrand } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { hasVowAccess } from "@/lib/vow";
 
-export const metadata = { title: "Your Houzzat" };
+export async function generateMetadata(): Promise<Metadata> {
+  const brand = await resolveMarketingPresentationBrand();
+  return { title: brand ? tenantAccountLabel(brand) : "Your account" };
+}
 
 type AccountStats = {
   savedCount: number;
@@ -109,6 +115,8 @@ async function loadAccountStats(
 }
 
 export default async function AccountPage() {
+  const brand = await resolveMarketingPresentationBrand();
+  const brandName = brand?.displayName?.trim() || "this site";
   const user = await requireCustomerUser();
   if (!user) {
     redirect("/auth/sign-in?callbackUrl=/account");
@@ -282,7 +290,7 @@ export default async function AccountPage() {
       <section className="rounded-2xl border border-line bg-surface p-5">
         <h2 className="font-display text-2xl text-ink">Info</h2>
         <p className="mt-1 text-sm text-ink/55">
-          Consent recorded when you created your Houzzat client account.
+          Consent recorded when you created your {brandName} client account.
         </p>
         <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
           <div>

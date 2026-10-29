@@ -1,9 +1,15 @@
-export const ESTIMATOR_FAQS = [
-  {
-    question: "How is my home value calculated?",
-    answer:
-      "We look at similar sold homes in Houzzat’s entitled Ontario inventory near your address. You get an automated low-to-high range with a midpoint for reference—not a single guaranteed price.",
-  },
+export function estimatorFaqs(brandName: string) {
+  const brand = brandName.trim() || "this site";
+  return [
+    {
+      question: "How is my home value calculated?",
+      answer: `We look at similar sold homes in ${brand}'s entitled Ontario inventory near your address. You get an automated low-to-high range with a midpoint for reference—not a single guaranteed price.`,
+    },
+    ...ESTIMATOR_FAQ_REST,
+  ];
+}
+
+const ESTIMATOR_FAQ_REST = [
   {
     question: "Is this the same as a professional appraisal?",
     answer:

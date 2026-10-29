@@ -10,6 +10,7 @@ import {
   presentCustomerChatAgentInitials,
   presentCustomerChatAgentName,
 } from "@/lib/customer-chat/floating-chat";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { cn } from "@/lib/utils";
 
 function usePrefersReducedMotion(): boolean {
@@ -25,6 +26,7 @@ function usePrefersReducedMotion(): boolean {
 }
 
 export function CustomerChatFloatingWindow() {
+  const brandName = useTenantDisplayName("Houzzat");
   const {
     mode,
     draft,
@@ -94,7 +96,7 @@ export function CustomerChatFloatingWindow() {
         }
       >
         <ChatAgentAvatar
-          name={presentCustomerChatAgentName(null)}
+          name={presentCustomerChatAgentName(null, brandName)}
           initials={presentCustomerChatAgentInitials(null)}
           photoUrl={null}
           size="sm"

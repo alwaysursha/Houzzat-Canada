@@ -16,6 +16,8 @@ import {
 import { loadPersistedUtm } from "@/components/ads/UtmCapture";
 import { AuthOpenButton } from "@/components/auth/AuthOpenButton";
 import { AddressAutocomplete } from "@/components/listings/AddressAutocomplete";
+import valuationStyles from "@/components/templates/royal-collection-one/home-valuation-royal.module.css";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExpertWhatsAppNumber } from "@/components/whatsapp/useExpertWhatsAppNumber";
@@ -155,6 +157,7 @@ function EstimatePreviewWindow({
   inPersonHref: string | null;
   onAuthIntent?: () => void;
 }) {
+  const brandName = useTenantDisplayName("Houzzat");
   const revealed = Boolean(result);
   const insufficient = estimateStatus === "INSUFFICIENT_DATA";
   const authRequired = estimateStatus === "AUTH_REQUIRED";
@@ -363,7 +366,7 @@ function EstimatePreviewWindow({
                 <p className="text-xs text-ink/55">
                   Based on{" "}
                   {(result.soldCount ?? 0) + (result.activeCount ?? 0)} nearby
-                  homes in Houzzat inventory
+                  homes in {brandName} inventory
                 </p>
               ) : null}
               <p className="text-[11px] leading-relaxed text-ink/45">
@@ -445,11 +448,15 @@ export type HomeValuationVerifiedPrefill = {
 export function HomeValuationForm({
   initialContact = null,
   verifiedPrefill = null,
+  tone,
 }: {
   initialContact?: HomeValuationInitialContact | null;
   /** Server-resolved property address — preferred over raw query params. */
   verifiedPrefill?: HomeValuationVerifiedPrefill | null;
+  /** Visual skin only. Estimate behaviour stays the same. */
+  tone?: "royal";
 } = {}) {
+  const brandName = useTenantDisplayName("Houzzat");
   const searchParams = useSearchParams();
   const clientAccess = useClientAccess();
   const { digits: whatsappDigits } = useExpertWhatsAppNumber();
@@ -1011,6 +1018,8 @@ export function HomeValuationForm({
     }
   }
 
+  const royal = tone === "royal";
+
   const meetingHref =
     whatsappDigits && address.trim()
       ? buildValuationMeetingWhatsAppUrl({
@@ -1031,7 +1040,13 @@ export function HomeValuationForm({
   });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8">
+    <div
+      className={cn(
+        "grid gap-6 lg:grid-cols-2 lg:items-stretch lg:gap-8",
+        royal && valuationStyles.form,
+        royal && "lg:gap-0",
+      )}
+    >
       <div className="min-w-0">
         {step === "address" ? (
           <form onSubmit={submitAddress} className="space-y-5">
@@ -1049,7 +1064,13 @@ export function HomeValuationForm({
                 source="google"
                 minChars={2}
                 placeholder="Start typing your address…"
-                inputClassName="h-12 text-base"
+                menuTone={royal ? "royal" : undefined}
+                iconClassName={royal ? "text-[#c8a66a]" : undefined}
+                inputClassName={
+                  royal
+                    ? "h-12 rounded-none border-[#e6dccb] bg-[#fffdf8] text-base text-[#1c1915]"
+                    : "h-12 text-base"
+                }
               />
               <p className="text-xs text-ink/50">
                 Select a suggestion so we can verify city and map location.
@@ -1278,7 +1299,7 @@ export function HomeValuationForm({
               </p>
               {initialContact?.authenticated ? (
                 <p className="mt-2 text-xs text-ink/55">
-                  Signed in — we filled in the details Houzzat already has. You
+                  Signed in — we filled in the details {brandName} already has. You
                   can correct anything before saving.
                 </p>
               ) : null}
@@ -1565,7 +1586,7 @@ export function HomeValuationForm({
                     className="mt-0.5 size-4 shrink-0 text-canopy"
                     aria-hidden
                   />
-                  Your Houzzat account is ready — sign in to manage updates.
+                  Your {brandName} account is ready — sign in to manage updates.
                 </p>
               ) : null}
               {(marketPulseOptIn || neighbourhoodSalesOptIn) && (

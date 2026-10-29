@@ -117,7 +117,7 @@ export async function answerListingQuestion(
         (p) =>
           `${p.name} (${p.type.toLowerCase()}, ${p.distanceKm < 1 ? `${Math.round(p.distanceKm * 1000)} m` : `${p.distanceKm.toFixed(1)} km`})`,
       );
-      facts.push(`Nearby from Houzzat catalogue: ${top.join("; ")}.`);
+      facts.push(`Nearby from the catalogue: ${top.join("; ")}.`);
     }
     citations.push("poi.nearby");
   }

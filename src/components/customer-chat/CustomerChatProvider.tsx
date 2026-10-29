@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useTenantDisplayName } from "@/components/tenancy/TenantBrandProvider";
 import { CustomerChatFloatingWindow } from "@/components/customer-chat/CustomerChatFloatingWindow";
 import { CustomerChatUnreadPreview } from "@/components/customer-chat/CustomerChatUnreadPreview";
 import {
@@ -120,6 +121,7 @@ export function useOptionalCustomerChatController(): CustomerChatController | nu
 
 export function CustomerChatProvider({ children }: { children: ReactNode }) {
   const { status, data } = useSession();
+  const brandName = useTenantDisplayName("Houzzat");
   const pathname = usePathname() || "/";
   const userId = data?.user?.id ?? null;
   const role = data?.user?.role;
@@ -398,6 +400,7 @@ export function CustomerChatProvider({ children }: { children: ReactNode }) {
             body: messageBody,
             hasVoiceAttachment: hasVoice,
             isListingShare,
+            brandName,
           }),
           messageCreatedAt: latestMessage?.createdAt ?? null,
           unreadCount: json.read.unreadCount,

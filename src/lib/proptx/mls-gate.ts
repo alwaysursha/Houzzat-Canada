@@ -3,7 +3,8 @@ import { needsEmailVerification } from "@/lib/account-access";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isVowOnlyMlsMode } from "@/lib/proptx/config";
-import { hasClientAccess } from "@/lib/vow";
+import { hasClientAccess, vowAccountRequiredError } from "@/lib/vow";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 
 /**
  * When PropTx VOW-only mode is on, MLS APIs require a registered Houzzat client
@@ -45,7 +46,7 @@ export async function mlsClientGate(options?: {
 
   return NextResponse.json(
     {
-      error: "VOW access requires a Houzzat account.",
+      error: vowAccountRequiredError(await currentPublicBrandName()),
       requiresAuth: true,
       vowOnly: true,
     },

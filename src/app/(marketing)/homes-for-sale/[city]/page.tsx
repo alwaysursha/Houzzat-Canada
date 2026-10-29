@@ -8,6 +8,7 @@ import {
 import { getMarketPulse } from "@/lib/market/pulse";
 import { prisma } from "@/lib/prisma";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
+import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { withStagingSnapshotBoundary } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { stagingSnapshotVisibleForServerPage } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 
@@ -19,6 +20,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!place) return { title: "Homes for sale" };
 
   const stagingSnapshotVisible = await stagingSnapshotVisibleForServerPage();
+  const brandName = await currentPublicBrandName();
   const [activeCount, pulse] = await Promise.all([
     prisma.listing.count({
       where: withStagingSnapshotBoundary(
@@ -30,13 +32,14 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
         stagingSnapshotVisible,
       ),
     }),
-    getMarketPulse({ city: place.city, includeSold: false }),
+    getMarketPulse({ city: place.city, includeSold: false, brandName }),
   ]);
   const copy = buildAreaPageCopy({
     place,
     activeCount,
     pulse,
     amenityCounts: {},
+    brandName,
   });
 
   return buildMarketingPageMetadata({
