@@ -19,7 +19,6 @@ import {
   CUSTOMER_CHAT_SEND_ROUTE,
   CUSTOMER_CHAT_TEXT_MAX_LENGTH,
   appendCustomerChatSentMessage,
-  customerChatBlockedCopy,
   customerChatBubbleAlign,
   customerChatComposerCanSubmit,
   customerChatComposerKeyAction,
@@ -443,6 +442,30 @@ function testTenantOnlyFabAndNoSixthTab() {
   assert.ok(fab.includes("chat.open"));
   assert.ok(fab.includes("CUSTOMER_CHAT_PAGE_HREF"));
   assert.ok(fab.includes('aria-label="Open chat"'));
+  assert.ok(fab.includes("data-customer-chat-fab"));
+  assert.ok(fab.includes("[data-rc-concierge]:not([hidden])"));
+  assert.ok(fab.includes("listingConcierge"));
+  const hero = read("src/components/templates/royal-collection-one/RoyalCollectionHero.tsx");
+  assert.ok(hero.includes("RoyalCollectionHeroChat"));
+  assert.ok(hero.includes("view.heroPortrait ? <RoyalCollectionHeroChat /> : null"));
+  const heroChat = read(
+    "src/components/templates/royal-collection-one/RoyalCollectionHeroChat.tsx",
+  );
+  assert.ok(heroChat.includes("data-rc-hero-chat"));
+  assert.ok(heroChat.includes("openGuestStartChatIntent"));
+  assert.ok(heroChat.includes("chat.open"));
+  const royalCss = read(
+    "src/components/templates/royal-collection-one/royal-collection.module.css",
+  );
+  assert.equal(royalCss.includes(".heroHasPortrait .heroChat {\n    display: none;"), false);
+  const marketingLayout = read("src/app/(marketing)/layout.tsx");
+  assert.ok(marketingLayout.includes("heroChatWithScroll"));
+  assert.ok(marketingLayout.includes("heroChatWithScroll ? null"));
+  const concierge = read(
+    "src/components/templates/royal-collection-one/RoyalCollectionConciergeBar.tsx",
+  );
+  assert.ok(concierge.includes("data-rc-concierge"));
+  assert.ok(concierge.includes("hidden={concealed}"));
   const nav = read("src/components/site/MobileBottomNav.tsx");
   assert.ok(nav.includes("Chat"));
   assert.ok(nav.includes("grid-cols-4"));

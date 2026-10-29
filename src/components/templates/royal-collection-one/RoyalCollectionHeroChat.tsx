@@ -42,6 +42,8 @@ export function RoyalCollectionHeroChat() {
       className={styles.heroChat}
       aria-label="Open chat"
       data-customer-chat-entry=""
+      data-rc-hero-chat=""
+      data-rc-allow=""
       onClick={() => {
         if (status === "authenticated") {
           if (chat) {

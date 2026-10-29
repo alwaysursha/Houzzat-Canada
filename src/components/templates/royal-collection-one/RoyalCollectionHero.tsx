@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RoyalCollectionScene } from "@/lib/tenancy/templates/royal-collection-media";
 import type { RoyalCollectionView } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import { ROYAL_COLLECTION_PREVIEW_ACTION_NOTE } from "./preview-action-note";
+import { RoyalCollectionHeroChat } from "./RoyalCollectionHeroChat";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
@@ -227,6 +228,7 @@ export function RoyalCollectionHero({ view }: { view: RoyalCollectionView }) {
             ))}
           </div>
         )}
+        {view.heroPortrait ? <RoyalCollectionHeroChat /> : null}
         <HeroScrollLink />
       </div>
     </section>

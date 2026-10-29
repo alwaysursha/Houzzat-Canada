@@ -25,6 +25,7 @@ export function CustomerChatFab() {
   const role = data?.user?.role;
   const [houzzatProShell, setHouzzatProShell] = useState(false);
   const [listingConcierge, setListingConcierge] = useState(false);
+  const onListing = pathname.startsWith("/listing/");
 
   useEffect(() => {
     let cancelled = false;
@@ -37,14 +38,13 @@ export function CustomerChatFab() {
   }, []);
 
   useEffect(() => {
-    if (!pathname.startsWith("/listing/")) {
-      setListingConcierge(false);
-      return;
-    }
+    if (!onListing) return;
     const sync = () => {
-      setListingConcierge(Boolean(document.querySelector("[data-rc-concierge]:not([hidden])")));
+      setListingConcierge(
+        Boolean(document.querySelector("[data-rc-concierge]:not([hidden])")),
+      );
     };
-    sync();
+    const frame = window.requestAnimationFrame(sync);
     const observer = new MutationObserver(sync);
     observer.observe(document.body, {
       subtree: true,
@@ -52,8 +52,11 @@ export function CustomerChatFab() {
       attributes: true,
       attributeFilter: ["hidden"],
     });
-    return () => observer.disconnect();
-  }, [pathname]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [onListing]);
 
   const isStaff =
     status === "authenticated" &&
@@ -63,7 +66,7 @@ export function CustomerChatFab() {
     pathname.startsWith(`${CUSTOMER_CHAT_PAGE_HREF}/`);
   const onPro = pathname === "/pro" || pathname.startsWith("/pro/");
 
-  if (houzzatProShell || isStaff || onChatPage || onPro || listingConcierge) return null;
+  if (houzzatProShell || isStaff || onChatPage || onPro || (onListing && listingConcierge)) return null;
   if (status === "loading") return null;
   if (status === "authenticated" && chat?.mode === "open") return null;
 
@@ -93,6 +96,7 @@ export function CustomerChatFab() {
         type="button"
         aria-label="Open chat"
         data-customer-chat-entry=""
+        data-customer-chat-fab=""
         className={className}
         onClick={() => {
           if (chat) {
@@ -112,6 +116,7 @@ export function CustomerChatFab() {
       type="button"
       aria-label="Open chat"
       data-customer-chat-entry=""
+      data-customer-chat-fab=""
       className={className}
       onClick={() => {
         openGuestStartChatIntent({
