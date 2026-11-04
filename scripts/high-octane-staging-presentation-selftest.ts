@@ -157,7 +157,7 @@ assert.equal(
 );
 assert.equal(
   stagingView.mobileAboutPortraitUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png?v=1",
 );
 assert.deepEqual(
   stagingView.collectionCards?.map((card) => ({

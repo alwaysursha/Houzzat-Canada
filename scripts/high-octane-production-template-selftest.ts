@@ -182,7 +182,7 @@ assert.equal(
 );
 assert.equal(
   highOctane.mobileAboutPortraitUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png?v=1",
 );
 assert.equal(
   highOctane.brokerage.logoUrl,

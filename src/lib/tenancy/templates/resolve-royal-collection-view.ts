@@ -166,11 +166,11 @@ const HIGH_OCTANE_BROKERAGE_ADDRESS = "5111 New St.\nBurlington, ON, L7L1V2";
  * Another workspace never receives it.
  */
 export const HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL =
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=3";
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=4";
 
 /** Full-length cutout. Phone about panel only. */
 const HIGH_OCTANE_FULL_BODY_PORTRAIT_URL =
-  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png";
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png?v=1";
 
 const HIGH_OCTANE_HERO_PORTRAIT_COPY = {
   name: "Saad Qureshi",
