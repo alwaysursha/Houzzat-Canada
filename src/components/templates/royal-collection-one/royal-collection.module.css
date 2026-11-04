@@ -2340,17 +2340,20 @@
  */
 @media (max-width: 767px) {
   .aboutHasFullPortrait {
+    display: flow-root;
     position: relative;
     align-items: start;
-    grid-template-columns: 30% minmax(0, 1fr);
-    gap: 8px;
     overflow: visible;
   }
 
+  /* Phone only: float the visible figure so the description sits beside it, then continues full width underneath. */
   .aboutHasFullPortrait .aboutImage {
+    float: left;
     position: relative;
-    align-self: stretch;
-    width: auto;
+    align-self: auto;
+    width: 38%;
+    aspect-ratio: 448 / 670;
+    margin: 0 12px 0 0;
     min-height: 0;
     background: none;
     overflow: visible;
@@ -2362,9 +2365,9 @@
   }
 
   .aboutHasFullPortrait .aboutCopy {
-    grid-column: 2;
     position: relative;
     z-index: 1;
+    min-width: 0;
   }
 
   .aboutHasFullPortrait .aboutCopy h2 {
@@ -2393,17 +2396,17 @@
   }
 
   .aboutHasFullPortrait .aboutPhoto {
-    top: 0;
-    right: 0;
+    top: -2.537%;
+    right: auto;
     bottom: auto;
-    left: auto;
-    width: auto;
-    height: 100%;
-    max-width: 210%;
-    max-height: 100%;
-    object-fit: contain;
-    object-position: right center;
-    transform: translateX(29.2%);
+    left: -21.875%;
+    width: 152.232%;
+    height: 151.045%;
+    max-width: none;
+    max-height: none;
+    object-fit: fill;
+    object-position: left top;
+    transform: translateY(8px);
   }
 
   .shell {
@@ -2928,7 +2931,7 @@
     width: auto;
     height: auto;
     max-width: 46vw;
-    aspect-ratio: 369 / 621;
+    aspect-ratio: 407 / 597;
     flex: 0 0 auto;
     object-fit: contain;
     object-position: center bottom;

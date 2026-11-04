@@ -275,7 +275,7 @@ assert.equal(
 );
 assert.equal(
   highOctaneWorkspace.mobileAboutPortraitUrl,
-  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png",
+  "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png?v=1",
 );
 assert.equal(
   highOctaneWorkspace.brokerage.logoUrl,
@@ -293,7 +293,7 @@ for (const rel of [
   highOctaneWorkspace.mobileAboutPortraitUrl,
   highOctaneWorkspace.brokerage.logoUrl,
 ]) {
-  const file = rel.slice(1);
+  const file = rel.slice(1).split("?")[0];
   assert.equal(existsSync(join(root, "public", file)), true, rel);
 }
 assert.deepEqual(
