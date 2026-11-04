@@ -166,11 +166,15 @@ const HIGH_OCTANE_BROKERAGE_ADDRESS = "5111 New St.\nBurlington, ON, L7L1V2";
  * Another workspace never receives it.
  */
 export const HIGH_OCTANE_APPROVED_AGENT_PORTRAIT_URL =
-  "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=4";
+  "/media/royal-collection/high-octane/saad-qureshi-portrait.png?v=5";
 
 /** Full-length cutout. Phone about panel only. */
 const HIGH_OCTANE_FULL_BODY_PORTRAIT_URL =
   "/media/royal-collection/high-octane/saad-qureshi-portrait-full.png?v=1";
+
+/** Public Meet Saad copy. A saved agent bio still replaces it. */
+const HIGH_OCTANE_AGENT_BIO =
+  "I've spent over 10 years negotiating for a living, in sales across Canada and overseas. Now I put that experience to work for Niagara buyers and sellers. I prepare hard, read the other side, and protect your number from the first offer to closing. I also come from energy-efficiency sales, so I'll tell you what a home costs to run.";
 
 const HIGH_OCTANE_HERO_PORTRAIT_COPY = {
   name: "Saad Qureshi",
@@ -403,7 +407,7 @@ export function resolveRoyalCollectionView(
     firstName: agentName ? firstNameFrom(agentName) : null,
     title: professional.agent.designation ?? brand.agent?.title ?? null,
     tagline: brand.tagline?.trim() || null,
-    bio: brand.agent?.bio?.trim() || null,
+    bio: brand.agent?.bio?.trim() || (stagingWorkspace ? HIGH_OCTANE_AGENT_BIO : null),
     photoUrl: uploadedPhotoUrl,
     resolvedAgentPortraitUrl,
     phone: professional.agent.cellPhone ?? brand.agent?.phone ?? null,

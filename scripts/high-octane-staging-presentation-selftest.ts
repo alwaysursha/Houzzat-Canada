@@ -109,6 +109,16 @@ function brand(overrides: Partial<MarketingPresentationBrand> = {}): MarketingPr
 const stagingView = resolveRoyalCollectionView(brand());
 assert.equal(stagingView.email, "saad@highoctaneniagara.ca");
 assert.equal(stagingView.agentName, "Saad Qureshi");
+assert.match(stagingView.bio ?? "", /negotiating for a living/);
+assert.match(stagingView.bio ?? "", /what a home costs to run/);
+assert.equal(
+  resolveRoyalCollectionView(
+    brand({
+      agent: { ...brand().agent!, bio: "Custom biography." },
+    }),
+  ).bio,
+  "Custom biography.",
+);
 assert.equal(stagingView.phone, "289-501-7755");
 assert.equal(stagingView.brokerage.name, "Right at Home Realty Brokerage");
 assert.equal(stagingView.brokerage.address, "5111 New St.\nBurlington, ON, L7L1V2");
@@ -310,6 +320,7 @@ assert.equal(houzzat.storyMainUrl, null);
 assert.equal(houzzat.storyInsetUrl, null);
 assert.equal(houzzat.valuationImageUrl, null);
 assert.equal(houzzat.mobileAboutPortraitUrl, null);
+assert.equal(houzzat.bio, null);
 assert.equal(JSON.stringify(houzzat.markets), JSON.stringify(["Mississauga"]));
 assert.equal(JSON.stringify(houzzat).includes("/media/royal-collection/high-octane/"), false);
 assert.equal(
