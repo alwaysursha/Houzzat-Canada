@@ -21,7 +21,33 @@ import {
   isAdminRole,
   isAgentRole,
 } from "@/lib/roles";
+import { HIGH_OCTANE_COMMUNITY_GUIDES } from "@/lib/tenancy/templates/high-octane-community-guides";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { NextResponse, type NextRequest } from "next/server";
+
+const HIGH_OCTANE_COMMUNITY_SLUGS = new Set(
+  HIGH_OCTANE_COMMUNITY_GUIDES.map((guide) => guide.slug),
+);
+
+function unknownHighOctaneCommunity(request: NextRequest) {
+  const host = request.headers.get("host")?.split(":")[0]?.trim().toLowerCase() ?? "";
+  if (host !== `${HIGH_OCTANE_STAGING_WORKSPACE_SLUG}.houzzatpro.com`) return null;
+  const match = request.nextUrl.pathname.match(/^\/communities\/([^/]+)\/?$/);
+  if (!match) return null;
+  const slug = decodeURIComponent(match[1] ?? "").toLowerCase();
+  if (HIGH_OCTANE_COMMUNITY_SLUGS.has(slug)) return null;
+  return new NextResponse(
+    `<!DOCTYPE html><html lang="en-CA"><head><meta name="robots" content="noindex"/><title>404 | This page could not be found.</title></head><body><h1>404 | This page could not be found.</h1></body></html>`,
+    {
+      status: 404,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "x-robots-tag": "noindex",
+        "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+      },
+    },
+  );
+}
 
 function isHouzzatProPlatformRootHost(host: string): boolean {
   const normalized = host.trim().toLowerCase().split(":")[0] ?? "";
@@ -88,6 +114,9 @@ function readShellHint(request: NextRequest) {
 }
 
 export default auth((request) => {
+  const unknownCommunity = unknownHighOctaneCommunity(request);
+  if (unknownCommunity) return unknownCommunity;
+
   const { pathname } = request.nextUrl;
   if (pathname === "/home-preview") {
     const url = request.nextUrl.clone();
