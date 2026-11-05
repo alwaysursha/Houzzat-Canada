@@ -1,0 +1,15 @@
+---
+description: Remind the user to get Ali's permission before editing package.json
+alwaysApply: true
+---
+
+# package.json needs Ali's permission
+
+If a task would edit any `package.json` file, including dependencies, scripts, versions, or any other field:
+
+- Stop before changing the file.
+- Remind the user, in plain language, to get permission from Ali first.
+- Wait until the user confirms that Ali approved the change.
+- Do not edit `package.json` until that confirmation is given.
+
+Reading `package.json` is allowed. Only edits need Ali's permission.
