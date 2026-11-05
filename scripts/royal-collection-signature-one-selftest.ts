@@ -25,6 +25,14 @@ import {
 } from "../src/lib/tenancy/templates/resolve-royal-collection-view";
 import { takeRoyalFeaturedListings } from "../src/components/templates/royal-collection-one/royal-featured-listings";
 import {
+  authorizedLeaseListings,
+  authorizedSoldListings,
+  listingsAfterFeatured,
+  recommendationListings,
+  upcomingOpenHouseListings,
+} from "../src/components/templates/royal-collection-one/royal-discovery-listings";
+import { searchHighOctaneDevelopmentListings } from "../src/lib/tenancy/templates/high-octane-development-listings";
+import {
   LISTING_SOURCE_SWITCH_INVALIDATION,
   resolveHighOctaneDevelopmentListingSource,
   resolveTenantListingSourceAssignment,
@@ -95,6 +103,29 @@ assert.ok(featured.includes("Featured Listings"));
 assert.ok(featured.includes("Concept"));
 assert.ok(featured.includes("Not an MLS listing"));
 assert.ok(featured.includes("/api/listings/home-rails"));
+assert.ok(home.includes("<RoyalCollectionDiscovery"));
+assert.ok(
+  home.indexOf("<RoyalCollectionFeatured") <
+    home.indexOf("<RoyalCollectionDiscovery"),
+);
+assert.ok(
+  home.indexOf("<RoyalCollectionDiscovery") <
+    home.indexOf("<RoyalCollectionStory"),
+);
+const discovery = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionDiscovery.tsx",
+);
+assert.ok(discovery.includes("/api/listings/home-rails"));
+assert.ok(discovery.includes("/api/listings/by-mls"));
+assert.ok(discovery.includes("/api/account/home-shell"));
+assert.ok(discovery.includes("/api/listings/search"));
+assert.ok(discovery.includes("localRecentMlsNumbers"));
+assert.ok(discovery.includes('source?.kind !== "primary"'));
+assert.equal(discovery.includes("HomepageMarketRails"), false);
+assert.equal(discovery.includes("PersonalizeHomepageBar"), false);
+assert.equal(discovery.includes("HomeListingRail"), false);
+const houzzatHome = read("src/components/home/HomeDeferredBody.tsx");
+assert.equal(houzzatHome.includes("RoyalCollectionDiscovery"), false);
 assert.equal(featured.includes("minPrice"), false);
 assert.equal(featured.includes("Display preview"), false);
 assert.equal(featured.includes("Waterfront residence"), false);
@@ -110,6 +141,56 @@ assert.deepEqual(
     sampleCard("d"),
   ]).map((item) => item.mlsNumber),
   ["a", "b", "c"],
+);
+const showcaseNewest = searchHighOctaneDevelopmentListings({
+  sort: "newest",
+  limit: 18,
+});
+const showcaseFresh = listingsAfterFeatured(showcaseNewest);
+const showcaseFeatured = new Set(
+  takeRoyalFeaturedListings(showcaseNewest).map((item) => item.mlsNumber),
+);
+assert.ok(showcaseFresh.length > 0);
+assert.ok(showcaseFresh.every((item) => !showcaseFeatured.has(item.mlsNumber)));
+const duringFixtureOpenHouse = Date.parse("2026-10-25T15:00:00.000Z");
+assert.equal(
+  upcomingOpenHouseListings(
+    searchHighOctaneDevelopmentListings({ openHouseOnly: true, limit: 12 }),
+    duringFixtureOpenHouse,
+  ).length,
+  0,
+);
+assert.equal(
+  authorizedSoldListings(
+    searchHighOctaneDevelopmentListings({ status: "SOLD", limit: 12 }),
+  ).length,
+  0,
+);
+assert.equal(
+  authorizedLeaseListings(
+    searchHighOctaneDevelopmentListings({ transactionType: "LEASE", limit: 12 }),
+  ).length,
+  0,
+);
+assert.deepEqual(recommendationListings(showcaseNewest, new Set()), []);
+const liveCard = {
+  ...showcaseNewest[0],
+  mlsNumber: "LIVE1",
+  dataSource: "mls",
+  openHouses: [
+    {
+      startsAt: "2026-11-06T15:00:00.000Z",
+      endsAt: "2026-11-06T17:00:00.000Z",
+    },
+  ],
+} as ListingCard;
+assert.equal(
+  upcomingOpenHouseListings([liveCard], Date.parse("2026-11-05T12:00:00.000Z")).length,
+  1,
+);
+assert.equal(
+  upcomingOpenHouseListings([liveCard], Date.parse("2026-11-06T18:00:00.000Z")).length,
+  0,
 );
 assert.ok(hero.includes("prefers-reduced-motion"));
 assert.ok(hero.includes('href="/search"'));

@@ -141,14 +141,9 @@ assert.ok(belowHeader.includes('main className="min-h-0 flex-1"'));
 // (main padding left a blank mist band between homepage content and footer).
 assert.ok(
   belowHeader.includes(
-    'pb-[var(--mobile-bottom-nav,0px)] md:pb-0',
+    'pb-[calc(var(--mobile-bottom-nav,0px)+var(--rc-concierge-bar,0px))] md:pb-0',
   ),
 );
-assert.equal(
-  belowHeader.includes(
-    'min-h-0 flex-1 pb-[var(--mobile-bottom-nav,0px)] md:pb-0',
-  ),
-  false,
-);
+assert.equal(belowHeader.includes('main className="min-h-0 flex-1 pb-'), false);
 
 console.log("homepage-personalization-phase-b selftest: PASS");
