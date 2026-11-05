@@ -914,6 +914,68 @@
   margin-top: 22px;
 }
 
+.propertyActions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 10px;
+  width: min(100%, 46rem);
+  max-width: 100%;
+  margin-top: 0;
+}
+
+.propertyActions > * {
+  min-width: 0;
+}
+
+.propertyActions :global([data-rc-action]),
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border-radius: 0 !important;
+  min-height: 44px;
+  border: 1px solid #c8a66a;
+  background: #fff;
+  color: #071629;
+  box-shadow: none;
+  font-family: var(--rc-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.propertyActions :global([data-rc-action][data-active="true"]) {
+  background: #071629;
+  color: #f7f4ee;
+  border-color: #071629;
+}
+
+.propertyActions :global([data-rc-action]:focus-visible),
+.actionButton:focus-visible {
+  outline: 2px solid #c8a66a;
+  outline-offset: 2px;
+}
+
+.actionButton {
+  padding: 0 12px;
+}
+
+.actionButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.actionNote {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  max-width: 42rem;
+  color: var(--rc-slate);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .listingActions :global(.sticky) {
   position: static;
   top: auto;

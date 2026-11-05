@@ -269,7 +269,10 @@ function testFullSearchCallbackSurvives() {
     "src/components/listings/SearchExperience.tsx",
     "utf8",
   );
-  assert.match(search, /authCallbackUrl=\{searchCallbackPath\(filters\)\}/);
+  assert.match(
+    search,
+    /authCallbackUrl=\{searchCallbackPath\(filters, structuredCities\)\}/,
+  );
 }
 
 function testAreaCriteriaSurvive() {
