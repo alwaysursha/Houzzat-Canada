@@ -359,6 +359,21 @@ assert.ok(actions.includes("engagement.demonstration"));
 assert.ok(actions.includes("HIGH_OCTANE_DEMO_PROPERTY_NOTICE"));
 assert.equal(actions.includes("/api/saved-listings"), false);
 assert.equal(actions.includes("/api/leads"), false);
+const intelligence = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionPropertyIntelligence.tsx",
+);
+assert.ok(intelligence.includes("if (demonstration) return"));
+assert.ok(intelligence.includes("/api/listings/"));
+assert.ok(intelligence.includes("/insights"));
+assert.ok(intelligence.includes("/api/nearby"));
+assert.ok(intelligence.includes("/api/listings/related"));
+assert.ok(intelligence.includes("rooms-open-houses"));
+assert.ok(intelligence.includes("not calculated from sample inventory"));
+assert.ok(intelligence.includes("valuation.restricted"));
+assert.ok(intelligence.includes("soldRestricted"));
+assert.ok(operational.includes("historyRows: synthetic ? [] : listingHistoryRows"));
+assert.ok(operational.includes("canSeeRestricted: synthetic ? false : canSeeRestricted"));
+assert.equal(houzzatDetail.includes("RoyalCollectionPropertyIntelligence"), false);
 const sticky = read("src/components/listings/ListingStickyBar.tsx");
 assert.equal(sticky.includes('appearance="royal"'), false);
 assert.equal(houzzatDetail.includes('appearance="royal"'), false);

@@ -5,6 +5,10 @@ import {
   RoyalCollectionPropertyActions,
   type RoyalCollectionPropertyEngagement,
 } from "./RoyalCollectionPropertyActions";
+import {
+  RoyalCollectionPropertyIntelligence,
+  type RoyalCollectionIntelligenceInput,
+} from "./RoyalCollectionPropertyIntelligence";
 import { RoyalCollectionPropertyView } from "./RoyalCollectionPropertyView";
 import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
@@ -32,6 +36,7 @@ export function RoyalCollectionOperationalProperty({
   canonicalPath,
   viewing,
   engagement,
+  intelligence,
   publicShowcase = false,
   sheet = false,
 }: {
@@ -41,6 +46,7 @@ export function RoyalCollectionOperationalProperty({
   canonicalPath: string;
   viewing: RoyalCollectionViewingAction | null;
   engagement?: RoyalCollectionPropertyEngagement | null;
+  intelligence?: RoyalCollectionIntelligenceInput | null;
   /** Public synthetic inventory stays readable without a sign-in wall. */
   publicShowcase?: boolean;
   /** Listing overlay iframe. The site header is not in this frame. */
@@ -54,6 +60,11 @@ export function RoyalCollectionOperationalProperty({
       actions={
         engagement && model.kind === "listing" ? (
           <RoyalCollectionPropertyActions engagement={engagement} />
+        ) : null
+      }
+      intelligence={
+        intelligence && model.kind === "listing" ? (
+          <RoyalCollectionPropertyIntelligence {...intelligence} />
         ) : null
       }
     >

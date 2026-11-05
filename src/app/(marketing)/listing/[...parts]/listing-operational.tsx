@@ -343,6 +343,25 @@ export async function OperationalListingDetail({
           demonstration: synthetic,
           signedIn: Boolean(user),
         }}
+        intelligence={{
+          demonstration: synthetic,
+          mlsNumber: listingForClient.mlsNumber,
+          lat: listingForClient.lat,
+          lng: listingForClient.lng,
+          canSeeRestricted: synthetic ? false : canSeeRestricted,
+          historyRows: synthetic ? [] : listingHistoryRows,
+          transactionType:
+            listingForClient.transactionType === "LEASE" ? "LEASE" : "SALE",
+          recordedOpenHouses: synthetic
+            ? (highOctaneDevelopmentListingDetail(listing.mlsNumber)?.openHouses ?? []).map(
+                (openHouse) => ({
+                  startsAt: openHouse.startsAt.toISOString(),
+                  endsAt: openHouse.endsAt.toISOString(),
+                  notes: openHouse.notes,
+                }),
+              )
+            : [],
+        }}
       />
     );
   }

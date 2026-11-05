@@ -213,7 +213,7 @@ function main() {
   const route = read("src/app/api/listings/[mlsNumber]/insights/route.ts");
   assert.ok(route.includes("resolveListingDetailAccess"));
   const boardIdx = route.indexOf("evaluateWebListingDetailInventoryAccess({");
-  const vowIdx = route.indexOf("resolveListingDetailAccess(user, listing)");
+  const vowIdx = route.indexOf("resolveListingDetailAccess(user, listing, brandName)");
   const buildIdx = route.indexOf("buildListingInsights({");
   assert.ok(boardIdx >= 0 && vowIdx > boardIdx && buildIdx > vowIdx);
 

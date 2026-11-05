@@ -1737,3 +1737,196 @@
     transform: none;
   }
 }
+
+.intelligence {
+  display: flex;
+  flex-direction: column;
+  gap: 42px;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+.intelNote {
+  max-width: 40rem;
+  color: var(--rc-slate);
+}
+
+.estimateFigure {
+  margin: 14px 0 0;
+  color: var(--rc-navy);
+  font-family: var(--rc-serif);
+  font-size: clamp(32px, 4vw, 48px);
+  line-height: 1.05;
+}
+
+.intelStats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 12px;
+  margin: 22px 0 0;
+}
+
+.intelStats div {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #c8a66a;
+  background: #fff;
+}
+
+.intelStats dt {
+  margin: 0;
+  color: var(--rc-slate);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.intelStats dd {
+  margin: 8px 0 0;
+  color: var(--rc-navy);
+  font-family: var(--rc-serif);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.priceTrack {
+  position: relative;
+  margin-top: 28px;
+  padding-top: 18px;
+}
+
+.priceTrack::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 8px;
+  border: 1px solid #c8a66a;
+  background: #f7f4ee;
+}
+
+.priceMark,
+.priceMarkList {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 16px;
+  background: #c8a66a;
+}
+
+.priceMarkList {
+  width: 8px;
+  margin-left: -4px;
+  background: #071629;
+}
+
+.priceTrack p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  max-width: none;
+  margin-top: 12px;
+  color: var(--rc-slate);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.historyList,
+.openList,
+.amenityList,
+.similarGrid {
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyRow,
+.amenityList li,
+.openList li {
+  display: grid;
+  gap: 4px 16px;
+  padding: 14px 0;
+  border-top: 1px solid rgb(200 166 106 / 0.55);
+}
+
+.historyRow strong,
+.amenityList strong,
+.openList strong,
+.similarGrid strong {
+  color: var(--rc-navy);
+  font-weight: 600;
+}
+
+.historyRow span,
+.amenityList span,
+.openList span,
+.similarGrid span {
+  color: var(--rc-slate);
+  font-size: 14px;
+}
+
+.amenityFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.amenityFilters button {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #c8a66a;
+  border-radius: 0;
+  background: #fff;
+  color: #071629;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.amenityFilters button[aria-pressed="true"] {
+  background: #071629;
+  color: #f7f4ee;
+  border-color: #071629;
+}
+
+.similarGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.similarGrid a {
+  display: grid;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.similarGrid img,
+.similarGrid .relatedEmpty {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background: #f7f4ee;
+}
+
+@media (min-width: 768px) {
+  .historyRow,
+  .amenityList li {
+    grid-template-columns: 8.5rem 1fr auto;
+    align-items: baseline;
+  }
+
+  .similarGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1100px) {
+  .similarGrid {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
