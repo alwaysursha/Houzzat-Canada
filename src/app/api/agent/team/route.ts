@@ -11,8 +11,10 @@ import {
   enableTeamMember,
 } from "@/lib/agent/team-member-admin";
 import { SITE_URL } from "@/lib/constants";
+import { highOctaneEmailChromeForWorkspace } from "@/lib/email/high-octane/chrome-for-workspace";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { notifyLeadAssignedToAgent } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import {
@@ -82,9 +84,32 @@ async function sendTeamInviteEmail(input: {
   alreadyMember?: boolean;
   convertsConsumerAccount?: boolean;
   consumerLabels?: Array<"buyer" | "seller">;
+  workspaceId?: string | null;
 }) {
+  const fallbackHost = (() => {
+    try {
+      return new URL(SITE_URL).hostname;
+    } catch {
+      return "houzzatpro.com";
+    }
+  })();
+  const origin = input.workspaceId
+    ? await resolveCanonicalPublicOrigin(input.workspaceId, fallbackHost).catch(
+        () => SITE_URL,
+      )
+    : SITE_URL;
+  const royal = input.workspaceId
+    ? await highOctaneEmailChromeForWorkspace(input.workspaceId, origin).catch(
+        () => null,
+      )
+    : null;
   const rendered = renderTeamInviteEmail({
     orgName: input.orgName,
+    tenantDisplayName: royal?.brandLabel || input.orgName,
+    tenantLogoUrl: royal?.brandLogoUrl,
+    tenantPrimaryColor: royal ? "#C8A66A" : undefined,
+    emailPresentation: royal?.presentation,
+    brandWebsiteUrl: royal?.brandWebsiteUrl,
     role: input.role,
     inviteUrl: `${SITE_URL}/auth/invite/${input.token}`,
     invitedByName: input.invitedByName,
@@ -568,6 +593,7 @@ export async function POST(request: Request) {
     const sendResult = await sendTeamInviteEmail({
       to: invite.email,
       orgName: invite.organization.name,
+      workspaceId: ctx.workspaceId,
       role: invite.role,
       token: invite.token,
       invitedByName: ctx.user.name || ctx.user.email,
@@ -735,6 +761,7 @@ export async function POST(request: Request) {
   const sendResult = await sendTeamInviteEmail({
     to: email,
     orgName: org.name,
+    workspaceId: ctx.workspaceId,
     role: parsed.data.role,
     token: invite.token,
     invitedByName: ctx.user.name || ctx.user.email,

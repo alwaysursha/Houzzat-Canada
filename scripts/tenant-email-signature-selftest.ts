@@ -719,10 +719,9 @@ function testMultiLineLegalFooterPreserved() {
   assert.ok(brand.signaturePhotoUrl);
 
   const chrome = toEmailBrandChrome(brand);
-  // Body signatures are omitted — footer is the sole signature block.
-  assert.equal(chrome.agentSignatureHtml, undefined);
-  assert.equal(chrome.agentSignatureText, undefined);
-  assert.equal(chrome.footerAgentPhotoUrl, brand.signaturePhotoUrl);
+  assert.equal(chrome.agentSignatureHtml, brand.signatureHtml);
+  assert.equal(chrome.agentSignatureText, brand.signatureText);
+  assert.equal(chrome.footerAgentPhotoUrl, undefined);
 
   const rendered = renderAgentMessageEmail({
     subject: "Signature canary",
@@ -740,9 +739,12 @@ function testMultiLineLegalFooterPreserved() {
     rendered.html,
     /Ali Syed<br \/>\nSales Representative<br \/>\nRoyal LePage Credit Valley Real Estate/,
   );
-  // Sole signature/footer block (no body agent signature).
+  // Assigned-agent signature once, plus the separate legal footer.
   assert.match(rendered.html, /data-houzzat-email-footer-signature="1"/);
-  assert.doesNotMatch(rendered.html, /data-houzzat-agent-signature="1"/);
+  assert.equal(
+    (rendered.html.match(/data-houzzat-agent-signature="1"/g) ?? []).length,
+    1,
+  );
   assert.match(
     rendered.html,
     new RegExp(escapeRegExp(brand.signaturePhotoUrl!)),
@@ -991,13 +993,16 @@ function testFooterIsSoleSignatureBlock() {
     body: "Hello",
     ...toEmailBrandChrome(brand),
   });
-  // One footer signature block; no body profile signature.
+  // One assigned-agent signature and one legal footer. Headshot stays in the signature.
   assert.equal(
     (rendered.html.match(/data-houzzat-email-footer-signature="1"/g) ?? [])
       .length,
     1,
   );
-  assert.doesNotMatch(rendered.html, /data-houzzat-agent-signature="1"/);
+  assert.equal(
+    (rendered.html.match(/data-houzzat-agent-signature="1"/g) ?? []).length,
+    1,
+  );
   const footerIdx = rendered.html.indexOf(
     'data-houzzat-email-footer-signature="1"',
   );
@@ -1023,7 +1028,7 @@ function testFooterIsSoleSignatureBlock() {
     appendEmailFooterText("Body\n\n— Agent", "Legal line"),
     "Body\n\n— Agent\n\nLegal line",
   );
-  section("Footer is the sole signature block with headshot");
+  section("Assigned agent signature plus legal footer");
 }
 
 async function testAllowlistIsolationForFooterBrand() {

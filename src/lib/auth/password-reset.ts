@@ -116,6 +116,8 @@ export async function requestPasswordReset(input: {
     resetUrl: link,
     customerId: user.id,
     siteName: input.siteName,
+    workspaceId: input.workspaceId,
+    origin: input.origin,
   });
 }
 

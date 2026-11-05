@@ -15,8 +15,8 @@ import {
 } from "@/lib/communications/category-email-gate";
 import { renderCmaEmail } from "@/lib/email/templates";
 import {
+  resolveLeadCustomerEmailChrome,
   resolveTenantEmailBrand,
-  toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import { loadPublishedCmaShareOverride } from "@/lib/email/workspace-templates/agent-share-templates";
 import { prisma } from "@/lib/prisma";
@@ -143,6 +143,11 @@ export async function sendCmaEmailToLead(input: {
     leadId: lead.id,
     customerId: lead.customer?.id,
   });
+  const leadMail = await resolveLeadCustomerEmailChrome({
+    workspaceId: input.workspaceId,
+    leadId: lead.id,
+    customerId: lead.customer?.id,
+  });
   const cmaUrl = `${SITE_URL}/cma/${report.token}`;
   const agentName =
     report.agent.name?.trim() || report.agent.email || "Your agent";
@@ -172,7 +177,7 @@ export async function sendCmaEmailToLead(input: {
     cmaUrl,
     recommendedListPrice: report.recommendedListPrice,
     ...preferenceFooterFields(chrome),
-    ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+    ...(leadMail?.chrome ?? {}),
     publishedCmaShareTemplate: publishedCmaShare,
   });
 

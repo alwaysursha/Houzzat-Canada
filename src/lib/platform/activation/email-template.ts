@@ -3,8 +3,10 @@
  */
 
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
-import { HOUZZATPRO_TECHNICAL_SUPPORT_URL } from "@/lib/platform/status/support";
+import { ctaButton, emailLayout } from "@/lib/email/layout";
+import { highOctaneEmailChrome } from "@/lib/email/high-octane/chrome";
 import type { RenderedEmail } from "@/lib/email/templates";
+import { HOUZZATPRO_TECHNICAL_SUPPORT_URL } from "@/lib/platform/status/support";
 
 function escapeHtml(value: string): string {
   return value
@@ -19,6 +21,12 @@ export function renderOwnerActivationEmail(input: {
   workspaceName: string;
   activationUrl: string;
   expiresAt: Date;
+  /**
+   * Absent keeps the platform shell. HIGH OCTANE passes "high-octane".
+   * This function does not send mail.
+   */
+  presentation?: "high-octane" | null;
+  websiteUrl?: string | null;
 }): RenderedEmail {
   const greet = input.ownerName?.trim()
     ? `Hi ${input.ownerName.trim()},`
@@ -43,6 +51,33 @@ export function renderOwnerActivationEmail(input: {
     "",
     "If you did not expect this email, you can ignore it.",
   ].join("\n");
+
+  if (input.presentation === "high-octane") {
+    const chrome = highOctaneEmailChrome({
+      brandLabel: workspace,
+      websiteUrl: input.websiteUrl?.trim() || "https://high-octane-real-estate.houzzatpro.com",
+      footerNote: "Powered by HouzzatPRO",
+    });
+    const html = emailLayout({
+      title: "Activate your account",
+      subtitle: `${workspace} is ready.`,
+      preheader: subject,
+      presentation: "high-octane",
+      brandLabel: chrome.brandLabel,
+      brandLogoUrl: chrome.brandLogoUrl,
+      brandPrimaryColor: chrome.brandPrimaryColor,
+      brandWebsiteUrl: chrome.brandWebsiteUrl,
+      footerNote: chrome.footerNote,
+      bodyHtml: `
+        <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
+        <p style="margin:0 0 12px;color:#115e59">Your workspace <strong>${escapeHtml(workspace)}</strong> has been provisioned. Create a password to sign in and finish setup.</p>
+        ${ctaButton(input.activationUrl, "Activate account")}
+        <p style="margin:16px 0 0;font-size:13px;color:#047857">This secure link expires on ${escapeHtml(expireLabel)}. It can be used once.</p>
+        <p style="margin:12px 0 0;font-size:13px;color:#047857">Need help? <a href="${escapeHtml(HOUZZATPRO_TECHNICAL_SUPPORT_URL)}" style="color:#071629">Contact support</a></p>
+      `,
+    });
+    return { subject, text, html, kind: "owner_activation" };
+  }
 
   const html = `
 <!DOCTYPE html>

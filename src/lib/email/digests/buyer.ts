@@ -23,10 +23,7 @@ import {
   savedSearchDigestCursorUpdate,
 } from "@/lib/email/digests/buyer-digest-plan";
 import { renderSavedSearchDigestEmail } from "@/lib/email/templates";
-import {
-  resolveTenantEmailBrand,
-  toEmailBrandChrome,
-} from "@/lib/email/tenant-email-brand";
+import { resolveLeadCustomerEmailChrome } from "@/lib/email/tenant-email-brand";
 import { loadPublishedSavedSearchDigestOverride } from "@/lib/email/workspace-templates/digest-templates";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatListPrice } from "@/lib/listings/constants";
@@ -232,8 +229,8 @@ export async function runBuyerSavedSearchDigests(opts?: {
             email: user.email,
           })
         : null;
-      const tenantBrand = user.workspaceId
-        ? await resolveTenantEmailBrand({
+      const leadMail = user.workspaceId
+        ? await resolveLeadCustomerEmailChrome({
             workspaceId: user.workspaceId,
             customerId: user.id,
           })
@@ -256,7 +253,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
           "saved_search",
         ),
         ...preferenceFooterFields(chrome),
-        ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+        ...(leadMail?.chrome ?? {}),
         publishedSavedSearchDigestTemplate: publishedSavedSearchDigest,
       });
 
@@ -276,7 +273,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         rendered,
         stream: "alerts",
         customerId: user.id,
-        replyTo: tenantBrand?.replyTo,
+        replyTo: leadMail?.replyTo,
       });
 
       if (!result.ok) {

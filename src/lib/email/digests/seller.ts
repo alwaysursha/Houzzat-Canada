@@ -12,10 +12,7 @@ import {
   type DigestListingCard,
 } from "@/lib/email/digests/search";
 import { renderNeighborhoodWeeklyEmail } from "@/lib/email/templates";
-import {
-  resolveTenantEmailBrand,
-  toEmailBrandChrome,
-} from "@/lib/email/tenant-email-brand";
+import { resolveLeadCustomerEmailChrome } from "@/lib/email/tenant-email-brand";
 import { loadPublishedSellerNeighbourhoodDigestOverride } from "@/lib/email/workspace-templates/digest-templates";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
 import { formatListPrice, formatPrice } from "@/lib/listings/constants";
@@ -185,8 +182,8 @@ export async function runSellerNeighborhoodReports(opts?: {
             email: user.email,
           })
         : null;
-      const tenantBrand = user.workspaceId
-        ? await resolveTenantEmailBrand({
+      const leadMail = user.workspaceId
+        ? await resolveLeadCustomerEmailChrome({
             workspaceId: user.workspaceId,
             customerId: user.id,
           })
@@ -216,7 +213,7 @@ export async function runSellerNeighborhoodReports(opts?: {
         ),
         ctaUrl: `${SITE_URL}/owner`,
         ...preferenceFooterFields(chrome),
-        ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+        ...(leadMail?.chrome ?? {}),
         publishedSellerNeighbourhoodDigestTemplate:
           publishedSellerNeighbourhoodDigest,
       });
@@ -238,7 +235,7 @@ export async function runSellerNeighborhoodReports(opts?: {
         rendered,
         stream: "alerts",
         customerId: user.id,
-        replyTo: tenantBrand?.replyTo,
+        replyTo: leadMail?.replyTo,
       });
 
       if (!result.ok) {

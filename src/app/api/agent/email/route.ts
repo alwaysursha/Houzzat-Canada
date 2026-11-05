@@ -12,8 +12,8 @@ import {
 } from "@/lib/communications/preference-email-chrome";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import {
+  resolveLeadCustomerEmailChrome,
   resolveTenantEmailBrand,
-  toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import { loadPublishedAgentEmailOverride } from "@/lib/email/workspace-templates/agent-share-templates";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
@@ -121,6 +121,13 @@ export async function POST(request: Request) {
           customerId: lead.customer?.id,
         })
       : null;
+    const leadMail = lead.workspaceId
+      ? await resolveLeadCustomerEmailChrome({
+          workspaceId: lead.workspaceId,
+          leadId: lead.id,
+          customerId: lead.customer?.id,
+        })
+      : null;
     // Phase 2C-4 — published AGENT_EMAIL only. Agent subject/body always win.
     let publishedAgentEmail: EmailTemplateContentFields | null = null;
     if (lead.workspaceId) {
@@ -133,7 +140,7 @@ export async function POST(request: Request) {
       subject: parsed.data.subject,
       body: parsed.data.body,
       ...preferenceFooterFields(chrome),
-      ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+      ...(leadMail?.chrome ?? {}),
       publishedAgentEmailTemplate: publishedAgentEmail,
     });
 

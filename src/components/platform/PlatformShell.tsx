@@ -16,6 +16,7 @@ const NAV = [
   { href: "/platform/sms-automations", label: "SMS Automations" },
   { href: "/platform/sms-quick-texts", label: "Quick Texts" },
   { href: "/platform/audit", label: "Audit" },
+  { href: "/platform/email-previews", label: "Email previews" },
 ] as const;
 
 type PlatformShellProps = {
