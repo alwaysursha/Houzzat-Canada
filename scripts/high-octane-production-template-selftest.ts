@@ -308,4 +308,13 @@ const previewGate = readFileSync(
 assert.equal(previewGate.includes('env.VERCEL_ENV !== "preview"'), true);
 assert.equal(previewGate.includes("HIGH_OCTANE_STAGING_PREVIEW_HOSTNAME"), true);
 
+const middleware = readFileSync(join(root, "src/middleware.ts"), "utf8");
+assert.equal(middleware.includes("unknownHighOctaneCommunity"), true);
+assert.equal(
+  middleware.includes("`${HIGH_OCTANE_STAGING_WORKSPACE_SLUG}.houzzatpro.com`"),
+  true,
+);
+assert.equal(middleware.includes("status: 404"), true);
+assert.equal(middleware.includes('content="noindex"'), true);
+
 console.log("high-octane-production-template-selftest: ok");

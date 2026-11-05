@@ -15,7 +15,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { brand } = await requireRoyalCollectionPage();
   const highOctane = brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
   const guide = highOctane ? highOctaneCommunityGuideBySlug(slug) : null;
-  if (highOctane && !guide) notFound();
+  if (highOctane && !guide) {
+    return {
+      title: "Community",
+      robots: { index: false, follow: false },
+    };
+  }
   const title = guide?.name ?? slug.replace(/-/g, " ");
   return buildMarketingPageMetadata({
     title,
@@ -26,6 +31,12 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CommunityPage({ params }: PageProps) {
   const { slug } = await params;
-  const { view } = await requireRoyalCollectionPage();
+  const { brand, view } = await requireRoyalCollectionPage();
+  if (
+    brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+    !highOctaneCommunityGuideBySlug(slug)
+  ) {
+    notFound();
+  }
   return <RoyalCollectionCommunityPage view={view} slug={slug} />;
 }
