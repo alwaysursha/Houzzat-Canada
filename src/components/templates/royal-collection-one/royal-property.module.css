@@ -946,10 +946,30 @@
   letter-spacing: 0.01em;
 }
 
+.propertyActions :global([data-rc-action]:hover),
+.actionButton:hover:not(:disabled) {
+  background: #071629;
+  color: #f7f4ee;
+  border-color: #071629;
+}
+
 .propertyActions :global([data-rc-action][data-active="true"]) {
   background: #071629;
   color: #f7f4ee;
   border-color: #071629;
+}
+
+.propertyActions :global([data-rc-share-menu] button) {
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.propertyActions :global([data-rc-share-menu] button:hover) {
+  background: #071629;
+  color: #f7f4ee;
+}
+
+.propertyActions :global([data-rc-share-menu] button:hover svg) {
+  color: #f7f4ee;
 }
 
 .propertyActions :global([data-rc-action]:focus-visible),
