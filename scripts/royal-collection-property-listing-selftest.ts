@@ -371,6 +371,11 @@ assert.ok(intelligence.includes("rooms-open-houses"));
 assert.ok(intelligence.includes("not calculated from sample inventory"));
 assert.ok(intelligence.includes("valuation.restricted"));
 assert.ok(intelligence.includes("soldRestricted"));
+assert.ok(intelligence.includes("new Date(row.endsAt).getTime() >= now"));
+const openHouseRoute = read(
+  "src/app/api/listings/[mlsNumber]/rooms-open-houses/route.ts",
+);
+assert.ok(openHouseRoute.includes("oh.endsAt.getTime() >= now"));
 assert.ok(operational.includes("historyRows: synthetic ? [] : listingHistoryRows"));
 assert.ok(operational.includes("canSeeRestricted: synthetic ? false : canSeeRestricted"));
 assert.equal(houzzatDetail.includes("RoyalCollectionPropertyIntelligence"), false);

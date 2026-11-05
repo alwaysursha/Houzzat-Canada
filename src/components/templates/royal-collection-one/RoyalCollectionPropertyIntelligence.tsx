@@ -89,6 +89,12 @@ function Section({
   );
 }
 
+/** Same window as the rooms-open-houses API: keep an event only while endsAt >= now. */
+function currentOpenHouses(rows: RecordedOpenHouse[]): RecordedOpenHouse[] {
+  const now = Date.now();
+  return rows.filter((row) => new Date(row.endsAt).getTime() >= now);
+}
+
 function OpenHouseList({
   rows,
   demonstration,
@@ -96,11 +102,12 @@ function OpenHouseList({
   rows: RecordedOpenHouse[];
   demonstration: boolean;
 }) {
-  if (rows.length === 0) return null;
+  const current = currentOpenHouses(rows);
+  if (current.length === 0) return null;
   return (
     <Section id="listing-open-houses" eyebrow="Showings" title="Open houses">
       <ul className={styles.openList}>
-        {rows.map((row) => (
+        {current.map((row) => (
           <li key={`${row.startsAt}-${row.endsAt}`}>
             <strong>{formatShowing(row.startsAt, row.endsAt)}</strong>
             {row.notes ? <span>{row.notes}</span> : null}
