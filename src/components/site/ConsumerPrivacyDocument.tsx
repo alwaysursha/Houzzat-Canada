@@ -34,8 +34,12 @@ export async function ConsumerPrivacyDocument() {
           Email:{" "}
           <a href={`mailto:${supportEmail}`}>{supportEmail}</a>
         </li>
-        <li>Phone: 647-221-4949</li>
-        <li>Mail: 1-10045 Hurontario St., Brampton, ON L6Z 0E6</li>
+        {isHouzzatWorkspace ? (
+          <>
+            <li>Phone: 647-221-4949</li>
+            <li>Mail: 1-10045 Hurontario St., Brampton, ON L6Z 0E6</li>
+          </>
+        ) : null}
       </ul>
 
       <h2>2. Information we collect</h2>

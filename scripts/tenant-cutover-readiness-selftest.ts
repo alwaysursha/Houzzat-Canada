@@ -269,15 +269,38 @@ function testSecondarySurfaceBrandingWiring() {
   assert.ok(!lp.includes('"https://houzzat.com"'));
   assert.ok(lp.includes("--tenant-primary-rgb"));
 
-  for (const file of [
-    "src/app/(marketing)/privacy/page.tsx",
-    "src/app/(marketing)/terms/page.tsx",
-    "src/app/(marketing)/delete-account/page.tsx",
-  ]) {
-    const src = read(file);
-    assert.ok(src.includes("resolveMarketingLegalSiteContext"), file);
-    assert.ok(!src.includes("SITE_NAME"), file);
+  const legalSurfaces = [
+    {
+      page: "src/app/(marketing)/privacy/page.tsx",
+      document: "src/components/site/ConsumerPrivacyDocument.tsx",
+    },
+    {
+      page: "src/app/(marketing)/terms/page.tsx",
+      document: "src/components/site/ConsumerTermsDocument.tsx",
+    },
+    {
+      page: "src/app/(marketing)/delete-account/page.tsx",
+      document: null,
+    },
+  ] as const;
+  for (const surface of legalSurfaces) {
+    const page = read(surface.page);
+    assert.ok(!page.includes("SITE_NAME"), surface.page);
+    const identity = surface.document ? read(surface.document) : page;
+    assert.ok(
+      identity.includes("resolveMarketingLegalSiteContext"),
+      surface.page,
+    );
+    if (surface.document) {
+      const component = surface.document.split("/").pop()!.replace(/\.tsx$/, "");
+      assert.ok(page.includes(component), surface.page);
+    }
   }
+
+  const privacy = read("src/components/site/ConsumerPrivacyDocument.tsx");
+  const houzzatMail = privacy.indexOf("1-10045 Hurontario St.");
+  const houzzatGate = privacy.lastIndexOf("isHouzzatWorkspace", houzzatMail);
+  assert.ok(houzzatMail > houzzatGate);
 }
 
 function testHomeValuationNoHouzzatHero() {
