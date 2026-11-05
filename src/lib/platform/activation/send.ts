@@ -18,6 +18,8 @@ import {
   OWNER_ACTIVATION_TTL_MS,
 } from "./constants";
 import { evaluateOwnerActivationEligibility } from "./eligibility";
+import { isHighOctaneEmailSlug } from "@/lib/email/high-octane/chrome";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import { renderOwnerActivationEmail } from "./email-template";
 import { OwnerActivationError } from "./errors";
 import { ensureWorkspaceOnboardingState } from "./onboarding-state";
@@ -204,9 +206,36 @@ async function issueAndSendOwnerActivation(input: {
   );
 
   const url = activationUrl(rawToken);
+  let presentation: "high-octane" | null = null;
+  let websiteUrl: string | null = null;
+  try {
+    const ws = await input.db.workspace.findUnique({
+      where: { id: input.workspaceId },
+      select: { slug: true },
+    });
+    if (isHighOctaneEmailSlug(ws?.slug)) {
+      presentation = "high-octane";
+      const fallbackHost = (() => {
+        try {
+          return new URL(HOUZZATPRO_APP_BOOTSTRAP_ORIGIN).hostname;
+        } catch {
+          return "houzzatpro.com";
+        }
+      })();
+      websiteUrl = await resolveCanonicalPublicOrigin(
+        input.workspaceId,
+        fallbackHost,
+      );
+    }
+  } catch {
+    presentation = null;
+    websiteUrl = null;
+  }
   const rendered = renderOwnerActivationEmail({
     ownerName: input.ownerName,
     workspaceName: input.workspaceName ?? "Workspace",
+    presentation,
+    websiteUrl,
     activationUrl: url,
     expiresAt,
   });

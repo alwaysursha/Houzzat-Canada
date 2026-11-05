@@ -3,6 +3,7 @@ import type { ActiveMode, Role } from "@prisma/client";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { safeInternalCallbackUrl } from "@/lib/auth/safe-callback-url";
 import { sendAndLogClientEmail } from "@/lib/email/client-send";
+import { highOctaneEmailChromeForWorkspace } from "@/lib/email/high-octane/chrome-for-workspace";
 import { isResendConfigured } from "@/lib/email/config";
 import { renderVerifyEmail, renderWelcomeEmail } from "@/lib/email/templates";
 import { prisma } from "@/lib/prisma";
@@ -145,9 +146,14 @@ export async function sendEmailVerification(input: {
     input.email,
   );
   const link = verificationLink(token, input.callbackUrl, origin);
+  const chrome = await highOctaneEmailChromeForWorkspace(
+    input.workspaceId,
+    origin,
+  ).catch(() => null);
   const rendered = renderVerifyEmail({
     name: input.name,
     verifyUrl: link,
+    chrome,
   });
   if (input.purpose === "automatic_nudge") {
     rendered.kind = VERIFY_EMAIL_NUDGE_KIND;
@@ -177,10 +183,19 @@ export async function sendWelcomeEmail(input: {
   email: string;
   name?: string | null;
   customerId?: string | null;
+  workspaceId?: string | null;
+  origin?: string | null;
 }): Promise<"sent" | "skipped" | "failed"> {
   if (!isEmailSendConfigured()) return "skipped";
 
-  const rendered = renderWelcomeEmail({ name: input.name });
+  const chrome =
+    input.workspaceId && input.origin
+      ? await highOctaneEmailChromeForWorkspace(
+          input.workspaceId,
+          input.origin,
+        ).catch(() => null)
+      : null;
+  const rendered = renderWelcomeEmail({ name: input.name, chrome });
   const result = await sendAndLogClientEmail({
     to: normalizeIdentityEmail(input.email),
     rendered,

@@ -4,7 +4,8 @@
  * Global: TENANT_EMAIL_BRANDING=on (default off).
  * Allowlist: TENANT_EMAIL_BRANDING_WORKSPACE_IDS (comma/whitespace-separated).
  *
- * When global off: resolveTenantEmailBrand returns null; callers keep legacy layout.
+ * When global off: resolveTenantEmailBrand returns null, except the HIGH OCTANE
+ * workspace, which still resolves so its royal presentation can apply.
  * When global on: only allowlisted workspace IDs resolve (unset/empty allowlist → none).
  * Brand is always loaded for the recipient workspace only — never another tenant.
  *
@@ -17,14 +18,16 @@
  * Phase 3D.4.2 — prefer verified AgentEmailHeadshot thumbnail when association
  * matches current User.image; otherwise sanitized canonical User.image.
  *
- * Future tenant-branding task (explicitly out of Phase 1):
- * - Customer verification email (`renderVerifyEmail`)
- * - Welcome email (`renderWelcomeEmail`)
- * - Password-reset email (`password-reset-email`)
- * HouzzatPRO platform administration / Book Demo / offer / activation emails
- * remain platform-branded and must not consume this resolver.
+ * HIGH OCTANE (slug high-octane-real-estate) may resolve even when the global
+ * flag is off, and only to attach presentation: "high-octane". From stays on
+ * the verified Houzzat stream (fromOverride is always null).
+ * Customer verification (`renderVerifyEmail`), welcome (`renderWelcomeEmail`),
+ * and password reset (`password-reset-email`) do not call this resolver.
+ * HouzzatPRO platform administration / Book Demo / offer emails stay
+ * platform-branded and must not consume this resolver.
  */
 
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import type {
   WorkspaceBranding,
   WorkspaceEmailIdentity,
@@ -85,6 +88,8 @@ export type TenantEmailBrand = {
   signaturePhotoUrl: string | null;
   footerNote: string;
   poweredByHouzzatPro: boolean;
+  /** Royal shell for the HIGH OCTANE workspace only. Other tenants omit this. */
+  presentation?: "high-octane" | null;
 };
 
 /** Optional fields spread into email template renderers / emailLayout. */
@@ -106,6 +111,8 @@ export type EmailBrandChrome = {
   agentSignatureText?: string | null;
   /** Subtitle helper e.g. agent message "from your X agent". */
   agentFromLabel?: string | null;
+  /** HIGH OCTANE royal shell. Omit for every other tenant. */
+  presentation?: "high-octane" | null;
 };
 
 export type TenantEmailBrandResolveInput = {
@@ -149,6 +156,11 @@ export type TenantEmailBrandDeps = {
     userId: string,
   ) => Promise<AgentEmailHeadshotAssociationView | null>;
   resolveWebsiteUrl: (workspaceId: string) => Promise<string>;
+  /**
+   * Optional. When omitted, the HIGH OCTANE presentation bypass does not run
+   * and flag-off behavior stays exactly as before.
+   */
+  loadWorkspaceSlug?: (workspaceId: string) => Promise<string | null>;
 };
 
 /** Global feature flag — default OFF. Set TENANT_EMAIL_BRANDING=on to activate. */
@@ -428,6 +440,7 @@ export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
     footerAgentPhotoUrl: brand.signaturePhotoUrl,
     footerAgentPhotoAlt: agentName ? `Photo of ${agentName}` : null,
     agentFromLabel: brand.agent?.name ?? brand.displayName,
+    presentation: brand.presentation ?? null,
   };
 }
 
@@ -595,6 +608,13 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
     },
     resolveWebsiteUrl: (workspaceId) =>
       resolveCanonicalPublicOrigin(workspaceId, fallbackWebsiteHost()),
+    loadWorkspaceSlug: async (workspaceId) => {
+      const row = await prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { slug: true },
+      });
+      return row?.slug ?? null;
+    },
   };
 }
 
@@ -610,6 +630,7 @@ export function assembleTenantEmailBrand(input: {
   websiteUrl: string;
   brokerageRegisteredName?: string | null;
   emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
+  workspaceSlug?: string | null;
 }): TenantEmailBrand {
   const mapped = input.branding
     ? workspaceBrandingRowToBrand(input.workspaceId, input.branding)
@@ -663,6 +684,10 @@ export function assembleTenantEmailBrand(input: {
     signaturePhotoUrl: signature.photoUrl,
     footerNote,
     poweredByHouzzatPro: mapped.poweredByHouzzatPro,
+    presentation:
+      input.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+        ? "high-octane"
+        : null,
   };
 }
 
@@ -672,10 +697,16 @@ export async function resolveTenantEmailBrand(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<TenantEmailBrand | null> {
   const workspaceId = input.workspaceId?.trim();
-  if (!isTenantEmailBrandingEnabledForWorkspace(workspaceId, env)) {
-    return null;
-  }
   if (!workspaceId) return null;
+  const brandingEnabled = isTenantEmailBrandingEnabledForWorkspace(
+    workspaceId,
+    env,
+  );
+  const workspaceSlug = deps.loadWorkspaceSlug
+    ? await deps.loadWorkspaceSlug(workspaceId)
+    : null;
+  const highOctane = workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+  if (!brandingEnabled && !highOctane) return null;
 
   const [branding, identity, professional, websiteUrl] = await Promise.all([
     deps.loadBranding(workspaceId),
@@ -724,6 +755,7 @@ export async function resolveTenantEmailBrand(
     websiteUrl,
     brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
     emailHeadshotAssociation,
+    workspaceSlug,
   });
 }
 

@@ -337,6 +337,8 @@ export async function POST(request: Request) {
           email,
           name: parsed.data.name,
           customerId: user.id,
+          workspaceId,
+          origin: tenancy.origin,
         }).catch((err) => {
           console.error("[sign-up] welcome email failed", err);
           return "failed" as const;

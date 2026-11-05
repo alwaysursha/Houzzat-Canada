@@ -1,4 +1,5 @@
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { HIGH_OCTANE_LOGO_URL } from "@/lib/tenancy/templates/resolve-royal-collection-view";
 import {
   formatHiddenEmailPreheaderHtml,
   resolveEmailPreheader,
@@ -64,7 +65,15 @@ export function emailLayout(input: {
   brandPrimaryColor?: string | null;
   /** Tenant public website origin (footer link). Defaults to SITE_URL. */
   brandWebsiteUrl?: string | null;
+  /**
+   * HIGH OCTANE only. Absent or any other value keeps the shared mint layout
+   * used by every other tenant.
+   */
+  presentation?: "high-octane" | null;
 }): string {
+  if (input.presentation === "high-octane") {
+    return renderHighOctaneEmailDocument(input);
+  }
   const brandLabel = input.brandLabel?.trim() || SITE_NAME;
   const brandColor = input.brandPrimaryColor?.trim() || "#047857";
   const websiteUrl = input.brandWebsiteUrl?.trim() || SITE_URL;
@@ -237,4 +246,145 @@ export function escapeHtml(value: string) {
 
 export function escapeAttr(value: string) {
   return escapeHtml(value).replaceAll("'", "&#39;");
+}
+
+const HIGH_OCTANE_NAVY = "#071629";
+const HIGH_OCTANE_GOLD = "#C8A66A";
+const HIGH_OCTANE_IVORY = "#F4EFE6";
+const HIGH_OCTANE_INK = "#3E4A56";
+
+const MINT_CTA_STYLE =
+  "display:inline-block;background:#ecfdf5;background-image:linear-gradient(135deg,#ecfdf5 0%,#6ee7b7 100%);color:#064e3b;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 20px;border-radius:999px;border:1.5px solid #34d399;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+
+const HIGH_OCTANE_CTA_STYLE =
+  "display:inline-block;background:#C8A66A;color:#071629;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:14px 22px;border-radius:0;border:1px solid #C8A66A;font-family:Georgia,'Times New Roman',serif";
+
+/** Recolor shared body fragments so only the HIGH OCTANE shell is royal. */
+export function presentHighOctaneEmailBody(html: string): string {
+  return html
+    .replaceAll(MINT_CTA_STYLE, HIGH_OCTANE_CTA_STYLE)
+    .replaceAll("#115e59", HIGH_OCTANE_INK)
+    .replaceAll("#047857", "#5c5346")
+    .replaceAll("#064e3b", HIGH_OCTANE_NAVY)
+    .replaceAll("#a7f3d0", "#e4d7c3")
+    .replaceAll("#ecfdf5", "#f7f3eb")
+    .replaceAll("border-radius:12px", "border-radius:0")
+    .replaceAll("border-radius:10px", "border-radius:0")
+    .replaceAll("border-radius:999px", "border-radius:0");
+}
+
+function renderHighOctaneEmailDocument(input: {
+  preheader?: string | null;
+  subject?: string | null;
+  preheaderBodyText?: string | null;
+  title: string;
+  subtitle?: string | null;
+  bodyHtml: string;
+  footerNote?: string | null;
+  footerAgentPhotoUrl?: string | null;
+  footerAgentPhotoAlt?: string | null;
+  unsubscribeUrl?: string | null;
+  preferencesManageUrl?: string | null;
+  unsubscribeIntentUrl?: string | null;
+  brandLabel?: string | null;
+  brandLogoUrl?: string | null;
+  brandPrimaryColor?: string | null;
+  brandWebsiteUrl?: string | null;
+}): string {
+  const brandLabel = input.brandLabel?.trim() || "HIGH OCTANE";
+  const websiteUrl = input.brandWebsiteUrl?.trim() || SITE_URL;
+  const websiteHost = websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  const suppliedLogo = input.brandLogoUrl?.trim() || HIGH_OCTANE_LOGO_URL;
+  const logoUrl = /^https?:\/\//i.test(suppliedLogo)
+    ? suppliedLogo
+    : `${websiteUrl}${suppliedLogo.startsWith("/") ? "" : "/"}${suppliedLogo}`;
+  const logo = logoUrl
+    ? `<img src="${escapeAttr(logoUrl)}" alt="${escapeHtml(brandLabel)}" width="220" style="display:block;width:220px;max-width:100%;height:auto;margin:0 0 16px;border:0;padding:0" />`
+    : "";
+  const resolvedPreheader = resolveEmailPreheader({
+    explicit: input.preheader,
+    subject: input.subject,
+    title: input.title,
+    subtitle: input.subtitle,
+    brandLabel,
+    footerNote: input.footerNote,
+    bodyText: input.preheaderBodyText,
+    bodyHtml: input.bodyHtml,
+  });
+  const preheader = formatHiddenEmailPreheaderHtml(
+    resolvedPreheader,
+    escapeHtml,
+  );
+  const subtitle = input.subtitle?.trim()
+    ? `<p style="margin:10px 0 0;font-size:15px;line-height:1.5;color:#F4EFE6;font-family:Georgia,'Times New Roman',serif">${escapeHtml(input.subtitle.trim())}</p>`
+    : "";
+  const photoUrl = input.footerAgentPhotoUrl?.trim() || "";
+  const photo = photoUrl
+    ? `<img src="${escapeAttr(photoUrl)}" alt="${escapeHtml(input.footerAgentPhotoAlt?.trim() || brandLabel)}" width="56" height="56" style="display:block;width:56px;height:56px;border-radius:0;object-fit:cover;border:0" />`
+    : "";
+  const note = input.footerNote?.trim() || "";
+  const noteIsPoweredOnly = /^powered by houzzatpro\.?$/i.test(note);
+  const noteHtml =
+    note && !noteIsPoweredOnly
+      ? `<p style="margin:0 0 12px;font-size:13px;line-height:1.55;color:#F4EFE6">${formatEmailFooterNoteHtml(note)}</p>`
+      : "";
+  const preferenceLinks = input.preferencesManageUrl
+    ? `<a href="${escapeAttr(input.preferencesManageUrl)}" style="color:${HIGH_OCTANE_GOLD};text-decoration:underline">Manage email preferences</a>${
+        input.unsubscribeIntentUrl
+          ? ` &nbsp;·&nbsp; <a href="${escapeAttr(input.unsubscribeIntentUrl)}" style="color:${HIGH_OCTANE_GOLD};text-decoration:underline">Unsubscribe</a>`
+          : ""
+      }`
+    : input.unsubscribeUrl
+      ? `<a href="${escapeAttr(input.unsubscribeUrl)}" style="color:${HIGH_OCTANE_GOLD};text-decoration:underline">Unsubscribe</a>`
+      : "";
+  const body = presentHighOctaneEmailBody(input.bodyHtml);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>${escapeHtml(input.title)}</title>
+  <!--[if mso]><style>table,td{font-family:Arial,sans-serif!important}</style><![endif]-->
+</head>
+<body data-email-presentation="high-octane" style="margin:0;padding:0;background:${HIGH_OCTANE_IVORY};font-family:Arial,Helvetica,sans-serif;width:100% !important">
+  ${preheader}
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:${HIGH_OCTANE_IVORY};padding:24px 12px">
+    <tr>
+      <td align="center" style="padding:0">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;border-radius:0;background:#ffffff;border:1px solid #e4d7c3">
+          <tr>
+            <td align="left" style="width:100%;background:${HIGH_OCTANE_NAVY};padding:28px 28px 24px;border-radius:0;border-bottom:3px solid ${HIGH_OCTANE_GOLD}">
+              ${logo}
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:${HIGH_OCTANE_GOLD};font-family:Georgia,'Times New Roman',serif">${escapeHtml(brandLabel)}</p>
+              <h1 style="margin:12px 0 0;font-size:28px;line-height:1.15;font-weight:500;color:#ffffff;letter-spacing:0;font-family:Georgia,'Times New Roman',serif">${escapeHtml(input.title)}</h1>
+              ${subtitle}
+            </td>
+          </tr>
+          <tr>
+            <td style="width:100%;background:#ffffff;padding:28px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:${HIGH_OCTANE_INK}">
+              ${body}
+            </td>
+          </tr>
+          <tr>
+            <td style="width:100%;background:${HIGH_OCTANE_NAVY};padding:22px 28px;border-radius:0;font-family:Arial,Helvetica,sans-serif">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  ${photo ? `<td valign="top" style="padding:0 14px 0 0">${photo}</td>` : ""}
+                  <td valign="top" style="font-family:Arial,Helvetica,sans-serif">
+                    ${noteHtml}
+                    <p style="margin:0;font-size:13px;line-height:1.5"><a href="${escapeAttr(websiteUrl)}" style="color:${HIGH_OCTANE_GOLD};text-decoration:none">${escapeHtml(websiteHost)}</a></p>
+                    <p style="margin:10px 0 0;font-size:12px;line-height:1.5"><a href="https://houzzatpro.com" style="color:${HIGH_OCTANE_GOLD};text-decoration:underline">Powered by HouzzatPRO.com</a></p>
+                    ${preferenceLinks ? `<p style="margin:10px 0 0;font-size:12px;line-height:1.5">${preferenceLinks}</p>` : ""}
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }

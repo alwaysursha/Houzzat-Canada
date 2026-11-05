@@ -95,6 +95,7 @@ function layoutBrandProps(brand?: EmailBrandChrome | null) {
     footerNote: brand.footerNote ?? undefined,
     footerAgentPhotoUrl: brand.footerAgentPhotoUrl ?? undefined,
     footerAgentPhotoAlt: brand.footerAgentPhotoAlt ?? undefined,
+    presentation: brand.presentation ?? undefined,
   };
 }
 
@@ -290,13 +291,18 @@ function money(n: number) {
 export function renderVerifyEmail(input: {
   name?: string | null;
   verifyUrl: string;
+  chrome?: EmailBrandChrome | null;
 }): RenderedEmail {
+  const royal = input.chrome?.presentation === "high-octane";
+  const brandName = royal
+    ? input.chrome?.brandLabel?.trim() || "HIGH OCTANE"
+    : SITE_NAME;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
-  const subject = `Verify your email for ${SITE_NAME}`;
+  const subject = `Verify your email for ${brandName}`;
   const text = [
     greet,
     "",
-    `Please verify your email to keep full access to ${SITE_NAME}.`,
+    `Please verify your email to keep full access to ${brandName}.`,
     "",
     `Verify (valid 7 days): ${input.verifyUrl}`,
     "",
@@ -304,11 +310,14 @@ export function renderVerifyEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: "Verify your email",
-    subtitle: "Confirm your address to unlock the full Houzzat experience.",
-    preheader: `Confirm your ${SITE_NAME} account`,
+    subtitle: royal
+      ? "Confirm your address to use your account."
+      : "Confirm your address to unlock the full Houzzat experience.",
+    preheader: `Confirm your ${brandName} account`,
+    ...layoutBrandProps(input.chrome),
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
-      <p style="margin:0 0 12px;color:#115e59">Please verify your email address to keep full access to ${escapeHtml(SITE_NAME)} — saved homes, alerts, and client tools.</p>
+      <p style="margin:0 0 12px;color:#115e59">Please verify your email address to keep full access to ${escapeHtml(brandName)} — saved homes, alerts, and client tools.</p>
       ${ctaButton(input.verifyUrl, "Verify email")}
       <p style="margin:16px 0 0;font-size:13px;color:#047857">This link expires in 7 days. If you didn’t create an account, you can ignore this message.</p>
     `,
@@ -318,23 +327,38 @@ export function renderVerifyEmail(input: {
 
 export function renderWelcomeEmail(input: {
   name?: string | null;
+  chrome?: EmailBrandChrome | null;
 }): RenderedEmail {
+  const royal = input.chrome?.presentation === "high-octane";
+  const brandName = royal
+    ? input.chrome?.brandLabel?.trim() || "HIGH OCTANE"
+    : SITE_NAME;
   const greet = input.name?.trim() ? `Welcome, ${input.name.trim()}` : "Welcome";
-  const subject = `Welcome to ${SITE_NAME}`;
-  const searchUrl = `${SITE_URL}/search`;
+  const subject = `Welcome to ${brandName}`;
+  const origin = input.chrome?.brandWebsiteUrl?.trim() || SITE_URL;
+  const searchUrl = royal ? `${origin.replace(/\/$/, "")}/` : `${SITE_URL}/search`;
   const text = [
     `${greet},`,
     "",
-    `Thanks for joining ${SITE_NAME}. You can search homes, save favourites, and get alerts when the market moves.`,
+    royal
+      ? `Thanks for joining ${brandName}. You can search homes, save favourites, and get alerts when the market moves.`
+      : `Thanks for joining ${SITE_NAME}. You can search homes, save favourites, and get alerts when the market moves.`,
     "",
     `Start searching: ${searchUrl}`,
   ].join("\n");
   const html = emailLayout({
     title: greet,
-    subtitle: "Your account is ready — start exploring GTA homes.",
-    preheader: `Your ${SITE_NAME} account is ready`,
+    subtitle: royal
+      ? "Your account is ready."
+      : "Your account is ready — start exploring GTA homes.",
+    preheader: `Your ${brandName} account is ready`,
+    ...layoutBrandProps(input.chrome),
     bodyHtml: `
-      <p style="margin:0 0 12px;color:#115e59">Thanks for joining ${escapeHtml(SITE_NAME)}. Search the GTA, save homes you love, and get notified when prices change or new listings match what you’re watching.</p>
+      <p style="margin:0 0 12px;color:#115e59">Thanks for joining ${escapeHtml(brandName)}. ${
+        royal
+          ? "Search homes, save the ones you love, and get notified when prices change or a new listing matches what you’re watching."
+          : "Search the GTA, save homes you love, and get notified when prices change or new listings match what you’re watching."
+      }</p>
       ${ctaButton(searchUrl, "Browse homes")}
       <p style="margin:16px 0 0;font-size:13px;color:#047857">Tip: turn on email alerts in your account so you never miss a price drop on a watched home.</p>
     `,
@@ -481,8 +505,12 @@ export function renderPasswordResetEmail(input: {
   name?: string | null;
   resetUrl: string;
   siteName?: string | null;
+  chrome?: EmailBrandChrome | null;
 }): RenderedEmail {
-  const brand = input.siteName?.trim() || SITE_NAME;
+  const brand =
+    input.chrome?.presentation === "high-octane"
+      ? input.chrome.brandLabel?.trim() || input.siteName?.trim() || "HIGH OCTANE"
+      : input.siteName?.trim() || SITE_NAME;
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const subject = `Reset your ${brand} password`;
   const text = [
@@ -497,6 +525,7 @@ export function renderPasswordResetEmail(input: {
     title: "Reset your password",
     subtitle: "Use the secure link below to choose a new password.",
     preheader: "Password reset link inside",
+    ...layoutBrandProps(input.chrome),
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">We received a request to reset your ${escapeHtml(brand)} password.</p>
@@ -529,6 +558,8 @@ export function renderTeamInviteEmail(input: {
   tenantDisplayName?: string | null;
   tenantLogoUrl?: string | null;
   tenantPrimaryColor?: string | null;
+  emailPresentation?: "high-octane" | null;
+  brandWebsiteUrl?: string | null;
 }): RenderedEmail {
   const roleLabel = orgRoleLabel(input.role);
   const inviter = input.invitedByName?.trim() || null;
@@ -588,7 +619,9 @@ export function renderTeamInviteEmail(input: {
     brandLabel: brand,
     brandLogoUrl: input.tenantLogoUrl,
     brandPrimaryColor: accent,
+    brandWebsiteUrl: input.brandWebsiteUrl,
     footerNote: "Powered by HouzzatPRO",
+    presentation: input.emailPresentation,
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">
         ${
@@ -1247,7 +1280,7 @@ export function renderNewsletterEmail(input: {
   unsubscribeUrl?: string | null;
   preferencesManageUrl?: string | null;
   unsubscribeIntentUrl?: string | null;
-}): RenderedEmail {
+} & EmailBrandChrome): RenderedEmail {
   const greet = input.name?.trim() ? `Hi ${input.name.trim()},` : "Hi there,";
   const text = [
     greet,
@@ -1259,11 +1292,15 @@ export function renderNewsletterEmail(input: {
   ].join("\n");
   const html = emailLayout({
     title: input.headline,
-    subtitle: "Fresh market notes from Houzzat.",
+    subtitle:
+      input.presentation === "high-octane"
+        ? `Notes from ${input.brandLabel?.trim() || "HIGH OCTANE"}.`
+        : "Fresh market notes from Houzzat.",
     preheader: input.subject,
     unsubscribeUrl: input.unsubscribeUrl,
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
+    ...layoutBrandProps(input),
     bodyHtml: `
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <div style="color:#115e59">${input.bodyHtml}</div>

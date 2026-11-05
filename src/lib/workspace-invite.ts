@@ -18,8 +18,10 @@ import {
   provisionPasswordlessAgentFromInvite,
 } from "@/lib/auth/invite-account";
 import { SITE_URL } from "@/lib/constants";
+import { highOctaneEmailChromeForWorkspace } from "@/lib/email/high-octane/chrome-for-workspace";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { renderTeamInviteEmail } from "@/lib/email/templates";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import {
   assertWorkspaceInviteAcceptanceWithinSeatLimit,
   assertWorkspaceSeatAvailableForInvite,
@@ -123,11 +125,28 @@ async function sendWorkspaceInviteEmail(input: {
         ? `${SITE_URL.replace(/\/$/, "")}${logoRaw}`
         : null;
 
+  const fallbackHost = (() => {
+    try {
+      return new URL(SITE_URL).hostname;
+    } catch {
+      return "houzzatpro.com";
+    }
+  })();
+  const origin = await resolveCanonicalPublicOrigin(
+    input.workspaceId,
+    fallbackHost,
+  ).catch(() => SITE_URL);
+  const royal = await highOctaneEmailChromeForWorkspace(
+    input.workspaceId,
+    origin,
+  ).catch(() => null);
   const rendered = renderTeamInviteEmail({
     orgName: input.workspaceName,
     tenantDisplayName,
-    tenantLogoUrl,
-    tenantPrimaryColor: brand.colors.primary,
+    tenantLogoUrl: royal?.brandLogoUrl || tenantLogoUrl,
+    tenantPrimaryColor: royal ? "#C8A66A" : brand.colors.primary,
+    emailPresentation: royal?.presentation,
+    brandWebsiteUrl: royal?.brandWebsiteUrl,
     role: input.role,
     inviteUrl: `${SITE_URL}/auth/invite/${input.token}`,
     invitedByName: input.invitedByName,

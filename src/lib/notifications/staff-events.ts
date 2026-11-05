@@ -2,6 +2,12 @@ import { ONLINE_MS } from "@/lib/agent/hotness";
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
 import {
+  highOctaneEmailChrome,
+  isHighOctaneEmailSlug,
+} from "@/lib/email/high-octane/chrome";
+import { ctaButton, emailLayout, escapeHtml, infoCard } from "@/lib/email/layout";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
+import {
   dedupeLeadInfoChanges,
   formatLeadInfoUpdatedSummary,
   leadInfoChangeLabels,
@@ -157,6 +163,40 @@ export function scheduleNewLeadStaffEmail(input: {
         }),
       ]);
       const workspaceId = leadRow?.workspaceId ?? null;
+      if (!html && workspaceId) {
+        const ws = await prisma.workspace.findUnique({
+          where: { id: workspaceId },
+          select: { slug: true, name: true },
+        });
+        if (isHighOctaneEmailSlug(ws?.slug)) {
+          const origin = await resolveCanonicalPublicOrigin(
+            workspaceId,
+            "houzzatpro.com",
+          ).catch(() => "https://high-octane-real-estate.houzzatpro.com");
+          const chrome = highOctaneEmailChrome({
+            brandLabel: ws?.name || input.brand?.displayName,
+            websiteUrl: origin,
+          });
+          const rows = input.detailLines
+            .map((line) => `<p style="margin:0 0 8px;color:#3e4a56">${escapeHtml(line)}</p>`)
+            .join("");
+          html = emailLayout({
+            presentation: "high-octane",
+            brandLabel: chrome.brandLabel,
+            brandLogoUrl: chrome.brandLogoUrl,
+            brandPrimaryColor: chrome.brandPrimaryColor,
+            brandWebsiteUrl: chrome.brandWebsiteUrl,
+            footerNote: chrome.footerNote,
+            title: "New lead",
+            subtitle: input.subject,
+            preheader: input.subject,
+            bodyHtml: `
+              ${infoCard(rows)}
+              <div style="margin:20px 0 0;text-align:center">${ctaButton(cta, "Open lead in HouzzatPro")}</div>
+            `,
+          });
+        }
+      }
       const byId = new Map(users.map((u) => [u.id, u]));
       const emailed = new Set<string>();
 

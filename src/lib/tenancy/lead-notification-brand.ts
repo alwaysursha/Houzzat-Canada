@@ -7,6 +7,8 @@ import { resolveRequestTenancy } from "@/lib/tenancy/resolve-request-tenancy";
 export type LeadNotificationBrand = {
   displayName: string;
   isHouzzatWorkspace: boolean;
+  /** Set when the request or desk knows the workspace. Optional for older callers. */
+  workspaceSlug?: string | null;
 };
 
 export const LEGACY_HOUZZAT_NOTIFICATION_BRAND: LeadNotificationBrand = {
@@ -23,6 +25,7 @@ export async function resolveLeadNotificationBrandFromRequest(
   return {
     displayName: tenancy.brand.displayName,
     isHouzzatWorkspace: tenancy.workspaceSlug === "houzzat",
+    workspaceSlug: tenancy.workspaceSlug,
   };
 }
 
@@ -36,6 +39,7 @@ export function resolveLeadNotificationBrandFromDesk(input: {
       input.displayName?.trim() ||
       (isHouzzatWorkspace ? SITE_NAME : "Real Estate"),
     isHouzzatWorkspace,
+    workspaceSlug: input.workspaceSlug,
   };
 }
 

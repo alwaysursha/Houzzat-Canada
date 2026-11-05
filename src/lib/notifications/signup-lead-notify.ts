@@ -11,11 +11,16 @@ import {
 import { openLeadHandoffHref } from "@/lib/agent/lead-profile-query";
 import { SITE_URL } from "@/lib/constants";
 import {
+  highOctaneEmailChrome,
+  isHighOctaneEmailSlug,
+} from "@/lib/email/high-octane/chrome";
+import {
   ctaButton,
   emailLayout,
   escapeHtml,
   infoCard,
 } from "@/lib/email/layout";
+import { resolveCanonicalPublicOrigin } from "@/lib/tenancy/canonical-public-origin";
 import type { RenderedEmail } from "@/lib/email/templates";
 import { formatConfirmSearchSummary } from "@/lib/auth/buyer-confirmed-preference";
 import { sendNotification } from "@/lib/notifications";
@@ -319,6 +324,7 @@ export async function buildSignupLeadNotifyContent(
     where: { id: leadId },
     select: {
       id: true,
+      workspaceId: true,
       source: true,
       intent: true,
       listingMls: true,
@@ -490,6 +496,26 @@ export async function buildSignupLeadNotifyContent(
     })
     .join("");
 
+  let workspaceSlug = brand.workspaceSlug ?? null;
+  if (!workspaceSlug && lead.workspaceId) {
+    const ws = await prisma.workspace.findUnique({
+      where: { id: lead.workspaceId },
+      select: { slug: true },
+    });
+    workspaceSlug = ws?.slug ?? null;
+  }
+  const royal = isHighOctaneEmailSlug(workspaceSlug);
+  let royalChrome = null;
+  if (royal && lead.workspaceId) {
+    const origin = await resolveCanonicalPublicOrigin(
+      lead.workspaceId,
+      "houzzatpro.com",
+    ).catch(() => "https://high-octane-real-estate.houzzatpro.com");
+    royalChrome = highOctaneEmailChrome({
+      brandLabel: brand.displayName,
+      websiteUrl: origin,
+    });
+  }
   const rendered: RenderedEmail = {
     subject,
     text,
@@ -500,6 +526,12 @@ export async function buildSignupLeadNotifyContent(
           ? "signup_claim_property_update"
           : "signup_lead",
     html: emailLayout({
+      presentation: royalChrome?.presentation,
+      brandLabel: royalChrome?.brandLabel,
+      brandLogoUrl: royalChrome?.brandLogoUrl,
+      brandPrimaryColor: royalChrome?.brandPrimaryColor,
+      brandWebsiteUrl: royalChrome?.brandWebsiteUrl,
+      footerNote: royalChrome?.footerNote,
       title:
         mode === "qualification"
           ? "Qualification update"
