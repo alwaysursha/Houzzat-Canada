@@ -88,6 +88,7 @@ export function RoyalCollectionPropertyView({
   notice,
   trailer,
   actions,
+  intelligence,
   showDisclaimer = false,
   sheet = false,
 }: {
@@ -99,6 +100,8 @@ export function RoyalCollectionPropertyView({
   trailer?: ReactNode;
   /** Save, watch, and share. Rendered only on a listing, under the facts. */
   actions?: ReactNode;
+  /** History, insights, estimate, amenities, similar homes, and open houses. */
+  intelligence?: ReactNode;
   showDisclaimer?: boolean;
   /** Overlay iframe has no site header, so the header offset would be an empty band. */
   sheet?: boolean;
@@ -228,6 +231,8 @@ export function RoyalCollectionPropertyView({
                   </dl>
                 </section>
               ) : null}
+
+              {model.kind === "listing" ? intelligence : null}
 
               {model.related ? (
                 <section className={styles.block} aria-labelledby="rc-property-related">
