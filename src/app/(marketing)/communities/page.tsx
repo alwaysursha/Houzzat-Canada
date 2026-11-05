@@ -6,7 +6,7 @@ import { requireRoyalCollectionPage } from "@/lib/tenancy/templates/require-roya
 export async function generateMetadata(): Promise<Metadata> {
   const { brand } = await requireRoyalCollectionPage();
   return buildMarketingPageMetadata({
-    title: `Communities | ${brand.displayName}`,
+    title: "Communities",
     description: `Communities served by ${brand.displayName}.`,
     path: "/communities",
   });

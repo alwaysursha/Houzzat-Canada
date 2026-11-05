@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const brand = await resolveMarketingPresentationBrand();
   if (brand && isRoyalCollectionOneTemplateId(brand.templateId)) {
     return buildMarketingPageMetadata({
-      title: `Contact | ${brand.displayName}`,
+      title: "Contact",
       description: `Contact ${brand.displayName}.`,
       path: "/contact",
     });

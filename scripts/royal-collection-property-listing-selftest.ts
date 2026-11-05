@@ -339,7 +339,7 @@ const concierge = read(
 );
 assert.ok(concierge.includes("Request Private Viewing"));
 assert.ok(concierge.includes("IntersectionObserver"));
-assert.ok(concierge.includes("prefers-reduced-motion"));
+assert.ok(css.includes("@media (prefers-reduced-motion: reduce)"));
 assert.ok(concierge.includes('aria-label={`Call ${agentName}`}'));
 assert.ok(concierge.includes('aria-label="Open chat"'));
 assert.ok(concierge.includes('getElementById("rc-contact")'));
