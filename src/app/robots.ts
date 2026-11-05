@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/constants";
 import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
+import { publicSitemapChunkCount } from "@/app/sitemap";
 
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const canonicalOrigin = await resolveMarketingCanonicalOrigin();
   const siteUrl = (canonicalOrigin ?? SITE_URL).replace(/\/$/, "");
+  const chunks = await publicSitemapChunkCount();
 
   return {
     rules: {
@@ -26,6 +28,9 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
         "/home-preview",
       ],
     },
-    sitemap: `${siteUrl}/sitemap.xml`,
+    sitemap: Array.from(
+      { length: chunks },
+      (_, id) => `${siteUrl}/sitemap/${id}.xml`,
+    ),
   };
 }

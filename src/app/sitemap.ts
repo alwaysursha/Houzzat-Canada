@@ -4,13 +4,18 @@ import { homesForSalePath } from "@/lib/geo/area-seo";
 import { listingPath } from "@/lib/listings/listing-path";
 import { prisma } from "@/lib/prisma";
 import { resolveMarketingCanonicalOrigin } from "@/lib/tenancy/marketing-page-metadata";
+import { resolveMarketingTenancy } from "@/lib/tenancy/resolve-marketing-tenancy";
+import { HIGH_OCTANE_COMMUNITY_GUIDES } from "@/lib/tenancy/templates/high-octane-community-guides";
+import { HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } from "@/lib/tenancy/templates/high-octane-development-listings";
 import { excludeStagingSnapshotWhere } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 
-/** Snapshot rows are never sitemap entries, including on the staging host. */
+/** Snapshot rows and synthetic demos are never sitemap entries. */
 const PUBLIC_SITEMAP_LISTING_WHERE = {
   AND: [
     { status: "ACTIVE" as const },
     excludeStagingSnapshotWhere(),
+    { dataSource: { not: HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } },
     { mlsNumber: { not: { startsWith: "ITSODEMO" } } },
   ],
 };
@@ -18,15 +23,19 @@ const PUBLIC_SITEMAP_LISTING_WHERE = {
 /** Google allows 50k URLs/file; keep headroom for static + area rows. */
 const LISTING_CHUNK = 4_000;
 
-export async function generateSitemaps() {
+export async function publicSitemapChunkCount(): Promise<number> {
   try {
     const count = await prisma.listing.count({ where: PUBLIC_SITEMAP_LISTING_WHERE });
-    const chunks = Math.max(1, Math.ceil(count / LISTING_CHUNK));
-    return Array.from({ length: chunks }, (_, id) => ({ id }));
+    return Math.max(1, Math.ceil(count / LISTING_CHUNK));
   } catch (error) {
-    console.error("[sitemap] generateSitemaps failed; using a single chunk", error);
-    return [{ id: 0 }];
+    console.error("[sitemap] chunk count failed; using one chunk", error);
+    return 1;
   }
+}
+
+export async function generateSitemaps() {
+  const chunks = await publicSitemapChunkCount();
+  return Array.from({ length: chunks }, (_, id) => ({ id }));
 }
 
 export default async function sitemap(props: {
@@ -37,6 +46,18 @@ export default async function sitemap(props: {
   const skip = chunk * LISTING_CHUNK;
   const canonicalOrigin = await resolveMarketingCanonicalOrigin();
   const siteUrl = (canonicalOrigin ?? SITE_URL).replace(/\/$/, "");
+  const tenancy = await resolveMarketingTenancy();
+  const highOctaneRoutes =
+    chunk === 0 && tenancy?.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
+      ? [
+          "/communities",
+          "/contact",
+          "/about",
+          "/privacy",
+          "/terms",
+          ...HIGH_OCTANE_COMMUNITY_GUIDES.map((guide) => `/communities/${guide.slug}`),
+        ]
+      : [];
 
   try {
     const [listings, areas, landings] = await Promise.all([
@@ -83,6 +104,7 @@ export default async function sitemap(props: {
             "/tools/seller-readiness",
             "/partners",
             "/route-planner",
+            ...highOctaneRoutes,
           ].map((path) => ({
             url: `${siteUrl}${path}`,
             changeFrequency: "daily" as const,

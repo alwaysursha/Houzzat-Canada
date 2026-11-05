@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { RoyalCollectionCommunityPage } from "@/components/templates/royal-collection-one/RoyalCollectionPages";
 import { highOctaneCommunityGuideBySlug } from "@/lib/tenancy/templates/high-octane-community-guides";
 import { buildMarketingPageMetadata } from "@/lib/tenancy/marketing-page-metadata";
@@ -12,12 +13,12 @@ type PageProps = {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const { brand } = await requireRoyalCollectionPage();
-  const guide =
-    brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG
-      ? highOctaneCommunityGuideBySlug(slug)
-      : null;
+  const highOctane = brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
+  const guide = highOctane ? highOctaneCommunityGuideBySlug(slug) : null;
+  if (highOctane && !guide) notFound();
+  const title = guide?.name ?? slug.replace(/-/g, " ");
   return buildMarketingPageMetadata({
-    title: `${guide?.name ?? slug.replace(/-/g, " ")} | ${brand.displayName}`,
+    title,
     description: guide?.summary ?? `A community page for ${brand.displayName}.`,
     path: `/communities/${slug}`,
   });

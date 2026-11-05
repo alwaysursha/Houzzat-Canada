@@ -18,6 +18,12 @@ import { HIGH_OCTANE_DEMO_CARD_LABEL } from "@/lib/tenancy/templates/high-octane
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
+function sameCity(listingCity: string, requestedCity: string): boolean {
+  const normalize = (value: string) =>
+    value.toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+  return normalize(listingCity) === normalize(requestedCity);
+}
+
 export function RoyalCollectionCommunityListings({
   city,
   placeName,
@@ -50,7 +56,8 @@ export function RoyalCollectionCommunityListings({
           return;
         }
         const data = (await res.json()) as { newListings?: ListingCardData[] };
-        if (!cancelled) setItems(Array.isArray(data.newListings) ? data.newListings : []);
+        const rows = Array.isArray(data.newListings) ? data.newListings : [];
+        if (!cancelled) setItems(rows.filter((listing) => sameCity(listing.city, city)));
       } catch {
         if (!cancelled) setItems([]);
       }
