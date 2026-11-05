@@ -3226,3 +3226,100 @@
     padding-bottom: calc(28px + var(--mobile-bottom-nav, 4.25rem) + var(--rc-concierge-bar, 0px));
   }
 }
+
+.discovery {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.discoverySection {
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+.section.discoverySection h2 {
+  font-size: clamp(32px, 4vw, 56px);
+}
+
+.discoveryActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
+
+.railControls {
+  display: flex;
+  gap: 8px;
+}
+
+.railControls button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #c8a66a;
+  border-radius: 0;
+  background: #fff;
+  color: #071629;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.railControls button:hover {
+  background: #071629;
+  color: #f7f4ee;
+}
+
+.discoveryRail {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0 0 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  list-style: none;
+  scrollbar-width: none;
+}
+
+.discoveryRail::-webkit-scrollbar {
+  display: none;
+}
+
+.discoveryRail > li {
+  flex: 0 0 min(82vw, 300px);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.discoveryRail .featureCard {
+  height: 100%;
+}
+
+.discoveryRail .featureMedia {
+  aspect-ratio: 4 / 5;
+}
+
+@media (min-width: 768px) {
+  .discoveryRail > li {
+    flex-basis: 280px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .discoveryRail > li {
+    flex-basis: 320px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .discoveryRail {
+    scroll-behavior: auto;
+  }
+
+  .discoveryRail .featureCard,
+  .discoveryRail .featureImage {
+    transition: none;
+  }
+}

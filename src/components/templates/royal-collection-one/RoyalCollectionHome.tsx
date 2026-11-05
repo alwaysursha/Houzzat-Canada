@@ -4,6 +4,7 @@ import { resolveRoyalCollectionView } from "@/lib/tenancy/templates/resolve-roya
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { RoyalCollectionAbout } from "./RoyalCollectionAbout";
 import { RoyalCollectionCommunities } from "./RoyalCollectionCommunities";
+import { RoyalCollectionDiscovery } from "./RoyalCollectionDiscovery";
 import { RoyalCollectionFeatured } from "./RoyalCollectionFeatured";
 import { RoyalCollectionHero } from "./RoyalCollectionHero";
 import { RoyalCollectionJournal } from "./RoyalCollectionJournal";
@@ -39,6 +40,10 @@ export function RoyalCollectionHome({
           brand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
           view.displayFixtureId == null
         }
+      />
+      <RoyalCollectionDiscovery
+        cities={cities}
+        actionsDisabled={view.actionsDisabled}
       />
       <RoyalCollectionStory view={view} />
       <RoyalCollectionCommunities view={view} />
