@@ -79,8 +79,12 @@ export function ShareListingButton({
     setShareOpen((open) => !open);
   }
 
+  const menuItemClass = royal
+    ? "flex w-full items-center gap-2 bg-white px-3 py-2 text-left text-sm font-medium text-[#071629] hover:bg-[#F7F4EE]"
+    : "flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist";
+
   return (
-    <div ref={menuRef} className={cn("relative", className)}>
+    <div ref={menuRef} className={cn("relative", royal && shareOpen && "z-40", className)}>
       <Button
         type="button"
         variant="secondary"
@@ -99,19 +103,19 @@ export function ShareListingButton({
           className={cn(
             "absolute left-0 top-full z-40 mt-2 w-48 overflow-hidden border py-1",
             royal
-              ? "border-[#C8A66A] bg-[#F7F4EE] text-[#071629]"
+              ? "rounded-none border-[#C8A66A] bg-white text-[#071629] shadow-[0_16px_32px_rgb(7_22_41/0.18)]"
               : "rounded-xl border-line bg-surface shadow-lg",
           )}
         >
           <button
             type="button"
             onClick={() => void copyLink()}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
+            className={menuItemClass}
           >
             {copied ? (
-              <Check className="size-4 text-canopy" />
+              <Check className={cn("size-4", royal ? "text-[#C8A66A]" : "text-canopy")} />
             ) : (
-              <Link2 className="size-4 text-canopy" />
+              <Link2 className={cn("size-4", royal ? "text-[#C8A66A]" : "text-canopy")} />
             )}
             {copied ? "Link copied" : "Copy link"}
           </button>
@@ -122,7 +126,7 @@ export function ShareListingButton({
                 `https://www.facebook.com/sharer/sharer.php?u=${encoded}`,
               )
             }
-            className="flex w-full px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
+            className={menuItemClass}
           >
             Facebook
           </button>
@@ -133,7 +137,7 @@ export function ShareListingButton({
                 `https://twitter.com/intent/tweet?url=${encoded}&text=${encodedTitle}`,
               )
             }
-            className="flex w-full px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
+            className={menuItemClass}
           >
             X
           </button>
@@ -144,7 +148,7 @@ export function ShareListingButton({
                 `https://www.linkedin.com/sharing/share-offsite/?url=${encoded}`,
               )
             }
-            className="flex w-full px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
+            className={menuItemClass}
           >
             LinkedIn
           </button>
@@ -155,7 +159,7 @@ export function ShareListingButton({
                 `https://wa.me/?text=${encodedTitle}%20${encoded}`,
               )
             }
-            className="flex w-full px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist"
+            className={menuItemClass}
           >
             WhatsApp
           </button>
