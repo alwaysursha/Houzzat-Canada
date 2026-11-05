@@ -16,8 +16,8 @@ import {
 } from "@/lib/communications/category-email-gate";
 import { renderAgentMessageEmail } from "@/lib/email/templates";
 import {
+  resolveLeadCustomerEmailChrome,
   resolveTenantEmailBrand,
-  toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import { loadPublishedAgentEmailOverride } from "@/lib/email/workspace-templates/agent-share-templates";
 import {
@@ -295,6 +295,11 @@ export async function POST(
       leadId: lead.id,
       customerId: lead.customer?.id,
     });
+    const leadMail = await resolveLeadCustomerEmailChrome({
+      workspaceId: access.workspaceId,
+      leadId: lead.id,
+      customerId: lead.customer?.id,
+    });
     // Phase 2C-4 — published AGENT_EMAIL for verified workspace membership only.
     // Agent-authored subject/body always take precedence.
     const publishedAgentEmail = await loadPublishedAgentEmailOverride({
@@ -305,7 +310,7 @@ export async function POST(
       subject: parsed.data.subject,
       body: parsed.data.body,
       ...preferenceFooterFields(chrome),
-      ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+      ...(leadMail?.chrome ?? {}),
       publishedAgentEmailTemplate: publishedAgentEmail,
     });
 

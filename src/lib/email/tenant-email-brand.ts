@@ -426,8 +426,9 @@ export function buildAgentEmailSignature(input: {
 
 /**
  * Map assembled brand → renderer chrome.
- * Body signatures are intentionally omitted: the layout footer is the only
- * signature/legal block for tenant-branded mail.
+ * The assigned-agent signature is rendered once in the body. The layout footer
+ * stays the legal block. The headshot stays inside the signature, not a second
+ * footer portrait.
  */
 export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
   const agentName = brand.agent?.name?.trim();
@@ -437,9 +438,9 @@ export function toEmailBrandChrome(brand: TenantEmailBrand): EmailBrandChrome {
     brandPrimaryColor: brand.primaryColor,
     brandWebsiteUrl: brand.websiteUrl,
     footerNote: brand.footerNote,
-    footerAgentPhotoUrl: brand.signaturePhotoUrl,
-    footerAgentPhotoAlt: agentName ? `Photo of ${agentName}` : null,
-    agentFromLabel: brand.agent?.name ?? brand.displayName,
+    agentSignatureHtml: brand.signatureHtml,
+    agentSignatureText: brand.signatureText,
+    agentFromLabel: agentName || brand.displayName,
     presentation: brand.presentation ?? null,
   };
 }
@@ -757,6 +758,80 @@ export async function resolveTenantEmailBrand(
     emailHeadshotAssociation,
     workspaceSlug,
   });
+}
+
+/**
+ * Chrome for a customer email about one lead.
+ * Signature agent is the lead assignee (then the customer's latest assigned
+ * lead). The logged-in user, workspace owner, and preferred sender are not
+ * substituted. When tenant branding is off, only the signature is returned so
+ * Houzzat keeps its existing shell.
+ */
+export async function resolveLeadCustomerEmailChrome(
+  input: {
+    workspaceId: string;
+    leadId?: string | null;
+    customerId?: string | null;
+  },
+  deps: TenantEmailBrandDeps = createDefaultTenantEmailBrandDeps(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<{ chrome: EmailBrandChrome; replyTo: string | null } | null> {
+  const workspaceId = input.workspaceId?.trim();
+  if (!workspaceId) return null;
+
+  const branded = await resolveTenantEmailBrand(
+    {
+      workspaceId,
+      leadId: input.leadId,
+      customerId: input.customerId,
+    },
+    deps,
+    env,
+  );
+  if (branded) {
+    return { chrome: toEmailBrandChrome(branded), replyTo: branded.replyTo };
+  }
+
+  let agent: TenantEmailAgentIdentity | null = null;
+  if (input.leadId?.trim()) {
+    agent = await deps.loadAssignedAgentForLead(workspaceId, input.leadId.trim());
+  }
+  if (!agent && input.customerId?.trim()) {
+    agent = await deps.loadAssignedAgentForCustomer(
+      workspaceId,
+      input.customerId.trim(),
+    );
+  }
+  const emailHeadshotAssociation = agent
+    ? await loadAgentEmailHeadshotAssociationBestEffort(
+        deps,
+        workspaceId,
+        agent.userId,
+      )
+    : null;
+  const [branding, identity, professional, websiteUrl] = await Promise.all([
+    deps.loadBranding(workspaceId),
+    deps.loadEmailIdentity(workspaceId),
+    deps.loadProfessionalIdentity(workspaceId),
+    deps.resolveWebsiteUrl(workspaceId),
+  ]);
+  const assembled = assembleTenantEmailBrand({
+    workspaceId,
+    branding,
+    identity,
+    agent,
+    websiteUrl,
+    brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
+    emailHeadshotAssociation,
+  });
+  return {
+    chrome: {
+      agentSignatureHtml: assembled.signatureHtml,
+      agentSignatureText: assembled.signatureText,
+      agentFromLabel: assembled.agent?.name || assembled.displayName,
+    },
+    replyTo: null,
+  };
 }
 
 /**

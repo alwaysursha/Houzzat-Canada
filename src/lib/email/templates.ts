@@ -1707,19 +1707,22 @@ export function renderCmaEmail(
         "It reviews recent comparable sales and current competition to help you understand how the property is positioned today.",
         priceLine ? `\n${priceLine}\n` : "",
         `View your CMA: ${input.cmaUrl}`,
-        "",
-        input.agentName,
-        input.agentPhone ? input.agentPhone : "",
-        input.agentEmail ? input.agentEmail : "",
+        ...(input.agentSignatureText
+          ? []
+          : [
+              "",
+              input.agentName,
+              input.agentPhone ? input.agentPhone : "",
+              input.agentEmail ? input.agentEmail : "",
+            ]),
         // Legacy powered-by only when branding OFF (no legal footerNote).
         ...(hasBrandedLegalFooter ? [] : ["", "Powered by HouzzatPRO"]),
       ]
         .filter((line, i, arr) => !(line === "" && arr[i - 1] === ""))
         .filter((line) => line !== "")
         .join("\n"),
-      // CMA already includes agent contact in-body; skip duplicate signature text
-      // unless chrome supplies a distinct fallback-only signature without agent block.
-      null,
+      // Assigned-agent signature follows the in-body author lines when present.
+      input.agentSignatureText,
     ),
     input,
   );
@@ -1743,7 +1746,7 @@ export function renderCmaEmail(
         input.footerNote?.trim() ||
         `Prepared by ${input.agentName} · Powered by HouzzatPRO`,
     }),
-    bodyHtml: `
+    bodyHtml: appendAgentSignatureHtml(`
       <p style="margin:0 0 12px;color:#115e59">${escapeHtml(greet)}</p>
       <p style="margin:0 0 12px;color:#115e59">${override.introHtml}</p>
       ${override.paragraphsHtml}
@@ -1756,12 +1759,16 @@ export function renderCmaEmail(
       <p style="margin:22px 0 8px;text-align:center">
         <a href="${escapeAttr(input.cmaUrl)}" style="display:inline-block;background:${escapeAttr(accent)};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;line-height:1.2;padding:12px 22px;border-radius:999px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${escapeHtml(override.cta)}</a>
       </p>
-      <p style="margin:20px 0 0;color:#115e59">
+      ${
+        input.agentSignatureHtml
+          ? ""
+          : `<p style="margin:20px 0 0;color:#115e59">
         <strong style="color:#064e3b">${escapeHtml(input.agentName)}</strong><br/>
         ${input.agentPhone ? `${escapeHtml(input.agentPhone)}<br/>` : ""}
         ${input.agentEmail ? escapeHtml(input.agentEmail) : ""}
-      </p>
-    `,
+      </p>`
+      }
+    `, input.agentSignatureHtml),
     preferencesManageUrl: input.preferencesManageUrl,
     unsubscribeIntentUrl: input.unsubscribeIntentUrl,
   });

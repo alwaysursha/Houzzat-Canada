@@ -21,8 +21,7 @@ import {
   renderSoldAlertEmail,
 } from "@/lib/email/templates";
 import {
-  resolveTenantEmailBrand,
-  toEmailBrandChrome,
+  resolveLeadCustomerEmailChrome,
 } from "@/lib/email/tenant-email-brand";
 import { loadPublishedAreaWatchOverride } from "@/lib/email/workspace-templates/area-watch";
 import { loadPublishedPropertyWatchOverride } from "@/lib/email/workspace-templates/property-watch";
@@ -210,13 +209,13 @@ async function createAlert(input: {
         })
       : null;
   const footer = preferenceFooterFields(chrome);
-  const tenantBrand = input.workspaceId
-    ? await resolveTenantEmailBrand({
+  const leadMail = input.workspaceId
+    ? await resolveLeadCustomerEmailChrome({
         workspaceId: input.workspaceId,
         customerId: input.userId,
       })
     : null;
-  const brandChrome = tenantBrand ? toEmailBrandChrome(tenantBrand) : {};
+  const brandChrome = leadMail?.chrome ?? {};
 
   // Phase 2C — published watch overrides (drafts ignored). Categories stay isolated.
   // Brand + template share the same verified workspaceId from the monitor user.
@@ -323,7 +322,7 @@ async function createAlert(input: {
       customerId: input.userId,
       mlsNumber: input.mlsNumber,
       communicationCategory: input.watchCategory,
-      replyTo: tenantBrand?.replyTo,
+      replyTo: leadMail?.replyTo,
       rendered: renderPropertyUpdateEmail({
         name: input.name,
         title: input.title,
@@ -348,7 +347,7 @@ async function createAlert(input: {
     customerId: input.userId,
     mlsNumber: input.mlsNumber,
     communicationCategory: input.watchCategory,
-    replyTo: tenantBrand?.replyTo,
+    replyTo: leadMail?.replyTo,
     rendered,
   });
 }

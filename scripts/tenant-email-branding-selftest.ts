@@ -253,11 +253,15 @@ async function testHouzzatVsCanaryIsolation() {
   }).html;
 
   assert.match(houzzatHtml, /Houzzat/);
-  // Agent identity stays on chrome/assembly; body no longer repeats a profile block.
+  // Assigned-agent signature renders once; the legal footer stays separate.
   assert.equal(toEmailBrandChrome(houzzat).agentFromLabel, "Houzzat Agent");
   assert.match(houzzat.signatureHtml, /Houzzat Agent/);
   assert.match(houzzatHtml, /data-houzzat-email-footer-signature="1"/);
-  assert.doesNotMatch(houzzatHtml, /data-houzzat-agent-signature="1"/);
+  assert.equal(
+    (houzzatHtml.match(/data-houzzat-agent-signature="1"/g) ?? []).length,
+    1,
+  );
+  assert.match(houzzatHtml, /Houzzat Agent/);
   assert.doesNotMatch(houzzatHtml, /Tenant Canary/);
   assert.doesNotMatch(houzzatHtml, /Canary Agent/);
 
@@ -266,6 +270,11 @@ async function testHouzzatVsCanaryIsolation() {
   assert.match(canary.signatureHtml, /Canary Agent/);
   assert.match(canaryHtml, new RegExp(TENANT_B_TEST_PRIMARY_COLOR, "i"));
   assert.match(canaryHtml, /data-houzzat-email-footer-signature="1"/);
+  assert.equal(
+    (canaryHtml.match(/data-houzzat-agent-signature="1"/g) ?? []).length,
+    1,
+  );
+  assert.match(canaryHtml, /Canary Agent/);
   assert.doesNotMatch(canaryHtml, />Houzzat</);
   assert.doesNotMatch(canaryHtml, /Houzzat Agent/);
   assert.doesNotMatch(canaryHtml, /agent@houzzat\.com/);
@@ -458,8 +467,8 @@ function testDigestChromeIsolation() {
 
 function testWiringAndNoDuplicateSendPaths() {
   const monitors = read("src/lib/account/monitors.ts");
-  assert.match(monitors, /resolveTenantEmailBrand/);
-  assert.match(monitors, /toEmailBrandChrome/);
+  assert.match(monitors, /resolveLeadCustomerEmailChrome/);
+  assert.doesNotMatch(monitors, /preferredAgentUserId/);
   // Still a single send path per branch (no second campaign sender).
   const sendCount = (monitors.match(/sendAndLogClientEmail\(/g) ?? []).length;
   assert.equal(sendCount, 2, "createAlert should keep exactly two send sites");
@@ -475,12 +484,23 @@ function testWiringAndNoDuplicateSendPaths() {
   for (const [name, src] of [
     ["buyer", buyer],
     ["seller", seller],
+  ] as const) {
+    assert.match(src, /resolveLeadCustomerEmailChrome/, `${name} missing lead signature`);
+    assert.doesNotMatch(src, /preferredAgentUserId/, `${name} must not use a preferred sender`);
+  }
+  for (const [name, src] of [
     ["agent", agentRoute],
     ["shortlist", shortlist],
     ["cma", cma],
     ["mobile", mobile],
   ] as const) {
-    assert.match(src, /resolveTenantEmailBrand/, `${name} missing brand resolve`);
+    assert.match(src, /resolveTenantEmailBrand/, `${name} missing reply-to brand resolve`);
+    assert.match(src, /resolveLeadCustomerEmailChrome/, `${name} missing lead signature`);
+    assert.equal(
+      (src.match(/sendAndLogClientEmail\(/g) ?? []).length,
+      1,
+      `${name} should keep a single send`,
+    );
   }
 
   const sendTs = read("src/lib/email/send.ts");

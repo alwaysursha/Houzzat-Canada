@@ -3,13 +3,20 @@
  */
 import assert from "node:assert/strict";
 import { emailLayout } from "@/lib/email/layout";
+import { localHighOctaneEmailPreviewAllowed } from "@/lib/email/high-octane/local-preview-access";
+import {
+  assembleTenantEmailBrand,
+  resolveLeadCustomerEmailChrome,
+  toEmailBrandChrome,
+  type TenantEmailAgentIdentity,
+  type TenantEmailBrandDeps,
+} from "@/lib/email/tenant-email-brand";
+import { renderPriceReductionEmail, renderVerifyEmail } from "@/lib/email/templates";
 import {
   HIGH_OCTANE_EMAIL_PREVIEW_GAPS,
   listHighOctaneEmailPreviews,
 } from "@/lib/email/high-octane/preview-catalog";
-import { renderVerifyEmail } from "@/lib/email/templates";
 import { renderOwnerActivationEmail } from "@/lib/platform/activation/email-template";
-import { assembleTenantEmailBrand } from "@/lib/email/tenant-email-brand";
 
 const mint = emailLayout({
   title: "Hello",
@@ -103,4 +110,196 @@ assert.ok(HIGH_OCTANE_EMAIL_PREVIEW_GAPS.some((gap) => /inquiry confirmation/i.t
 assert.ok(HIGH_OCTANE_EMAIL_PREVIEW_GAPS.some((gap) => /chat message/i.test(gap)));
 assert.ok(HIGH_OCTANE_EMAIL_PREVIEW_GAPS.some((gap) => /payment/i.test(gap)));
 
+const localEnv = {
+  NODE_ENV: "development",
+  HIGH_OCTANE_STAGING: "1",
+} as NodeJS.ProcessEnv;
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({ env: localEnv, host: "localhost:3010" }),
+  true,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({ env: localEnv, host: "127.0.0.1:3010" }),
+  true,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: { ...localEnv, VERCEL_ENV: "preview" },
+    host: "localhost:3010",
+  }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: { ...localEnv, VERCEL_ENV: "production", VERCEL: "1" },
+    host: "localhost:3010",
+  }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: { ...localEnv, NODE_ENV: "production" },
+    host: "localhost:3010",
+  }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: { ...localEnv, HIGH_OCTANE_STAGING: "0" },
+    host: "localhost:3010",
+  }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({ env: localEnv, host: "localhost:3000" }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: localEnv,
+    host: "high-octane-real-estate.houzzatpro.com",
+  }),
+  false,
+);
+assert.equal(
+  localHighOctaneEmailPreviewAllowed({
+    env: localEnv,
+    host: "localhost:3010",
+    forwardedHost: "high-octane-real-estate.houzzatpro.com",
+  }),
+  false,
+);
+
+function previewAgent(name: string, userId: string): TenantEmailAgentIdentity {
+  return {
+    userId,
+    name,
+    email: `${userId}@example.invalid`,
+    phone: "(000) 555-0199",
+    image: null,
+    designation: null,
+  };
+}
+
+function signatureDeps(
+  assignee: TenantEmailAgentIdentity | null,
+): TenantEmailBrandDeps {
+  return {
+    loadBranding: async () => null,
+    loadEmailIdentity: async () => null,
+    loadProfessionalIdentity: async () => ({
+      brokerageRegisteredName: "Right at Home Realty Brokerage",
+    }),
+    loadAgentInWorkspace: async () => {
+      throw new Error("logged-in agent must not be used");
+    },
+    loadAssignedAgentForLead: async () => assignee,
+    loadAssignedAgentForCustomer: async () => null,
+    loadAgentEmailHeadshotAssociation: async () => null,
+    resolveWebsiteUrl: async () => "https://houzzat.com",
+    loadWorkspaceSlug: async () => "houzzat",
+  };
+}
+
+async function assertAssignedAgentSignatures() {
+const agentA = previewAgent("Agent A", "agent-a");
+const agentB = previewAgent("Agent B", "agent-b");
+const listing = {
+  name: "Alex Sample",
+  addressLine: "123 Sample Street",
+  city: "Toronto",
+  mlsNumber: "PREVIEW",
+  oldPrice: 900_000,
+  newPrice: 850_000,
+  listingUrl: "https://houzzat.com/sample/listing/PREVIEW",
+};
+
+const houzzatA = await resolveLeadCustomerEmailChrome(
+  { workspaceId: "ws-houzzat", leadId: "lead-a" },
+  signatureDeps(agentA),
+  {},
+);
+const houzzatB = await resolveLeadCustomerEmailChrome(
+  { workspaceId: "ws-houzzat", leadId: "lead-b" },
+  signatureDeps(agentB),
+  {},
+);
+const houzzatNone = await resolveLeadCustomerEmailChrome(
+  { workspaceId: "ws-houzzat", leadId: "lead-none" },
+  signatureDeps(null),
+  {},
+);
+assert.ok(houzzatA && houzzatB && houzzatNone);
+assert.equal(houzzatA.chrome.brandLabel, undefined);
+assert.equal(houzzatA.chrome.presentation, undefined);
+assert.match(houzzatA.chrome.agentSignatureHtml ?? "", /Agent A/);
+assert.doesNotMatch(houzzatA.chrome.agentSignatureHtml ?? "", /Agent B/);
+assert.match(houzzatB.chrome.agentSignatureHtml ?? "", /Agent B/);
+assert.doesNotMatch(houzzatB.chrome.agentSignatureHtml ?? "", /Agent A/);
+assert.doesNotMatch(houzzatNone.chrome.agentSignatureHtml ?? "", /Agent A/);
+assert.doesNotMatch(houzzatNone.chrome.agentSignatureHtml ?? "", /Agent B/);
+
+const houzzatHtml = renderPriceReductionEmail({
+  ...listing,
+  ...houzzatA.chrome,
+});
+assert.match(houzzatHtml.html, /background:#e8f5f0/);
+assert.match(houzzatHtml.html, /data-houzzat-agent-signature="1"/);
+assert.match(houzzatHtml.html, /Agent A/);
+assert.equal(houzzatHtml.html.includes('data-email-presentation="high-octane"'), false);
+
+const saadBrand = assembleTenantEmailBrand({
+  workspaceId: "ws-high-octane",
+  branding: null,
+  identity: null,
+  agent: previewAgent("Saad Sample", "saad-sample"),
+  websiteUrl: "https://high-octane-real-estate.houzzatpro.com",
+  brokerageRegisteredName: "Right at Home Realty Brokerage",
+  workspaceSlug: "high-octane-real-estate",
+});
+const reassigned = assembleTenantEmailBrand({
+  workspaceId: "ws-high-octane",
+  branding: null,
+  identity: null,
+  agent: agentB,
+  websiteUrl: "https://high-octane-real-estate.houzzatpro.com",
+  brokerageRegisteredName: "Right at Home Realty Brokerage",
+  workspaceSlug: "high-octane-real-estate",
+});
+const saadHtml = renderPriceReductionEmail({
+  ...listing,
+  ...toEmailBrandChrome(saadBrand),
+});
+const reassignedHtml = renderPriceReductionEmail({
+  ...listing,
+  ...toEmailBrandChrome(reassigned),
+});
+assert.match(saadHtml.html, /data-email-presentation="high-octane"/);
+assert.match(saadHtml.html, /Saad Sample/);
+assert.doesNotMatch(saadHtml.html, /Agent B/);
+assert.match(reassignedHtml.html, /data-email-presentation="high-octane"/);
+assert.match(reassignedHtml.html, /Agent B/);
+assert.doesNotMatch(reassignedHtml.html, /Saad Sample/);
+assert.equal(renderVerifyEmail({
+  name: "Alex Sample",
+  verifyUrl: "https://houzzat.com/verify",
+}).html.includes("data-houzzat-agent-signature"), false);
+
+const pricePreview = previews.find((item) => item.id === "price-reduction");
+const verifyPreview = previews.find((item) => item.id === "verify");
+assert.match(pricePreview?.html ?? "", /Jordan Sample/);
+assert.doesNotMatch(pricePreview?.html ?? "", /Alex Owner/);
+assert.equal(
+  (pricePreview?.html.match(/data-houzzat-agent-signature="1"/g) ?? []).length,
+  1,
+);
+assert.equal(verifyPreview?.personalSignature, false);
+assert.equal(
+  (verifyPreview?.html ?? "").includes("data-houzzat-agent-signature"),
+  false,
+);
+
 console.log(`high-octane email presentation selftest ok (${previews.length} previews)`);
+}
+
+assertAssignedAgentSignatures();

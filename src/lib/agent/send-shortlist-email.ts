@@ -12,8 +12,8 @@ import {
 } from "@/lib/communications/category-email-gate";
 import { renderShortlistEmail } from "@/lib/email/templates";
 import {
+  resolveLeadCustomerEmailChrome,
   resolveTenantEmailBrand,
-  toEmailBrandChrome,
 } from "@/lib/email/tenant-email-brand";
 import { loadPublishedShortlistOverride } from "@/lib/email/workspace-templates/agent-share-templates";
 import type { EmailTemplateContentFields } from "@/lib/email/workspace-templates/types";
@@ -239,6 +239,13 @@ export async function sendShortlistEmail(
         customerId: lead.customerId,
       })
     : null;
+  const leadMail = lead.workspaceId
+    ? await resolveLeadCustomerEmailChrome({
+        workspaceId: lead.workspaceId,
+        leadId: lead.id,
+        customerId: lead.customerId,
+      })
+    : null;
   // Phase 2C-4 — published SHORTLIST only. Agent note + optional subject preserved.
   let publishedShortlist: EmailTemplateContentFields | null = null;
   if (lead.workspaceId) {
@@ -253,7 +260,7 @@ export async function sendShortlistEmail(
     note,
     listings: emailListings,
     ...preferenceFooterFields(chrome),
-    ...(tenantBrand ? toEmailBrandChrome(tenantBrand) : {}),
+    ...(leadMail?.chrome ?? {}),
     publishedShortlistTemplate: publishedShortlist,
   });
   // Explicit agent-authored subject takes precedence over template/legacy subject.
