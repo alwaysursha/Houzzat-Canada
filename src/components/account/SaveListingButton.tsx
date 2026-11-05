@@ -10,12 +10,15 @@ export function SaveListingButton({
   initiallySaved,
   signedIn: _signedIn,
   authCallbackUrl,
+  appearance,
 }: {
   mlsNumber: string;
   initiallySaved: boolean;
   /** Kept for call-site compatibility; session is read inside the toggle hook. */
   signedIn: boolean;
   authCallbackUrl?: string;
+  /** Royal Collection property toolbar. Houzzat omits this. */
+  appearance?: "royal";
 }) {
   const { saved, pending, ready, toggle } = useSavedListingToggle({
     mlsNumber,
@@ -30,10 +33,18 @@ export function SaveListingButton({
       size="sm"
       disabled={pending || !ready}
       onClick={() => void toggle()}
-      className={cn(saved && "border-canopy text-canopy")}
+      className={cn(saved && appearance !== "royal" && "border-canopy text-canopy")}
+      data-rc-action={appearance === "royal" ? "" : undefined}
+      data-active={appearance === "royal" && saved ? "true" : undefined}
       aria-busy={pending || !ready}
     >
-      <Heart className={cn("h-4 w-4", saved && "fill-canopy text-canopy")} />
+      <Heart
+        className={cn(
+          "h-4 w-4",
+          saved && appearance !== "royal" && "fill-canopy text-canopy",
+          appearance === "royal" && saved && "fill-[#C8A66A] text-[#C8A66A]",
+        )}
+      />
       {saved ? "Saved" : "Save listing"}
     </Button>
   );

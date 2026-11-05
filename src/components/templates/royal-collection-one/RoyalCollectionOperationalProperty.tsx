@@ -1,6 +1,10 @@
 import type { ViewingContactDefaults } from "@/components/listings/ViewingBookingModal";
 import { ListingAccessGate } from "@/components/listings/ListingAccessGate";
 import { ViewingRequestPanel } from "@/components/listings/ViewingRequestPanel";
+import {
+  RoyalCollectionPropertyActions,
+  type RoyalCollectionPropertyEngagement,
+} from "./RoyalCollectionPropertyActions";
 import { RoyalCollectionPropertyView } from "./RoyalCollectionPropertyView";
 import type { RoyalCollectionPropertyModel } from "@/lib/tenancy/templates/royal-collection-property-model";
 import styles from "./royal-property.module.css";
@@ -27,6 +31,7 @@ export function RoyalCollectionOperationalProperty({
   mlsNumber,
   canonicalPath,
   viewing,
+  engagement,
   publicShowcase = false,
   sheet = false,
 }: {
@@ -35,6 +40,7 @@ export function RoyalCollectionOperationalProperty({
   mlsNumber: string;
   canonicalPath: string;
   viewing: RoyalCollectionViewingAction | null;
+  engagement?: RoyalCollectionPropertyEngagement | null;
   /** Public synthetic inventory stays readable without a sign-in wall. */
   publicShowcase?: boolean;
   /** Listing overlay iframe. The site header is not in this frame. */
@@ -45,6 +51,11 @@ export function RoyalCollectionOperationalProperty({
       model={model}
       showDisclaimer={model.kind === "listing"}
       sheet={sheet}
+      actions={
+        engagement && model.kind === "listing" ? (
+          <RoyalCollectionPropertyActions engagement={engagement} />
+        ) : null
+      }
     >
       {viewing ? (
         <div className={styles.listingActions}>

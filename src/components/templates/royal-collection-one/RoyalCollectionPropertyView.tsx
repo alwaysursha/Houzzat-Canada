@@ -87,6 +87,7 @@ export function RoyalCollectionPropertyView({
   children,
   notice,
   trailer,
+  actions,
   showDisclaimer = false,
   sheet = false,
 }: {
@@ -96,6 +97,8 @@ export function RoyalCollectionPropertyView({
   notice?: ReactNode;
   /** Extra harness controls placed with the story, below the gallery. */
   trailer?: ReactNode;
+  /** Save, watch, and share. Rendered only on a listing, under the facts. */
+  actions?: ReactNode;
   showDisclaimer?: boolean;
   /** Overlay iframe has no site header, so the header offset would be an empty band. */
   sheet?: boolean;
@@ -136,6 +139,8 @@ export function RoyalCollectionPropertyView({
               ))}
             </dl>
           ) : null}
+
+          {model.kind === "listing" ? actions : null}
 
           <div className={styles.stage}>
             <div className={styles.story}>

@@ -15,6 +15,7 @@ export function WatchAreaButton({
   activeLabel = "Area watched",
   authCallbackUrl = "/search",
   className,
+  appearance,
 }: {
   city: string;
   community?: string;
@@ -26,6 +27,8 @@ export function WatchAreaButton({
   activeLabel?: string;
   authCallbackUrl?: string;
   className?: string;
+  /** Royal Collection property toolbar. Houzzat omits this. */
+  appearance?: "royal";
 }) {
   const { watching, pending, ready, canWatch, toggle } = useWatchAreaToggle({
     city,
@@ -42,7 +45,9 @@ export function WatchAreaButton({
       size="sm"
       disabled={pending || !canWatch || !ready}
       onClick={() => void toggle()}
-      className={cn(watching && "border-signal text-signal", className)}
+      className={cn(watching && appearance !== "royal" && "border-signal text-signal", className)}
+      data-rc-action={appearance === "royal" ? "" : undefined}
+      data-active={appearance === "royal" && watching ? "true" : undefined}
       title={
         canWatch
           ? watching
@@ -53,7 +58,11 @@ export function WatchAreaButton({
       aria-busy={pending || !ready}
     >
       <MapPin
-        className={cn("h-4 w-4", watching && "fill-signal text-signal")}
+        className={cn(
+          "h-4 w-4",
+          watching && appearance !== "royal" && "fill-signal text-signal",
+          appearance === "royal" && watching && "fill-[#C8A66A] text-[#C8A66A]",
+        )}
       />
       {pending
         ? watching

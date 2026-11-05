@@ -347,6 +347,21 @@ assert.ok(concierge.includes("(max-width: 767px)"));
 assert.ok(css.includes(".concierge"));
 assert.ok(css.includes("#071629"));
 assert.ok(css.includes("min-height: 44px"));
+const actions = read(
+  "src/components/templates/royal-collection-one/RoyalCollectionPropertyActions.tsx",
+);
+assert.ok(actions.includes("SaveListingButton"));
+assert.ok(actions.includes("WatchListingButton"));
+assert.ok(actions.includes("WatchAreaButton"));
+assert.ok(actions.includes("ShareListingButton"));
+assert.ok(actions.includes('appearance="royal"'));
+assert.ok(actions.includes("engagement.demonstration"));
+assert.ok(actions.includes("HIGH_OCTANE_DEMO_PROPERTY_NOTICE"));
+assert.equal(actions.includes("/api/saved-listings"), false);
+assert.equal(actions.includes("/api/leads"), false);
+const sticky = read("src/components/listings/ListingStickyBar.tsx");
+assert.equal(sticky.includes('appearance="royal"'), false);
+assert.equal(houzzatDetail.includes('appearance="royal"'), false);
 const below = read("src/components/site/MarketingBelowHeader.tsx");
 assert.ok(below.includes("--rc-concierge-bar"));
 

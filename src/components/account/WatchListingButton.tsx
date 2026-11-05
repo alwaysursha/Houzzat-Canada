@@ -12,6 +12,7 @@ export function WatchListingButton({
   idleLabel = "Watch",
   activeLabel = "Watching",
   authCallbackUrl,
+  appearance,
 }: {
   mlsNumber: string;
   initiallyWatching: boolean;
@@ -20,6 +21,8 @@ export function WatchListingButton({
   idleLabel?: string;
   activeLabel?: string;
   authCallbackUrl?: string;
+  /** Royal Collection property toolbar. Houzzat omits this. */
+  appearance?: "royal";
 }) {
   const { watching, pending, ready, toggle } = useWatchListingToggle({
     mlsNumber,
@@ -34,12 +37,19 @@ export function WatchListingButton({
       size="sm"
       disabled={pending || !ready}
       onClick={() => void toggle()}
-      className={cn(watching && "border-signal text-signal")}
+      className={cn(watching && appearance !== "royal" && "border-signal text-signal")}
+      data-rc-action={appearance === "royal" ? "" : undefined}
+      data-active={appearance === "royal" && watching ? "true" : undefined}
       title="Notify me of price and status changes"
       aria-busy={pending || !ready}
     >
       {watching ? (
-        <Bell className="h-4 w-4 fill-signal text-signal" />
+        <Bell
+          className={cn(
+            "h-4 w-4",
+            appearance === "royal" ? "fill-[#C8A66A] text-[#C8A66A]" : "fill-signal text-signal",
+          )}
+        />
       ) : (
         <BellOff className="h-4 w-4" />
       )}

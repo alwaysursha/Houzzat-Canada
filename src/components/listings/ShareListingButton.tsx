@@ -19,12 +19,15 @@ export function ShareListingButton({
   title,
   path,
   className,
+  appearance,
 }: {
   mlsNumber: string;
   title: string;
   /** Canonical SEO path when known (`/listing/slug/MLS`). */
   path?: string;
   className?: string;
+  /** Royal Collection property toolbar. Houzzat omits this. */
+  appearance?: "royal";
 }) {
   const siteName = useTenantDisplayName("Houzzat");
   const [shareOpen, setShareOpen] = useState(false);
@@ -62,6 +65,19 @@ export function ShareListingButton({
   const url = listingUrl(mlsNumber, path);
   const encoded = encodeURIComponent(url);
   const encodedTitle = encodeURIComponent(`${title} | ${siteName}`);
+  const royal = appearance === "royal";
+
+  async function openShare() {
+    if (royal && typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title: `${title} | ${siteName}`, url });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+    setShareOpen((open) => !open);
+  }
 
   return (
     <div ref={menuRef} className={cn("relative", className)}>
@@ -71,14 +87,22 @@ export function ShareListingButton({
         size="sm"
         aria-label="Share property"
         aria-expanded={shareOpen}
-        onClick={() => setShareOpen((open) => !open)}
+        data-rc-action={royal ? "" : undefined}
+        onClick={() => void openShare()}
       >
         <Share2 className="h-4 w-4" />
         Share
       </Button>
 
       {shareOpen ? (
-        <div className="absolute left-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
+        <div
+          className={cn(
+            "absolute left-0 top-full z-40 mt-2 w-48 overflow-hidden border py-1",
+            royal
+              ? "border-[#C8A66A] bg-[#F7F4EE] text-[#071629]"
+              : "rounded-xl border-line bg-surface shadow-lg",
+          )}
+        >
           <button
             type="button"
             onClick={() => void copyLink()}
