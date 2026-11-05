@@ -80,7 +80,7 @@ export function ShareListingButton({
   }
 
   const menuItemClass = royal
-    ? "flex w-full items-center gap-2 bg-white px-3 py-2 text-left text-sm font-medium text-[#071629] hover:bg-[#F7F4EE]"
+    ? "flex w-full items-center gap-2 bg-white px-3 py-2 text-left text-sm font-medium text-[#071629] transition-colors hover:bg-[#071629] hover:text-[#F7F4EE]"
     : "flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink hover:bg-mist";
 
   return (
@@ -106,6 +106,7 @@ export function ShareListingButton({
               ? "rounded-none border-[#C8A66A] bg-white text-[#071629] shadow-[0_16px_32px_rgb(7_22_41/0.18)]"
               : "rounded-xl border-line bg-surface shadow-lg",
           )}
+          data-rc-share-menu={royal ? "" : undefined}
         >
           <button
             type="button"
