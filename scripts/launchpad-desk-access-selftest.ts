@@ -115,7 +115,7 @@ function testBannerRemovedFromAgentLayout() {
   assert.equal(layout.includes("TeamLeaderDeskBanner"), false);
 
   const page = read("src/app/(agent)/agent/page.tsx");
-  assert.ok(page.includes("LaunchpadDeferredQuickModules"));
+  assert.ok(page.includes("LaunchpadBoard"));
   assert.ok(page.includes("resolveDeskView"));
   assert.ok(page.includes("DESK_AGENT_COOKIE"));
   assert.ok(page.includes("LaunchpadDeskIdentity"));

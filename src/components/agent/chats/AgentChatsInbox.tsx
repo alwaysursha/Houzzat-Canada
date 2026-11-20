@@ -35,7 +35,9 @@ export function AgentChatsInbox() {
   const selectedLeadId = readChatsLeadParam(searchParams);
   const [queryInput, setQueryInput] = useState("");
   const [debouncedQ, setDebouncedQ] = useState<string | null>(null);
-  const [filter, setFilter] = useState<ChatsInboxFilter>("all");
+  const [filter, setFilter] = useState<ChatsInboxFilter>(
+    searchParams.get("filter") === "unread" ? "unread" : "all",
+  );
   const [rows, setRows] = useState<ChatsInboxRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);

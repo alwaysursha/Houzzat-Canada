@@ -119,11 +119,16 @@ export async function loadDeskActivityFeed(input: {
   ctx: AgentOrgContext;
   category?: DeskActivityCategory;
   take?: number;
+  /** When set, skip a second desk-cookie read and use this desk. */
+  deskAgentId?: string | null;
 }): Promise<DeskActivityItem[]> {
   const take = Math.min(Math.max(input.take ?? 60, 1), 120);
   const category = input.category ?? "all";
-  const desk = await resolveDeskView(input.ctx);
-  const leadWhere = leadWhereForDesk(input.ctx, desk.deskAgentId);
+  const deskAgentId =
+    input.deskAgentId !== undefined
+      ? input.deskAgentId
+      : (await resolveDeskView(input.ctx)).deskAgentId;
+  const leadWhere = leadWhereForDesk(input.ctx, deskAgentId);
 
   const leads = await prisma.lead.findMany({
     where: leadWhere,

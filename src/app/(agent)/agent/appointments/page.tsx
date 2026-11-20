@@ -73,8 +73,9 @@ export default async function AgentAppointmentsPage({
         ) : (
           appointments.map((a) => (
             <li
+              id={a.id}
               key={a.id}
-              className="rounded-2xl border border-line/80 bg-surface/90 p-4 shadow-[0_1px_0_rgb(20_32_28/0.03)]"
+              className="scroll-mt-24 rounded-2xl border border-line/80 bg-surface/90 p-4 shadow-[0_1px_0_rgb(20_32_28/0.03)]"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>

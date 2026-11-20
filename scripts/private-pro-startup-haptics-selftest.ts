@@ -33,8 +33,8 @@ function testLaunchpadRouteConfirmed() {
   assert.equal(PRIVATE_PRO_DEFAULT_LANDING_PATH, "/agent");
   const page = read("src/app/(agent)/agent/page.tsx");
   assert.ok(page.includes('title: "Launchpad · Agent CRM"'));
-  assert.ok(page.includes("LaunchpadDeferredQuickModules"));
-  assert.ok(page.includes("Quick Modules"));
+  assert.ok(page.includes("LaunchpadBoard"));
+  assert.ok(page.includes("Appointment Requests") || read("src/components/agent/LaunchpadBoard.tsx").includes("Appointment Requests"));
   const modules = read("src/components/agent/QuickModulesPanel.tsx");
   assert.ok(modules.includes("Call New Leads"));
   assert.ok(modules.includes("Online Leads"));

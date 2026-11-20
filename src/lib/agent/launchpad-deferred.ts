@@ -170,9 +170,13 @@ export async function loadLaunchpadUnreadMessages(ctx: AgentOrgContext): Promise
 /** Request-cached so Hot card + Quick Modules share one hotness pass (same ctx ref). */
 export const loadLaunchpadHotLeads = cache(async function loadLaunchpadHotLeads(
   ctx: AgentOrgContext,
+  focusAgentId?: string | null,
 ) {
   const recentLeads = await prisma.lead.findMany({
-    where: leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine"),
+    where:
+      focusAgentId === undefined
+        ? leadScopeWhere(ctx, ctx.canSeeTeamLeads ? "team" : "mine")
+        : leadWhereForDesk(ctx, focusAgentId),
     orderBy: { updatedAt: "desc" },
     take: HOT_CANDIDATE_TAKE,
     select: {
@@ -242,6 +246,7 @@ export async function loadLaunchpadContactRequested(input: {
         select: {
           name: true,
           email: true,
+          phone: true,
           emailVerified: true,
           createdAt: true,
         },
@@ -274,6 +279,7 @@ export async function loadLaunchpadContactRequested(input: {
         ? {
             name: lead.customer.name,
             email: lead.customer.email,
+            phone: lead.customer.phone,
             ...displayedCrmClassification(lead),
             emailVerified: Boolean(lead.customer.emailVerified),
             createdAt: lead.customer.createdAt.toISOString(),

@@ -59,7 +59,11 @@ export default async function AgentTasksPage() {
         { title: "Overdue", items: overdue },
         { title: "Upcoming", items: upcoming },
       ].map((group) => (
-        <section key={group.title} className="space-y-3">
+        <section
+          key={group.title}
+          id={group.title === "Overdue" ? "overdue" : "upcoming-tasks"}
+          className="scroll-mt-24 space-y-3"
+        >
           <h2 className="font-display text-xl text-ink">
             {group.title} · {group.items.length}
           </h2>
@@ -71,8 +75,9 @@ export default async function AgentTasksPage() {
             ) : (
               group.items.map((task) => (
                 <li
+                  id={task.id}
                   key={task.id}
-                  className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                  className="flex scroll-mt-24 flex-wrap items-center justify-between gap-3 px-4 py-3"
                 >
                   <div>
                     <p className="text-sm font-semibold text-ink">{task.title}</p>
