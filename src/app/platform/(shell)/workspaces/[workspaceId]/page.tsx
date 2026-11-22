@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlatformDetailGrid, PlatformSection } from "@/components/platform/PlatformDetailGrid";
 import { PlatformItsoListingSources } from "@/components/platform/PlatformItsoListingSources";
+import { PlatformManualOnboarding } from "@/components/platform/PlatformManualOnboarding";
 import { PlatformOwnerActivationActions } from "@/components/platform/PlatformOwnerActivationActions";
 import { PlatformWorkspaceActions } from "@/components/platform/PlatformWorkspaceActions";
 import {
@@ -82,6 +83,17 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
       />
 
       <div className="space-y-6">
+        <PlatformManualOnboarding
+          workspaceId={str(workspace.id)}
+          indicators={asArray(workspace.manualOnboarding).map((item) => ({
+            label: str(item.label),
+            value: str(item.value),
+          }))}
+          offerId={
+            typeof workspace.preparedOfferId === "string" ? workspace.preparedOfferId : null
+          }
+        />
+
         <PlatformOwnerActivationActions
           workspaceId={str(workspace.id)}
           canSendOwnerActivation={Boolean(workspace.canSendOwnerActivation)}

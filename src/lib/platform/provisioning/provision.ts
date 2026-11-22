@@ -13,6 +13,7 @@ import type {
   ProvisioningRun,
 } from "@prisma/client";
 import { tryAutoSendOwnerActivationAfterProvision } from "@/lib/platform/activation";
+import { ownerActivationSuppressedForPreparedPayment } from "@/lib/platform/onboarding/prepared-workspace";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import {
   PROVISIONING_AUDIT,
@@ -62,6 +63,14 @@ async function maybeAutoSendOwnerActivation(input: {
       result.outcome !== "already_succeeded") ||
     !result.workspaceId
   ) {
+    return result;
+  }
+
+  const subscription = await input.prisma.subscription.findUnique({
+    where: { id: input.subscriptionId },
+    select: { commercialSnapshotJson: true },
+  });
+  if (ownerActivationSuppressedForPreparedPayment(subscription?.commercialSnapshotJson)) {
     return result;
   }
 

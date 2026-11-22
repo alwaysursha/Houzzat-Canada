@@ -101,7 +101,7 @@ export function PlatformOwnerActivationActions({
             onClick={() => void sendActivation()}
             className="rounded-lg border border-emerald-800/70 bg-emerald-950/30 px-4 py-2 text-sm font-medium text-emerald-100 hover:bg-emerald-950/50 disabled:opacity-60"
           >
-            {submitting ? "Sending…" : "Send Activation Email"}
+            {submitting ? "Sending…" : "Send Owner Activation"}
           </button>
         ) : (
           <p className="text-sm text-slate-400">

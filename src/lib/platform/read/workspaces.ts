@@ -6,6 +6,7 @@ import {
 } from "@/lib/platform/api/pagination";
 import { getWorkspaceSeatConsumption } from "@/lib/platform/seats";
 import { evaluateOwnerActivationEligibility } from "@/lib/platform/activation";
+import { deriveManualOnboardingIndicators } from "@/lib/platform/onboarding/manual-tenant";
 import {
   serializeBillingCustomerSummary,
   serializeBranding,
@@ -169,6 +170,13 @@ export async function getPlatformWorkspaceDetail(workspaceId: string) {
         orderBy: { createdAt: "desc" },
         take: 50,
       },
+      commercialOffers: {
+        where: {
+          status: { in: ["DRAFT", "SENT", "VIEWED", "ACCEPTED"] },
+        },
+        select: { id: true },
+        take: 1,
+      },
       provisioningRuns: {
         orderBy: { createdAt: "desc" },
         take: 20,
@@ -221,6 +229,11 @@ export async function getPlatformWorkspaceDetail(workspaceId: string) {
     brandingDetail: serializeBranding(workspace.branding),
     canSendOwnerActivation: activationEligibility.eligible,
     ownerActivationEligibilityReason: activationEligibility.reason,
+    manualOnboarding: await deriveManualOnboardingIndicators({
+      prisma,
+      workspaceId: workspace.id,
+    }),
+    preparedOfferId: workspace.commercialOffers[0]?.id ?? null,
   };
 }
 

@@ -116,6 +116,7 @@ function buildCommercialSnapshot(input: {
   trialDays: number | null;
   recurringTotalCents: number;
   oneTimeTotalCents: number;
+  preparedWorkspaceId?: string | null;
   lineItems: Array<{
     kind: string;
     code: string;
@@ -142,6 +143,7 @@ function buildCommercialSnapshot(input: {
     recurringTotalCents: input.recurringTotalCents,
     oneTimeTotalCents: input.oneTimeTotalCents,
     lineItems: input.lineItems,
+    preparedWorkspaceId: input.preparedWorkspaceId ?? null,
   };
 }
 
@@ -562,6 +564,7 @@ export async function createCheckoutForAcceptedOffer(
     trialDays: offer.trialDays,
     recurringTotalCents: amounts.recurringTotalCents,
     oneTimeTotalCents: amounts.oneTimeTotalCents,
+    preparedWorkspaceId: offer.workspaceId,
     lineItems: offer.lineItems.map((item) => ({
       kind: item.kind,
       code: item.code,

@@ -16,6 +16,11 @@ import type {
   WorkspaceStatus,
 } from "@prisma/client";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
+import {
+  placeholderSubscriptionCanBeSuperseded,
+  selectProvisionWorkspaceTarget,
+  workspaceStatusAfterPaidProvision,
+} from "@/lib/platform/onboarding/prepared-workspace";
 import { seedOwnerServiceAreasFromProspect } from "@/lib/agent/service-areas-store";
 import { provisioningPhoneSeedFromProspect } from "@/lib/platform/activation/sync-owner-canonical-profile";
 import {
@@ -255,19 +260,23 @@ async function stepValidateSubscription(ctx: StepContext): Promise<void> {
 }
 
 async function stepCreateWorkspace(ctx: StepContext): Promise<void> {
-  if (ctx.run.workspaceId) {
+  const target = selectProvisionWorkspaceTarget({
+    runWorkspaceId: ctx.run.workspaceId,
+    subscriptionWorkspaceId: ctx.subscription.workspaceId,
+    offerWorkspaceId: ctx.subscription.offer?.workspaceId ?? null,
+  });
+  if (target.kind === "conflict") {
+    throw new Error("Prepared workspace does not match the subscription workspace");
+  }
+  if (target.kind === "existing") {
     const existing = await ctx.db.workspace.findUnique({
-      where: { id: ctx.run.workspaceId },
+      where: { id: target.workspaceId },
       select: { id: true },
     });
-    if (existing) {
-      ctx.workspaceId = existing.id;
-      return;
+    if (!existing) {
+      throw new Error("Prepared workspace is missing");
     }
-  }
-
-  if (ctx.subscription.workspaceId) {
-    ctx.workspaceId = ctx.subscription.workspaceId;
+    ctx.workspaceId = existing.id;
     if (ctx.run.workspaceId !== ctx.workspaceId) {
       await ctx.db.provisioningRun.update({
         where: { id: ctx.run.id },
@@ -343,7 +352,32 @@ async function stepLinkSubscription(ctx: StepContext): Promise<void> {
     workspace.currentSubscriptionId &&
     workspace.currentSubscriptionId !== ctx.subscription.id
   ) {
-    throw new Error("Workspace already has a different currentSubscriptionId");
+    const current = await ctx.db.subscription.findUnique({
+      where: { id: workspace.currentSubscriptionId },
+      select: {
+        id: true,
+        source: true,
+        stripeSubscriptionId: true,
+        stripeCheckoutSessionId: true,
+      },
+    });
+    const preparedForThisWorkspace =
+      ctx.subscription.offer?.workspaceId === ctx.workspaceId;
+    if (
+      !current ||
+      !preparedForThisWorkspace ||
+      !placeholderSubscriptionCanBeSuperseded(current)
+    ) {
+      throw new Error("Workspace already has a different currentSubscriptionId");
+    }
+    await ctx.db.subscription.update({
+      where: { id: current.id },
+      data: { status: "CANCELLED" },
+    });
+    await ctx.db.workspace.update({
+      where: { id: workspace.id },
+      data: { currentSubscriptionId: ctx.subscription.id },
+    });
   }
 
   if (!workspace.currentSubscriptionId) {
@@ -365,6 +399,23 @@ async function stepLinkSubscription(ctx: StepContext): Promise<void> {
 
   const billing = ctx.subscription.billingCustomer;
   if (!billing.workspaceId) {
+    const occupying = await ctx.db.billingCustomer.findUnique({
+      where: { workspaceId: ctx.workspaceId },
+      select: { id: true, source: true, stripeCustomerId: true },
+    });
+    if (occupying && occupying.id !== billing.id) {
+      const preparedForThisWorkspace =
+        ctx.subscription.offer?.workspaceId === ctx.workspaceId;
+      const placeholder =
+        occupying.source === "INTERNAL" && occupying.stripeCustomerId == null;
+      if (!preparedForThisWorkspace || !placeholder) {
+        throw new Error("BillingCustomer already linked to a different workspace");
+      }
+      await ctx.db.billingCustomer.update({
+        where: { id: occupying.id },
+        data: { workspaceId: null },
+      });
+    }
     await ctx.db.billingCustomer.update({
       where: { id: billing.id },
       data: { workspaceId: ctx.workspaceId },
@@ -388,6 +439,19 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
   );
   if (!acceptedEmail.includes("@")) {
     throw new Error("Owner email invalid");
+  }
+
+  if (ctx.subscription.offer?.workspaceId === ctx.workspaceId) {
+    const owners = await ctx.db.workspaceMember.findMany({
+      where: { workspaceId: ctx.workspaceId, role: "OWNER", status: "ACTIVE" },
+      select: { user: { select: { email: true } } },
+    });
+    if (
+      owners.length > 0 &&
+      !owners.some((member) => member.user.email.trim().toLowerCase() === acceptedEmail)
+    ) {
+      throw new Error("Prepared workspace owner does not match the accepted offer");
+    }
   }
 
   const contactName =
@@ -839,14 +903,16 @@ async function stepMaterializeAddOns(ctx: StepContext): Promise<void> {
 async function stepMarkWorkspaceActive(ctx: StepContext): Promise<void> {
   if (!ctx.workspaceId) throw new Error("workspaceId required");
 
-  const targetStatus: WorkspaceStatus =
-    ctx.subscription.status === "TRIALING" ? "TRIAL" : "ACTIVE";
-
   const workspace = await ctx.db.workspace.findUnique({
     where: { id: ctx.workspaceId },
     select: { id: true, status: true },
   });
   if (!workspace) throw new Error("Workspace missing");
+
+  const targetStatus: WorkspaceStatus = workspaceStatusAfterPaidProvision({
+    currentStatus: workspace.status,
+    subscriptionStatus: ctx.subscription.status,
+  });
 
   if (workspace.status === targetStatus) return;
 

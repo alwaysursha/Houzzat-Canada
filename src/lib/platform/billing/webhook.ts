@@ -21,6 +21,7 @@ import {
 } from "@/lib/platform/billing/constants";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { readStripeWebhookSecret } from "@/lib/platform/billing/stripe-env";
+import { checkoutCompletionIsDuplicate } from "@/lib/platform/onboarding/prepared-workspace";
 import { tryProvisionAfterBillingActivation } from "@/lib/platform/provisioning";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
@@ -231,11 +232,13 @@ async function reconcileCheckoutCompleted(input: {
         ? subscriptionRow.status
         : "PENDING_PAYMENT";
 
-  const alreadyComplete =
-    (subscriptionRow.status === "ACTIVE" ||
-      subscriptionRow.status === "TRIALING") &&
-    subscriptionRow.stripeSubscriptionId === stripeSubscriptionId &&
-    subscriptionRow.stripeCheckoutSessionId === input.session.id;
+  const alreadyComplete = checkoutCompletionIsDuplicate({
+    status: subscriptionRow.status,
+    stripeSubscriptionId: subscriptionRow.stripeSubscriptionId,
+    stripeCheckoutSessionId: subscriptionRow.stripeCheckoutSessionId,
+    incomingSubscriptionId: stripeSubscriptionId,
+    incomingSessionId: input.session.id,
+  });
 
   if (stripeCustomerId && !subscriptionRow.billingCustomer.stripeCustomerId) {
     await input.db.billingCustomer.update({
