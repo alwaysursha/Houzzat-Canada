@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PlatformDetailGrid, PlatformSection } from "@/components/platform/PlatformDetailGrid";
 import { PlatformItsoListingSources } from "@/components/platform/PlatformItsoListingSources";
+import { PlatformCustomDomain } from "@/components/platform/PlatformCustomDomain";
 import { PlatformManualOnboarding } from "@/components/platform/PlatformManualOnboarding";
 import { PlatformOwnerActivationActions } from "@/components/platform/PlatformOwnerActivationActions";
 import { PlatformWorkspaceActions } from "@/components/platform/PlatformWorkspaceActions";
@@ -92,6 +93,16 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
           offerId={
             typeof workspace.preparedOfferId === "string" ? workspace.preparedOfferId : null
           }
+        />
+
+        <PlatformCustomDomain
+          workspaceId={str(workspace.id)}
+          existingHostnames={asArray(workspace.domains).map((domain) => ({
+            hostname: str(domain.hostname),
+            kind: str(domain.kind),
+            role: str(domain.role),
+            status: str(domain.status),
+          }))}
         />
 
         <PlatformOwnerActivationActions
