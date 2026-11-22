@@ -11,7 +11,10 @@ import {
   highOctaneDevelopmentListingDetail,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
-import { decideHighOctanePublicShowcase } from "@/lib/tenancy/templates/high-octane-public-showcase";
+import {
+  decideHighOctanePublicShowcase,
+  highOctaneSyntheticListingsAllowed,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { isHighOctaneStagingSnapshotDataSource } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 
 type Params = { params: Promise<{ mlsNumber: string }> };
@@ -40,7 +43,8 @@ export async function GET(request: Request, { params }: Params) {
       authorities: context.entitlement.authorities,
     });
     const detail =
-      development.serveFixtures || showcase.serve
+      highOctaneSyntheticListingsAllowed() &&
+      (development.serveFixtures || showcase.serve)
         ? highOctaneDevelopmentListingDetail(raw)
         : null;
     if (!detail) {

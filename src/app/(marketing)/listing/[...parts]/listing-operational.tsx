@@ -30,7 +30,11 @@ import {
   highOctaneDevelopmentListingDetail,
   isHighOctaneDevelopmentListingMls,
 } from "@/lib/tenancy/templates/high-octane-development-listings";
-import { decideHighOctanePublicShowcase } from "@/lib/tenancy/templates/high-octane-public-showcase";
+import {
+  decideHighOctanePublicShowcase,
+  highOctaneMustHideSyntheticListing,
+  highOctaneSyntheticListingsAllowed,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
 import { absoluteUrlForOrigin } from "@/lib/tenancy/resolve-trusted-request-origin";
 import { buildTenantPublicPageMetadata } from "@/lib/tenancy/tenant-seo";
@@ -101,7 +105,19 @@ const loadListingByMlsCached = cache(async (mlsNumber: string) => {
     entitlementFilteringEnabled: true,
     stagingSnapshotVisible: access.stagingSnapshotVisible,
   });
+  if (
+    listing &&
+    highOctaneMustHideSyntheticListing({
+      workspaceSlug: access.workspaceSlug,
+      mlsNumber: listing.mlsNumber,
+      dataSource: listing.dataSource,
+      isMock: listing.isMock,
+    })
+  ) {
+    return null;
+  }
   if (listing || !isHighOctaneDevelopmentListingMls(mlsNumber)) return listing;
+  if (!highOctaneSyntheticListingsAllowed()) return null;
   const showcase = decideHighOctanePublicShowcase({
     workspaceSlug: access.workspaceSlug,
     authorities: access.entitlement.authorities,

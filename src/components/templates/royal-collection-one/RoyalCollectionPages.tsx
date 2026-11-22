@@ -227,6 +227,7 @@ function CommunityGuidePage({
           placeName={guide.name}
           searchHref={guide.searchHref}
           actionsDisabled={view.actionsDisabled}
+          quietCollection={view.listingDisclosure === "unconnected" && view.communityGuides}
         />
         <div className={styles.placeActions}>
           <RoyalCollectionPreviewLink

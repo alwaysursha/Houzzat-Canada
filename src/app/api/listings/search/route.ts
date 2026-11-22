@@ -19,7 +19,11 @@ import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listin
 import { isHighOctaneStagingSnapshotVisible } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
 import { loadHighOctaneDevelopmentListingAccessForRequest } from "@/lib/tenancy/templates/high-octane-development-listing-access";
 import { searchHighOctaneDevelopmentListings } from "@/lib/tenancy/templates/high-octane-development-listings";
-import { decideHighOctanePublicShowcase } from "@/lib/tenancy/templates/high-octane-public-showcase";
+import {
+  decideHighOctanePublicShowcase,
+  highOctaneSyntheticListingsAllowed,
+  omitHighOctaneSyntheticListings,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -189,7 +193,10 @@ export async function GET(request: Request) {
     workspaceSlug,
     authorities: entitlement.authorities,
   });
-  if (developmentAccess.serveFixtures || publicShowcase.serve) {
+  if (
+    highOctaneSyntheticListingsAllowed() &&
+    (developmentAccess.serveFixtures || publicShowcase.serve)
+  ) {
     const items = searchHighOctaneDevelopmentListings(searchParamsBody);
     return NextResponse.json(
       {
@@ -260,5 +267,11 @@ export async function GET(request: Request) {
     result.items = result.items.map((item) => ({ ...item, soldPrice: null }));
   }
 
-  return NextResponse.json({ ...result, requiresAuth: false });
+  const visibleItems = omitHighOctaneSyntheticListings(workspaceSlug, result.items);
+  return NextResponse.json({
+    ...result,
+    items: visibleItems,
+    total: visibleItems.length === result.items.length ? result.total : visibleItems.length,
+    requiresAuth: false,
+  });
 }

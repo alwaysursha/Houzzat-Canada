@@ -11,6 +11,7 @@ import {
   excludeStagingSnapshotWhere,
   stagingSnapshotInventoryWhere,
 } from "@/lib/tenancy/templates/high-octane-staging-snapshot";
+import { omitHighOctaneSyntheticListings } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { hasClientAccess } from "@/lib/vow";
 
@@ -102,5 +103,10 @@ export async function GET(request: Request) {
       return card;
     });
 
-  return NextResponse.json({ items });
+  const workspaceSlug = context.resolution.ok
+    ? context.resolution.host.workspaceSlug
+    : null;
+  return NextResponse.json({
+    items: omitHighOctaneSyntheticListings(workspaceSlug, items),
+  });
 }

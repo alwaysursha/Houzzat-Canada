@@ -22,6 +22,7 @@ import royalCollectionStyles from "@/components/templates/royal-collection-one/r
 import { TeamSignatureHeader } from "@/components/templates/team-signature/TeamSignatureHeader";
 import { OwnerTemplatePreviewBar } from "@/components/templates/OwnerTemplatePreviewBar";
 import { TemplatePresentationProvider } from "@/components/templates/TemplatePresentationProvider";
+import { HIGH_OCTANE_STAGING_WORKSPACE_SLUG } from "@/lib/tenancy/templates/high-octane-staging-slug";
 import { suggestedCitiesForLocation } from "@/lib/geo/regions";
 import {
   isAgentSignatureTemplateId,
@@ -224,7 +225,13 @@ export default async function MarketingLayout({
 
   return (
     <TenantBrandProvider brand={chromeBrand}>
-      <TemplatePresentationProvider templateId={chromeBrand.templateId}>
+      <TemplatePresentationProvider
+        templateId={chromeBrand.templateId}
+        quietCollection={
+          chromeBrand.workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG &&
+          chromeBrand.authorizedListingSource !== true
+        }
+      >
         <TenantThemeStyle
           colors={chromeBrand.colors}
           isHouzzatWorkspace={chromeBrand.isHouzzatWorkspace}

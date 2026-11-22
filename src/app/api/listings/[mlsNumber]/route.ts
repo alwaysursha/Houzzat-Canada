@@ -13,6 +13,7 @@ import {
   evaluateWebListingDetailInventoryAccess,
   resolveListingEntitlementContextForRequest,
 } from "@/lib/tenancy/listing-entitlement";
+import { highOctaneMustHideSyntheticListing } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { vowAccountRequiredError } from "@/lib/vow";
 import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
@@ -37,6 +38,12 @@ export async function GET(request: Request, { params }: Params) {
 
   // Never trust client workspaceId / org / provider / SAK.
   const context = await resolveListingEntitlementContextForRequest(request);
+  const workspaceSlug = context.resolution.ok
+    ? context.resolution.host.workspaceSlug
+    : null;
+  if (highOctaneMustHideSyntheticListing({ workspaceSlug, mlsNumber })) {
+    return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  }
   const { entitlement } = context;
   const stagingSnapshotVisible = stagingSnapshotVisibleFromResolution(
     context.resolution,
@@ -45,7 +52,15 @@ export async function GET(request: Request, { params }: Params) {
   const provider = getListingProvider();
   const listing = await provider.getByMls(mlsNumber);
 
-  if (!listing) {
+  if (
+    !listing ||
+    highOctaneMustHideSyntheticListing({
+      workspaceSlug,
+      mlsNumber: listing.mlsNumber,
+      dataSource: listing.dataSource,
+      isMock: listing.isMock,
+    })
+  ) {
     return NextResponse.json({ error: "Listing not found" }, { status: 404 });
   }
 

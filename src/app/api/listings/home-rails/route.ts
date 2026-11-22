@@ -15,6 +15,8 @@ import { searchHighOctaneDevelopmentListings } from "@/lib/tenancy/templates/hig
 import {
   decideHighOctanePublicShowcase,
   HIGH_OCTANE_PUBLIC_SHOWCASE_FEATURED_COUNT,
+  highOctaneSyntheticListingsAllowed,
+  omitHighOctaneSyntheticListings,
 } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { typesenseHomeRails } from "@/lib/typesense/search";
 import { hasClientAccess } from "@/lib/vow";
@@ -77,7 +79,10 @@ export async function GET(request: Request) {
     workspaceSlug,
     authorities: entitlement.authorities,
   });
-  if (developmentAccess.serveFixtures || publicShowcase.serve) {
+  if (
+    highOctaneSyntheticListingsAllowed() &&
+    (developmentAccess.serveFixtures || publicShowcase.serve)
+  ) {
     const featuredLimit = publicShowcase.serve
       ? Math.max(limit, HIGH_OCTANE_PUBLIC_SHOWCASE_FEATURED_COUNT)
       : limit;
@@ -225,11 +230,11 @@ export async function GET(request: Request) {
 
   return NextResponse.json(
     {
-      newListings: rails.newListings,
-      openHouses: rails.openHouses,
-      sold,
-      forLease: rails.forLease,
-      commercial: rails.commercial,
+      newListings: omitHighOctaneSyntheticListings(workspaceSlug, rails.newListings),
+      openHouses: omitHighOctaneSyntheticListings(workspaceSlug, rails.openHouses),
+      sold: omitHighOctaneSyntheticListings(workspaceSlug, sold),
+      forLease: omitHighOctaneSyntheticListings(workspaceSlug, rails.forLease),
+      commercial: omitHighOctaneSyntheticListings(workspaceSlug, rails.commercial),
     },
     {
       headers: homeRailsCacheHeaders(isClient),

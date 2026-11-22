@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { ListingPhoto } from "@/components/listings/ListingPhoto";
 import { ListingLink } from "@/components/listings/ListingLink";
 import { citiesQueryParam } from "@/lib/geo/regions";
@@ -14,7 +15,13 @@ import {
 import { listingPath } from "@/lib/listings/listing-path";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } from "@/lib/tenancy/templates/high-octane-development-listings";
-import { HIGH_OCTANE_DEMO_CARD_LABEL } from "@/lib/tenancy/templates/high-octane-public-showcase";
+import {
+  HIGH_OCTANE_COLLECTION_CONTACT_HREF,
+  HIGH_OCTANE_COLLECTION_CONTACT_LABEL,
+  HIGH_OCTANE_COLLECTION_EMPTY_BODY,
+  HIGH_OCTANE_COLLECTION_EMPTY_TITLE,
+  HIGH_OCTANE_DEMO_CARD_LABEL,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import styles from "./royal-collection.module.css";
 
@@ -29,11 +36,13 @@ export function RoyalCollectionCommunityListings({
   placeName,
   searchHref,
   actionsDisabled,
+  quietCollection = false,
 }: {
   city: string;
   placeName: string;
   searchHref: string;
   actionsDisabled: boolean;
+  quietCollection?: boolean;
 }) {
   const [items, setItems] = useState<ListingCardData[] | null>(actionsDisabled ? [] : null);
 
@@ -93,7 +102,20 @@ export function RoyalCollectionCommunityListings({
         </div>
       ) : items.length === 0 ? (
         <div className={styles.featureEmpty}>
-          <p>No homes are published in {placeName} on this site yet.</p>
+          {quietCollection ? (
+            <>
+              <h3 className={styles.featureEmptyTitle}>{HIGH_OCTANE_COLLECTION_EMPTY_TITLE}</h3>
+              <p className={styles.featureEmptyCopy}>{HIGH_OCTANE_COLLECTION_EMPTY_BODY}</p>
+              <Link
+                href={HIGH_OCTANE_COLLECTION_CONTACT_HREF}
+                className={`${styles.button} ${styles.buttonEmerald} ${styles.featureEmptyAction}`}
+              >
+                {HIGH_OCTANE_COLLECTION_CONTACT_LABEL}
+              </Link>
+            </>
+          ) : (
+            <p>No homes are published in {placeName} on this site yet.</p>
+          )}
         </div>
       ) : (
         <div className={styles.featureGrid}>

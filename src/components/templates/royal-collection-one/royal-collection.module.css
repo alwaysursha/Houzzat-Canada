@@ -1214,6 +1214,30 @@
   margin: 0;
 }
 
+.featureEmptyTitle {
+  margin: 0;
+  font-family: var(--rc-serif);
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.featureEmptyCopy {
+  margin-top: 14px;
+  max-width: 38rem;
+  color: var(--rc-ink-soft, #6d6458);
+  font-family: var(--rc-sans, inherit);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.7;
+}
+
+.featureEmptyAction {
+  margin-top: 22px;
+}
+
 .featureCard,
 .card {
   display: flex;

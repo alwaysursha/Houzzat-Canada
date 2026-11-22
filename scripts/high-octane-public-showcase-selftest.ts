@@ -7,9 +7,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  HIGH_OCTANE_COLLECTION_EMPTY_BODY,
+  HIGH_OCTANE_COLLECTION_EMPTY_TITLE,
   HIGH_OCTANE_DEMO_CARD_LABEL,
   HIGH_OCTANE_DEMO_PROPERTY_NOTICE,
   decideHighOctanePublicShowcase,
+  highOctaneMustHideSyntheticListing,
+  highOctaneSyntheticListingsAllowed,
+  omitHighOctaneSyntheticListings,
 } from "../src/lib/tenancy/templates/high-octane-public-showcase";
 import {
   decideHighOctaneDevelopmentListingAccess,
@@ -46,12 +51,59 @@ assert.equal(
   false,
 );
 
+const developmentEnv = {
+  NODE_ENV: "development",
+  VERCEL_ENV: "development",
+};
 const showcase = decideHighOctanePublicShowcase({
   workspaceSlug: slug,
   authorities: [],
+  env: developmentEnv,
 });
 assert.equal(showcase.serve, true);
 assert.equal(showcase.ownActiveListings, false);
+assert.equal(highOctaneSyntheticListingsAllowed(productionEnv), false);
+assert.equal(
+  decideHighOctanePublicShowcase({
+    workspaceSlug: slug,
+    authorities: [],
+    env: productionEnv,
+  }).serve,
+  false,
+);
+assert.equal(
+  highOctaneMustHideSyntheticListing({
+    workspaceSlug: slug,
+    mlsNumber: "ITSODEMO1001",
+    env: productionEnv,
+  }),
+  true,
+);
+assert.equal(
+  highOctaneMustHideSyntheticListing({
+    workspaceSlug: "houzzat",
+    mlsNumber: "ITSODEMO1001",
+    isMock: true,
+    env: productionEnv,
+  }),
+  false,
+);
+assert.deepEqual(
+  omitHighOctaneSyntheticListings(
+    slug,
+    [
+      { mlsNumber: "ITSODEMO1001", isMock: true, dataSource: "high-octane-development" },
+      { mlsNumber: "W123", isMock: false, dataSource: "mls" },
+    ],
+    productionEnv,
+  ).map((card) => card.mlsNumber),
+  ["W123"],
+);
+assert.equal(HIGH_OCTANE_COLLECTION_EMPTY_TITLE, "Discover Exceptional Homes");
+assert.equal(
+  HIGH_OCTANE_COLLECTION_EMPTY_BODY.includes("Niagara Region"),
+  true,
+);
 
 assert.equal(
   decideHighOctanePublicShowcase({

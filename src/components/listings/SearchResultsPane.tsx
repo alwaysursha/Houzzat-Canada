@@ -1,9 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import type { ListingCard as ListingCardData } from "@/lib/listings/types";
 import { SearchResultCard } from "@/components/listings/SearchResultCard";
 import { SearchResultsHeading } from "@/components/listings/SearchResultsContext";
+import { useTemplatePresentation } from "@/components/templates/TemplatePresentationProvider";
+import {
+  HIGH_OCTANE_COLLECTION_CONTACT_HREF,
+  HIGH_OCTANE_COLLECTION_CONTACT_LABEL,
+  HIGH_OCTANE_COLLECTION_EMPTY_BODY,
+  HIGH_OCTANE_COLLECTION_EMPTY_TITLE,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { cn } from "@/lib/utils";
 
 export type SearchEmptyAction = {
@@ -60,6 +68,9 @@ export function SearchResultsPane({
   headingTrailing?: ReactNode;
   mobileChatClearance?: boolean;
 }) {
+  const presentation = useTemplatePresentation();
+  const quietCollection =
+    emptyPresentation === "royal" && presentation.quietCollection === true;
   return (
     <div
       className="h-full overflow-y-auto overscroll-contain bg-mist/50"
@@ -142,9 +153,11 @@ export function SearchResultsPane({
                   : undefined
               }
             >
-              {emptyPresentation === "royal"
-                ? "The collection is quiet."
-                : "No listings match this search."}
+              {quietCollection
+                ? HIGH_OCTANE_COLLECTION_EMPTY_TITLE
+                : emptyPresentation === "royal"
+                  ? "The collection is quiet."
+                  : "No listings match this search."}
             </p>
             <p
               className={cn(
@@ -152,11 +165,21 @@ export function SearchResultsPane({
                 emptyPresentation === "royal" && "mt-3 text-[15px] leading-7 text-[#6d6458]",
               )}
             >
-              {emptyPresentation === "royal"
-                ? "No homes are published for this search yet. Listing inventory appears only after an authorized source is connected."
-                : emptyHint}
+              {quietCollection
+                ? HIGH_OCTANE_COLLECTION_EMPTY_BODY
+                : emptyPresentation === "royal"
+                  ? "No homes are published for this search yet. Listing inventory appears only after an authorized source is connected."
+                  : emptyHint}
             </p>
-            {emptyActions && emptyActions.length > 0 ? (
+            {quietCollection ? (
+              <Link
+                href={HIGH_OCTANE_COLLECTION_CONTACT_HREF}
+                className="mt-5 inline-flex h-12 items-center justify-center bg-[#071629] px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#c8a66a] hover:bg-[#0b1f3a]"
+              >
+                {HIGH_OCTANE_COLLECTION_CONTACT_LABEL}
+              </Link>
+            ) : null}
+            {!quietCollection && emptyActions && emptyActions.length > 0 ? (
               <div className="mt-4 flex flex-col items-stretch gap-2 sm:mt-5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
                 {emptyActions.map((action) => (
                   <button

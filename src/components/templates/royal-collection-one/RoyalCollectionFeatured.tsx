@@ -19,7 +19,13 @@ import { ROYAL_COLLECTION_ONE_TEMPLATE_ID } from "@/lib/tenancy/templates/types"
 import { RoyalCollectionPreviewLink } from "./RoyalCollectionPreviewLink";
 import { RoyalCollectionReveal } from "./RoyalCollectionReveal";
 import { takeRoyalFeaturedListings } from "./royal-featured-listings";
-import { HIGH_OCTANE_DEMO_CARD_LABEL } from "@/lib/tenancy/templates/high-octane-public-showcase";
+import {
+  HIGH_OCTANE_COLLECTION_CONTACT_HREF,
+  HIGH_OCTANE_COLLECTION_CONTACT_LABEL,
+  HIGH_OCTANE_COLLECTION_EMPTY_BODY,
+  HIGH_OCTANE_COLLECTION_EMPTY_TITLE,
+  HIGH_OCTANE_DEMO_CARD_LABEL,
+} from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { HIGH_OCTANE_DEVELOPMENT_LISTING_SOURCE } from "@/lib/tenancy/templates/high-octane-development-listings";
 import styles from "./royal-collection.module.css";
 
@@ -115,6 +121,7 @@ export function RoyalCollectionFeatured({
             View All Listings <span>↗</span>
           </RoyalCollectionPreviewLink>
         </div>
+        {preserveEmpty && items != null && items.length === 0 ? null : (
         <p className={styles.sectionLead}>
           {showSamples
             ? "Concept previews only. These cards are not listings, and the photographs are not properties for sale."
@@ -122,6 +129,7 @@ export function RoyalCollectionFeatured({
               ? "Listings will appear here when this practice has its own listing source."
               : "Homes selected for this practice."}
         </p>
+        )}
         {showSamples || items == null || items.length > 0 ? (
         <div className={styles.featureGrid}>
           {showSamples
@@ -166,7 +174,20 @@ export function RoyalCollectionFeatured({
         </div>
         ) : (
           <div className={styles.featureEmpty}>
-            <p>No listings are published on this site yet.</p>
+            {preserveEmpty ? (
+              <>
+                <h3 className={styles.featureEmptyTitle}>{HIGH_OCTANE_COLLECTION_EMPTY_TITLE}</h3>
+                <p className={styles.featureEmptyCopy}>{HIGH_OCTANE_COLLECTION_EMPTY_BODY}</p>
+                <Link
+                  href={HIGH_OCTANE_COLLECTION_CONTACT_HREF}
+                  className={`${styles.button} ${styles.buttonEmerald} ${styles.featureEmptyAction}`}
+                >
+                  {HIGH_OCTANE_COLLECTION_CONTACT_LABEL}
+                </Link>
+              </>
+            ) : (
+              <p>No listings are published on this site yet.</p>
+            )}
           </div>
         )}
       </RoyalCollectionReveal>

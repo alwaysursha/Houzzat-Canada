@@ -9,6 +9,8 @@ import { DEFAULT_TEMPLATE_ID } from "@/lib/tenancy/templates";
 
 export type TemplatePresentationValue = {
   templateId: ImplementedTemplateId;
+  /** HIGH OCTANE has no connected listing source yet. Other tenants stay false. */
+  quietCollection?: boolean;
 };
 
 const TemplatePresentationContext = createContext<TemplatePresentationValue>({
@@ -17,13 +19,15 @@ const TemplatePresentationContext = createContext<TemplatePresentationValue>({
 
 export function TemplatePresentationProvider({
   templateId,
+  quietCollection = false,
   children,
 }: {
   templateId: ImplementedTemplateId;
+  quietCollection?: boolean;
   children: ReactNode;
 }) {
   return (
-    <TemplatePresentationContext.Provider value={{ templateId }}>
+    <TemplatePresentationContext.Provider value={{ templateId, quietCollection }}>
       {children}
     </TemplatePresentationContext.Provider>
   );

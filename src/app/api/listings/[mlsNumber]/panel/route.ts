@@ -4,6 +4,7 @@ import { buildListingPanelPayload } from "@/lib/listings/build-listing-panel";
 import { loadListingForDetailPage } from "@/lib/listings/load-listing-for-detail";
 import { prisma, scheduleWorkerSideEffect } from "@/lib/prisma";
 import { resolveListingEntitlementContextForRequest } from "@/lib/tenancy/listing-entitlement";
+import { highOctaneMustHideSyntheticListing } from "@/lib/tenancy/templates/high-octane-public-showcase";
 import { stagingSnapshotVisibleFromResolution } from "@/lib/tenancy/templates/high-octane-staging-snapshot-request";
 import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
 import { resolvePublicAgentIdentity } from "@/lib/tenancy/resolve-public-agent-identity";
@@ -30,6 +31,13 @@ export async function GET(request: Request, { params }: Params) {
     const context = await resolveListingEntitlementContextForRequest(request);
     const { entitlement } = context;
 
+    const workspaceSlug = context.resolution.ok
+      ? context.resolution.host.workspaceSlug
+      : null;
+    if (highOctaneMustHideSyntheticListing({ workspaceSlug, mlsNumber })) {
+      return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    }
+
     const listing = await loadListingForDetailPage(mlsNumber, {
       entitlement,
       entitlementFilteringEnabled: true,
@@ -37,7 +45,15 @@ export async function GET(request: Request, { params }: Params) {
         context.resolution,
       ),
     });
-    if (!listing) {
+    if (
+      !listing ||
+      highOctaneMustHideSyntheticListing({
+        workspaceSlug,
+        mlsNumber: listing.mlsNumber,
+        dataSource: listing.dataSource,
+        isMock: listing.isMock,
+      })
+    ) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 
