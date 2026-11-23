@@ -602,6 +602,56 @@ async function reconcileInvoicePaid(input: {
   };
 }
 
+function legacyChargeInvoiceId(charge: Stripe.Charge): string | null {
+  const chargeInvoice = (
+    charge as Stripe.Charge & {
+      invoice?: string | { id?: string | null } | null;
+    }
+  ).invoice;
+  if (typeof chargeInvoice === "string" && chargeInvoice.length > 0) {
+    return chargeInvoice;
+  }
+  if (chargeInvoice && typeof chargeInvoice === "object" && chargeInvoice.id) {
+    return chargeInvoice.id;
+  }
+  return null;
+}
+
+/**
+ * Current Stripe charges no longer include `invoice`. Keep the legacy field
+ * for older webhook payloads, then resolve the invoice through Invoice Payments.
+ */
+async function invoiceIdForCharge(input: {
+  stripe: Stripe;
+  charge: Stripe.Charge;
+}): Promise<string | null> {
+  const legacy = legacyChargeInvoiceId(input.charge);
+  if (legacy) return legacy;
+  const paymentIntent = input.charge.payment_intent;
+  const paymentIntentId =
+    typeof paymentIntent === "string" ? paymentIntent : paymentIntent?.id ?? null;
+  if (!paymentIntentId) return null;
+  const payments = await input.stripe.invoicePayments.list({
+    payment: { type: "payment_intent", payment_intent: paymentIntentId },
+    limit: 1,
+  });
+  const invoice = payments.data[0]?.invoice;
+  if (!invoice) return null;
+  if (typeof invoice === "string") return invoice;
+  return typeof invoice.id === "string" ? invoice.id : null;
+}
+
+function creditNoteTaxCents(creditNote: Stripe.CreditNote): number | null {
+  const raw = creditNote as Stripe.CreditNote & {
+    tax?: number | null;
+    total_taxes?: Array<{ amount?: number | null }> | null;
+  };
+  if (Array.isArray(raw.total_taxes)) {
+    return raw.total_taxes.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+  }
+  return typeof raw.tax === "number" ? raw.tax : null;
+}
+
 async function subscriptionIdForStripeInvoice(input: {
   db: PrismaClient;
   stripe: Stripe;
@@ -623,13 +673,10 @@ async function reconcileRefund(input: {
   stripe: Stripe;
   charge: Stripe.Charge;
 }): Promise<StripeWebhookProcessResult> {
-  const chargeInvoice = (
-    input.charge as Stripe.Charge & {
-      invoice?: string | { id?: string | null } | null;
-    }
-  ).invoice;
-  const invoiceId =
-    typeof chargeInvoice === "string" ? chargeInvoice : chargeInvoice?.id ?? null;
+  const invoiceId = await invoiceIdForCharge({
+    stripe: input.stripe,
+    charge: input.charge,
+  });
   const linked = await subscriptionIdForStripeInvoice({
     db: input.db,
     stripe: input.stripe,
@@ -689,7 +736,6 @@ async function reconcileCreditNote(input: {
   if (!linked) {
     return { received: true, handled: false, action: "ignored", subscriptionId: null };
   }
-  const note = input.creditNote as Stripe.CreditNote & { tax?: number | null };
   await ensureAuditOnce({
     db: input.db,
     subscriptionId: linked.subscriptionId,
@@ -699,7 +745,7 @@ async function reconcileCreditNote(input: {
     metadata: {
       creditNoteId: input.creditNote.id,
       amountCents: input.creditNote.amount,
-      taxCents: typeof note.tax === "number" ? note.tax : null,
+      taxCents: creditNoteTaxCents(input.creditNote),
       invoiceId,
     },
   });
@@ -746,7 +792,8 @@ export async function processStripeWebhook(input: {
       return reconcileCheckoutCompleted({ db, stripe, session });
     }
     case "customer.subscription.updated":
-    case "customer.subscription.created": {
+    case "customer.subscription.created":
+    case "customer.subscription.deleted": {
       const stripeSubscription = event.data.object as Stripe.Subscription;
       return reconcileSubscriptionUpdated({ db, stripeSubscription });
     }

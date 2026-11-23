@@ -517,6 +517,8 @@ async function main() {
     assert.ok(!/\$transaction/.test(webhook));
     assert.ok(!/\.updateMany\s*\(/.test(webhook));
     assert.ok(route.includes("processStripeWebhook"));
+    assert.ok(webhook.includes("customer.subscription.deleted"));
+    assert.ok(webhook.includes("invoicePayments.list"));
     assert.ok(statusPage.includes("BROWSER_SUCCESS_CANNOT_ACTIVATE"));
     assert.ok(
       !statusPage.includes("status: \"ACTIVE\"") &&
@@ -930,6 +932,73 @@ async function main() {
     assert.equal(
       state2.subscriptions.get(pending.subscriptionId)!.status,
       "PENDING_PAYMENT",
+    );
+
+    Object.assign(stripe, {
+      invoices: {
+        async retrieve(id: string) {
+          return {
+            id,
+            parent: {
+              subscription_details: { subscription: stripeSubId },
+            },
+          };
+        },
+      },
+      invoicePayments: {
+        async list() {
+          return { data: [{ invoice: "in_refund_1" }] };
+        },
+      },
+    });
+    const refunded = await processStripeWebhook({
+      rawBody: JSON.stringify({
+        type: "charge.refunded",
+        data: {
+          object: {
+            id: "ch_refund_1",
+            amount_refunded: 1_000,
+            payment_intent: "pi_refund_1",
+          },
+        },
+      }),
+      signatureHeader: "t=1,v1=test",
+      prisma: db,
+      stripe: stripe as never,
+      webhookSecret: "whsec_test",
+    });
+    assert.equal(refunded.action, "refund_recorded");
+    assert.ok(
+      state.audits.some((audit) => {
+        const metadata = audit.metadata as { invoiceId?: string } | null;
+        return (
+          audit.action === STRIPE_BILLING_AUDIT.REFUND_RECORDED &&
+          metadata?.invoiceId === "in_refund_1"
+        );
+      }),
+    );
+
+    const deleted = await processStripeWebhook({
+      rawBody: JSON.stringify({
+        type: "customer.subscription.deleted",
+        data: {
+          object: {
+            id: stripeSubId,
+            status: "canceled",
+            metadata: { subscriptionId: created.subscriptionId },
+            cancel_at_period_end: false,
+          },
+        },
+      }),
+      signatureHeader: "t=1,v1=test",
+      prisma: db,
+      stripe: stripe as never,
+      webhookSecret: "whsec_test",
+    });
+    assert.equal(deleted.action, "subscription_synced");
+    assert.equal(
+      state.subscriptions.get(created.subscriptionId)!.status,
+      "CANCELLED",
     );
     console.log("[5] Webhook activation + idempotency + unpaid guard... PASS");
   }

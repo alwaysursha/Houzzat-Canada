@@ -219,6 +219,11 @@ function createFakePrisma(state: State): PrismaClient {
         return [];
       },
     },
+    subscription: {
+      async findFirst() {
+        return null;
+      },
+    },
     workspaceMember: {
       async findUnique({
         where,
@@ -469,13 +474,13 @@ async function main() {
 
     {
       const seed = provisioningPhoneSeedFromProspect("4376774949");
-      assert.equal(seed?.phone, "4376774949");
+      assert.equal(seed?.phone, "(437) 677 - 4949");
       assert.equal(seed?.phoneE164, "+14376774949");
       assert.equal(provisioningPhoneSeedFromProspect("not-a-phone"), null);
       const lockstep = parsePhoneColumnsForWrite("416-555-0199");
       assert.equal(lockstep.ok, true);
       if (lockstep.ok) {
-        assert.equal(lockstep.columns.phone, "416-555-0199");
+        assert.equal(lockstep.columns.phone, "(416) 555 - 0199");
         assert.equal(lockstep.columns.phoneE164, "+14165550199");
       }
       console.log("[2] phone/E164 helpers... PASS");
@@ -502,7 +507,7 @@ async function main() {
       });
       assert.equal(saved.professionalIdentity.agentCellPhone, "437-677-4949");
       assert.equal(saved.professionalIdentity.recoLicenseNumber, "12345678");
-      assert.equal(state.users.get(USER_OWNER)?.phone, "437-677-4949");
+      assert.equal(state.users.get(USER_OWNER)?.phone, "(437) 677 - 4949");
       assert.equal(state.users.get(USER_OWNER)?.phoneE164, "+14376774949");
       assert.equal(state.agentProfiles.get(USER_OWNER)?.recoLicenseNumber, "12345678");
       assert.equal(state.identities.get(WS_A)?.brokerageRegisteredName, "Homelife Miracle Realty Ltd");
@@ -513,7 +518,7 @@ async function main() {
       assert.equal(team.profile.firstName, "Maria");
       assert.equal(team.profile.lastName, "Khalid");
       assert.equal(team.profile.email, "maria@homelife.test");
-      assert.equal(team.profile.phone, "437-677-4949");
+      assert.equal(team.profile.phone, "(437) 677 - 4949");
       assert.equal(team.profile.phoneE164, "+14376774949");
       assert.equal(team.profile.recoLicenseNumber, "12345678");
       assert.equal(team.profile.recoLicenseExpiresAt, "2027-06-15");
@@ -594,12 +599,12 @@ async function main() {
       });
       assert.equal(edited.ok, true);
       if (!edited.ok) return;
-      assert.equal(edited.profile.phone, "905-555-0100");
+      assert.equal(edited.profile.phone, "(905) 555 - 0100");
       assert.equal(edited.profile.phoneE164, "+19055550100");
       assert.equal(edited.profile.recoLicenseNumber, "87654321");
-      assert.equal(state.users.get(USER_OWNER)?.phone, "905-555-0100");
+      assert.equal(state.users.get(USER_OWNER)?.phone, "(905) 555 - 0100");
       assert.equal(state.agentProfiles.get(USER_OWNER)?.recoLicenseNumber, "87654321");
-      assert.equal(state.identities.get(WS_A)?.agentCellPhone, "905-555-0100");
+      assert.equal(state.identities.get(WS_A)?.agentCellPhone, "(905) 555 - 0100");
       assert.equal(state.identities.get(WS_A)?.agentRegisteredName, "Maria Khalid");
       assert.equal(state.identities.get(WS_A)?.brokerageRegisteredName, "Homelife Miracle Realty Ltd");
       console.log("[5] authorized Team edit updates the same canonical records... PASS");
@@ -608,8 +613,14 @@ async function main() {
     {
       const state = seedState();
       const db = createFakePrisma(state);
+      const owner = ownerCtx();
       const denied = await updateWorkspaceAgentProfile({
-        ctx: { ...ownerCtx(), canManageWorkspace: false, workspaceRole: "AGENT" },
+        ctx: {
+          ...owner,
+          canManageWorkspace: false,
+          workspaceRole: "AGENT",
+          user: { ...owner.user, id: USER_B },
+        },
         userId: USER_OWNER,
         prisma: db,
         raw: {
