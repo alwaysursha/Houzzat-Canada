@@ -99,6 +99,7 @@ type ActivationBlockReason =
   | "VERCEL_UNVERIFIED"
   | "VERCEL_MISCONFIGURED"
   | "TLS_NOT_READY"
+  | "VERCEL_NOT_PRODUCTION"
   | "VERCEL_API_ERROR"
   | "HOSTNAME_ROUTING_MISMATCH"
   | "WORKSPACE_NOT_ACTIVE"
@@ -125,6 +126,8 @@ function activationBlockMessage(reason: ActivationBlockReason): string {
       return "Vercel still reports the domain DNS as misconfigured.";
     case "TLS_NOT_READY":
       return "HTTPS certificate is not ready yet.";
+    case "VERCEL_NOT_PRODUCTION":
+      return "Domain is not assigned to the shared production deployment.";
     case "VERCEL_API_ERROR":
       return "Vercel could not be checked.";
     case "HOSTNAME_ROUTING_MISMATCH":
@@ -152,6 +155,7 @@ function vercelBlockReason(readiness: VercelDomainReadiness): ActivationBlockRea
     case "VERCEL_UNVERIFIED":
     case "VERCEL_MISCONFIGURED":
     case "TLS_NOT_READY":
+    case "VERCEL_NOT_PRODUCTION":
     case "VERCEL_API_ERROR":
       return readiness.reason;
     default: {

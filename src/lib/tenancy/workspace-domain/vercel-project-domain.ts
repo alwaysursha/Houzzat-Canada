@@ -23,6 +23,7 @@ export type VercelDomainReadiness = {
     | "VERCEL_UNVERIFIED"
     | "VERCEL_MISCONFIGURED"
     | "TLS_NOT_READY"
+    | "VERCEL_NOT_PRODUCTION"
     | "VERCEL_API_ERROR"
     | null;
 };
@@ -41,6 +42,10 @@ type VercelConfig = {
 type ProjectDomainPayload = {
   name?: string;
   verified?: boolean;
+  gitBranch?: string | null;
+  customEnvironmentId?: string | null;
+  redirect?: string | null;
+  redirectStatusCode?: number | null;
   verification?: Array<{ type?: string; domain?: string; value?: string }> | null;
 };
 
@@ -148,12 +153,24 @@ export function interpretVercelDomainStatus(input: {
 
   const verified = input.projectDomain.verified === true;
   const misconfigured = input.config?.misconfigured !== false;
+  const productionAssignment =
+    !input.projectDomain.gitBranch && !input.projectDomain.customEnvironmentId;
   const tlsReady = input.certificates.some((cert) =>
     certificateCoversHostname(cert.cns ?? [], hostname, input.now, cert.expiresAt ?? 0),
   );
 
   if (!verified) {
     return { attached: true, verified: false, misconfigured, tlsReady: false, records, reason: "VERCEL_UNVERIFIED" };
+  }
+  if (!productionAssignment) {
+    return {
+      attached: true,
+      verified: true,
+      misconfigured,
+      tlsReady: false,
+      records,
+      reason: "VERCEL_NOT_PRODUCTION",
+    };
   }
   if (misconfigured) {
     return { attached: true, verified: true, misconfigured: true, tlsReady: false, records, reason: "VERCEL_MISCONFIGURED" };
@@ -226,15 +243,15 @@ export function createVercelProjectDomainClient(
         `https://api.vercel.com/v6/domains/${domain}/config?teamId=${encodeURIComponent(teamId)}`,
         { headers, signal: AbortSignal.timeout(10_000) },
       );
-      const config = configResponse.ok
-        ? ((await readJson(configResponse)) as DomainConfigPayload | null)
-        : null;
+      if (!configResponse.ok) return apiError();
+      const config = (await readJson(configResponse)) as DomainConfigPayload | null;
       const certificates = await loadMatchingCertificates(hostname, teamId, headers, fetchImpl);
+      if (!certificates.ok) return apiError();
       return interpretVercelDomainStatus({
         hostname,
         projectDomain,
         config,
-        certificates,
+        certificates: certificates.certs,
         now: Date.now(),
         attached: true,
       });
@@ -277,28 +294,17 @@ async function loadMatchingCertificates(
   teamId: string,
   headers: { Authorization: string },
   fetchImpl: typeof fetch,
-): Promise<CertPayload[]> {
-  const matched: CertPayload[] = [];
-  let until: number | null = null;
-  for (let page = 0; page < 10; page += 1) {
-    const url = new URL("https://api.vercel.com/v6/certs");
-    url.searchParams.set("limit", "100");
-    url.searchParams.set("teamId", teamId);
-    if (until != null) url.searchParams.set("until", String(until));
-    const response = await fetchImpl(url, { headers, signal: AbortSignal.timeout(10_000) });
-    if (!response.ok) return matched;
-    const body = (await readJson(response)) as { certs?: CertPayload[] } | null;
-    const certs = body?.certs ?? [];
-    const now = Date.now();
-    for (const cert of certs) {
-      if (certificateCoversHostname(cert.cns ?? [], hostname, now, cert.expiresAt ?? 0)) {
-        matched.push(cert);
-      }
-    }
-    if (matched.length > 0 || certs.length < 100) return matched;
-    const oldest = Math.min(...certs.map((cert) => cert.createdAt ?? Number.POSITIVE_INFINITY));
-    if (!Number.isFinite(oldest) || oldest === until) return matched;
-    until = oldest;
-  }
-  return matched;
+): Promise<{ ok: true; certs: CertPayload[] } | { ok: false }> {
+  const url = new URL("https://api.vercel.com/v6/certs");
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("teamId", teamId);
+  url.searchParams.set("domain", hostname);
+  const response = await fetchImpl(url, { headers, signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) return { ok: false };
+  const body = (await readJson(response)) as { certs?: CertPayload[] } | null;
+  const now = Date.now();
+  const certs = (body?.certs ?? []).filter((cert) =>
+    certificateCoversHostname(cert.cns ?? [], hostname, now, cert.expiresAt ?? 0),
+  );
+  return { ok: true, certs };
 }

@@ -45,6 +45,33 @@ type Readiness = {
 
 type ApiEnvelope<T> = { ok: true; data: T } | { ok: false; code: string; message: string };
 
+function certificateCheckMessage(reason: string | null, tlsReady: boolean): string {
+  switch (reason) {
+    case "READY":
+      return "Certificate is ready. The domain stays pending until you activate it.";
+    case "VERCEL_NOT_CONFIGURED":
+      return "Vercel project credentials are not configured, so the certificate was not checked. The domain stays pending.";
+    case "TLS_NOT_READY":
+      return "Certificate is not ready. The domain stays pending.";
+    case "VERCEL_MISCONFIGURED":
+      return "Vercel DNS configuration is not valid. The domain stays pending.";
+    case "VERCEL_NOT_ATTACHED":
+      return "The domain is not attached to the shared Vercel project. The domain stays pending.";
+    case "VERCEL_UNVERIFIED":
+      return "Vercel has not verified this domain yet. The domain stays pending.";
+    case "VERCEL_NOT_PRODUCTION":
+      return "The domain is not assigned to production. The domain stays pending.";
+    case "VERCEL_API_ERROR":
+      return "Vercel could not be checked. The domain stays pending.";
+    case null:
+      return tlsReady
+        ? "Certificate is ready. The domain stays pending until you activate it."
+        : "Certificate is not ready. The domain stays pending.";
+    default:
+      return `Vercel check returned ${reason}. The domain stays pending.`;
+  }
+}
+
 export function PlatformCustomDomain({
   workspaceId,
   existingHostnames,
@@ -127,11 +154,7 @@ export function PlatformCustomDomain({
     const data = await post<Readiness>(`readiness:${domainId}`, `${base}/readiness`, { domainId });
     if (!data) return;
     setReadiness((current) => ({ ...current, [domainId]: data }));
-    setFeedback(
-      data.vercel.tlsReady
-        ? "Certificate is ready. The domain stays pending until you activate it."
-        : "Certificate is not ready. The domain stays pending.",
-    );
+    setFeedback(certificateCheckMessage(data.vercel.reason, data.vercel.tlsReady));
   }
 
   async function onAttach(domainId: string) {
