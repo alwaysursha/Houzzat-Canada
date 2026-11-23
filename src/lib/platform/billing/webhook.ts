@@ -21,6 +21,7 @@ import {
 } from "@/lib/platform/billing/constants";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { readStripeWebhookSecret } from "@/lib/platform/billing/stripe-env";
+import { refundTaxCents } from "@/lib/platform/billing/canadian-tax";
 import { checkoutCompletionIsDuplicate } from "@/lib/platform/onboarding/prepared-workspace";
 import { tryProvisionAfterBillingActivation } from "@/lib/platform/provisioning";
 import { prisma as defaultPrisma } from "@/lib/prisma";
@@ -33,6 +34,9 @@ export type StripeWebhookProcessResult = {
     | "checkout_completed"
     | "subscription_synced"
     | "payment_failed"
+    | "invoice_paid"
+    | "refund_recorded"
+    | "credit_note_recorded"
     | "duplicate";
   subscriptionId: string | null;
 };
@@ -93,6 +97,24 @@ function readSubscriptionPeriod(sub: Stripe.Subscription): {
     start: unixToDate(raw.current_period_start),
     end: unixToDate(raw.current_period_end),
   };
+}
+
+function snapshotObject(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return { ...(value as Record<string, unknown>) };
+  }
+  return {};
+}
+
+function invoiceTaxCents(invoice: Stripe.Invoice): number | null {
+  const raw = invoice as Stripe.Invoice & {
+    tax?: number | null;
+    total_taxes?: Array<{ amount?: number | null }> | null;
+  };
+  if (Array.isArray(raw.total_taxes)) {
+    return raw.total_taxes.reduce((sum, row) => sum + (row.amount ?? 0), 0);
+  }
+  return typeof raw.tax === "number" ? raw.tax : null;
 }
 
 function stripeSubscriptionIdFromInvoice(
@@ -258,10 +280,26 @@ async function reconcileCheckoutCompleted(input: {
     : { start: null, end: null };
 
   if (!alreadyComplete) {
+    const snapshot = snapshotObject(subscriptionRow.commercialSnapshotJson);
+    const confirmedTax = input.session.total_details?.amount_tax;
     await input.db.subscription.update({
       where: { id: subscriptionRow.id },
       data: {
         status: nextStatus,
+        ...(typeof confirmedTax === "number"
+          ? {
+              commercialSnapshotJson: {
+                ...snapshot,
+                taxConfirmation: {
+                  source: "checkout.session.completed",
+                  status: "confirmed",
+                  taxCents: confirmedTax,
+                  subtotalCents: input.session.amount_subtotal ?? null,
+                  totalCents: input.session.amount_total ?? null,
+                },
+              },
+            }
+          : {}),
         stripeCheckoutSessionId: input.session.id,
         stripeSubscriptionId:
           stripeSubscriptionId ?? subscriptionRow.stripeSubscriptionId,
@@ -501,6 +539,178 @@ async function reconcilePaymentFailed(input: {
   };
 }
 
+async function reconcileInvoicePaid(input: {
+  db: PrismaClient;
+  invoice: Stripe.Invoice;
+}): Promise<StripeWebhookProcessResult> {
+  const invoiceId = input.invoice.id ?? null;
+  const stripeSubscriptionId = stripeSubscriptionIdFromInvoice(input.invoice);
+  if (!invoiceId || !stripeSubscriptionId) {
+    return { received: true, handled: false, action: "ignored", subscriptionId: null };
+  }
+  const row = await input.db.subscription.findUnique({
+    where: { stripeSubscriptionId },
+  });
+  if (!row) {
+    return { received: true, handled: false, action: "ignored", subscriptionId: null };
+  }
+  const snapshot = snapshotObject(row.commercialSnapshotJson);
+  const estimated = snapshot.tax;
+  const estimatedTax =
+    estimated && typeof estimated === "object" && !Array.isArray(estimated)
+      ? (estimated as { taxCents?: unknown }).taxCents
+      : null;
+  const chargedTax = invoiceTaxCents(input.invoice);
+  const nextSnapshot = {
+    ...snapshot,
+    taxConfirmation: {
+      source: "invoice.paid",
+      invoiceId,
+      subtotalCents: input.invoice.subtotal ?? null,
+      taxCents: chargedTax,
+      totalCents: input.invoice.total ?? null,
+      estimatedTaxCents: typeof estimatedTax === "number" ? estimatedTax : null,
+      matchesEstimate:
+        typeof estimatedTax === "number" && chargedTax != null
+          ? chargedTax === estimatedTax
+          : null,
+    },
+  };
+  await input.db.subscription.update({
+    where: { id: row.id },
+    data: { commercialSnapshotJson: nextSnapshot },
+  });
+  await ensureAuditOnce({
+    db: input.db,
+    subscriptionId: row.id,
+    action: STRIPE_BILLING_AUDIT.INVOICE_PAID,
+    summary: "Stripe invoice paid",
+    dedupeKey: `invoice_paid:${invoiceId}`,
+    metadata: {
+      invoiceId,
+      subtotalCents: input.invoice.subtotal ?? null,
+      taxCents: chargedTax,
+      totalCents: input.invoice.total ?? null,
+      estimatedTaxCents: typeof estimatedTax === "number" ? estimatedTax : null,
+    },
+  });
+  return {
+    received: true,
+    handled: true,
+    action: "invoice_paid",
+    subscriptionId: row.id,
+  };
+}
+
+async function subscriptionIdForStripeInvoice(input: {
+  db: PrismaClient;
+  stripe: Stripe;
+  invoiceId: string | null;
+}): Promise<{ subscriptionId: string; snapshot: Record<string, unknown> } | null> {
+  if (!input.invoiceId) return null;
+  const invoice = await input.stripe.invoices.retrieve(input.invoiceId);
+  const stripeSubscriptionId = stripeSubscriptionIdFromInvoice(invoice);
+  if (!stripeSubscriptionId) return null;
+  const row = await input.db.subscription.findUnique({
+    where: { stripeSubscriptionId },
+  });
+  if (!row) return null;
+  return { subscriptionId: row.id, snapshot: snapshotObject(row.commercialSnapshotJson) };
+}
+
+async function reconcileRefund(input: {
+  db: PrismaClient;
+  stripe: Stripe;
+  charge: Stripe.Charge;
+}): Promise<StripeWebhookProcessResult> {
+  const chargeInvoice = (
+    input.charge as Stripe.Charge & {
+      invoice?: string | { id?: string | null } | null;
+    }
+  ).invoice;
+  const invoiceId =
+    typeof chargeInvoice === "string" ? chargeInvoice : chargeInvoice?.id ?? null;
+  const linked = await subscriptionIdForStripeInvoice({
+    db: input.db,
+    stripe: input.stripe,
+    invoiceId,
+  });
+  if (!linked) {
+    return { received: true, handled: false, action: "ignored", subscriptionId: null };
+  }
+  const tax = linked.snapshot.tax;
+  const taxRecord =
+    tax && typeof tax === "object" && !Array.isArray(tax)
+      ? (tax as { taxCents?: unknown; firstGrossCents?: unknown })
+      : null;
+  const taxCents = typeof taxRecord?.taxCents === "number" ? taxRecord.taxCents : 0;
+  const grossCents =
+    typeof taxRecord?.firstGrossCents === "number" ? taxRecord.firstGrossCents : 0;
+  const refundedTax = refundTaxCents({
+    refundCents: input.charge.amount_refunded,
+    grossCents,
+    taxCents,
+  });
+  await ensureAuditOnce({
+    db: input.db,
+    subscriptionId: linked.subscriptionId,
+    action: STRIPE_BILLING_AUDIT.REFUND_RECORDED,
+    summary: "Stripe refund recorded",
+    dedupeKey: `refund:${input.charge.id}:${input.charge.amount_refunded}`,
+    metadata: {
+      chargeId: input.charge.id,
+      refundedCents: input.charge.amount_refunded,
+      refundedTaxCents: refundedTax,
+      invoiceId,
+    },
+  });
+  return {
+    received: true,
+    handled: true,
+    action: "refund_recorded",
+    subscriptionId: linked.subscriptionId,
+  };
+}
+
+async function reconcileCreditNote(input: {
+  db: PrismaClient;
+  stripe: Stripe;
+  creditNote: Stripe.CreditNote;
+}): Promise<StripeWebhookProcessResult> {
+  const invoiceId =
+    typeof input.creditNote.invoice === "string"
+      ? input.creditNote.invoice
+      : input.creditNote.invoice?.id ?? null;
+  const linked = await subscriptionIdForStripeInvoice({
+    db: input.db,
+    stripe: input.stripe,
+    invoiceId,
+  });
+  if (!linked) {
+    return { received: true, handled: false, action: "ignored", subscriptionId: null };
+  }
+  const note = input.creditNote as Stripe.CreditNote & { tax?: number | null };
+  await ensureAuditOnce({
+    db: input.db,
+    subscriptionId: linked.subscriptionId,
+    action: STRIPE_BILLING_AUDIT.CREDIT_NOTE_RECORDED,
+    summary: "Stripe credit note recorded",
+    dedupeKey: `credit_note:${input.creditNote.id}`,
+    metadata: {
+      creditNoteId: input.creditNote.id,
+      amountCents: input.creditNote.amount,
+      taxCents: typeof note.tax === "number" ? note.tax : null,
+      invoiceId,
+    },
+  });
+  return {
+    received: true,
+    handled: true,
+    action: "credit_note_recorded",
+    subscriptionId: linked.subscriptionId,
+  };
+}
+
 /**
  * Verify signature and process a Stripe webhook payload.
  * Browser success redirects must never call this path's activation logic.
@@ -543,6 +753,18 @@ export async function processStripeWebhook(input: {
     case "invoice.payment_failed": {
       const invoice = event.data.object as Stripe.Invoice;
       return reconcilePaymentFailed({ db, invoice });
+    }
+    case "invoice.paid": {
+      const invoice = event.data.object as Stripe.Invoice;
+      return reconcileInvoicePaid({ db, invoice });
+    }
+    case "charge.refunded": {
+      const charge = event.data.object as Stripe.Charge;
+      return reconcileRefund({ db, stripe, charge });
+    }
+    case "credit_note.created": {
+      const creditNote = event.data.object as Stripe.CreditNote;
+      return reconcileCreditNote({ db, stripe, creditNote });
     }
     default:
       return {

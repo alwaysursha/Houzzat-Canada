@@ -46,6 +46,10 @@ export type OfferTermsInput = {
   expiresAt?: string | Date | null;
   addOns?: OfferAddOnInput[] | null;
   adjustments?: OfferAdjustmentInput[] | null;
+  billingCountry?: string | null;
+  billingRegion?: string | null;
+  taxExempt?: boolean | null;
+  taxExemptReason?: string | null;
 };
 
 function parseOptionalDate(
@@ -213,6 +217,10 @@ export async function createDraftCommercialOffer(input: {
     expiresAt: parseOptionalDate(input.terms.expiresAt, "Expiry date"),
     addOns: input.terms.addOns,
     adjustments: input.terms.adjustments,
+    billingCountry: input.terms.billingCountry,
+    billingRegion: input.terms.billingRegion,
+    taxExempt: input.terms.taxExempt,
+    taxExemptReason: input.terms.taxExemptReason,
   });
 
   if (terms.expiresAt && terms.expiresAt.getTime() <= Date.now()) {
@@ -316,6 +324,10 @@ export async function updateDraftCommercialOffer(input: {
     expiresAt: parseOptionalDate(input.terms.expiresAt, "Expiry date"),
     addOns: input.terms.addOns,
     adjustments: input.terms.adjustments,
+    billingCountry: input.terms.billingCountry,
+    billingRegion: input.terms.billingRegion,
+    taxExempt: input.terms.taxExempt,
+    taxExemptReason: input.terms.taxExemptReason,
   });
 
   if (terms.expiresAt && terms.expiresAt.getTime() <= Date.now()) {

@@ -25,6 +25,16 @@ import {
   evaluateAcceptedOfferCheckoutEligibility,
   isPaidSubscriptionStatus,
 } from "@/lib/platform/billing/checkout-eligibility";
+import {
+  billingLocationFromLineItems,
+  quoteCommercialTax,
+  type CommercialTaxQuote,
+} from "@/lib/platform/billing/canadian-tax";
+import {
+  assertTaxReadyForCheckout,
+  CommercialTaxConfigError,
+  exclusiveStripeTaxRateId,
+} from "@/lib/platform/billing/checkout-tax";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { resolvePlanEntitlementProfile } from "@/lib/platform/entitlements/profiles";
 import { commercialTermsHashFromOfferRow } from "@/lib/platform/offers/commercial-terms-hash";
@@ -117,6 +127,8 @@ function buildCommercialSnapshot(input: {
   recurringTotalCents: number;
   oneTimeTotalCents: number;
   preparedWorkspaceId?: string | null;
+  tax: CommercialTaxQuote;
+  gstHstRegistrationNumber: string;
   lineItems: Array<{
     kind: string;
     code: string;
@@ -142,6 +154,8 @@ function buildCommercialSnapshot(input: {
     trialDays: input.trialDays,
     recurringTotalCents: input.recurringTotalCents,
     oneTimeTotalCents: input.oneTimeTotalCents,
+    tax: input.tax,
+    gstHstRegistrationNumber: input.gstHstRegistrationNumber,
     lineItems: input.lineItems,
     preparedWorkspaceId: input.preparedWorkspaceId ?? null,
   };
@@ -523,6 +537,24 @@ export async function createCheckoutForAcceptedOffer(
     throw error;
   }
 
+  const billingLocation = billingLocationFromLineItems(offer.lineItems);
+  const taxQuote = quoteCommercialTax({
+    country: billingLocation.country,
+    region: billingLocation.region,
+    taxExempt: billingLocation.taxExempt,
+    recurringNetCents: amounts.recurringTotalCents,
+    oneTimeNetCents: amounts.oneTimeTotalCents,
+  });
+  let gstHstRegistrationNumber: string;
+  try {
+    gstHstRegistrationNumber = assertTaxReadyForCheckout(taxQuote);
+  } catch (error) {
+    if (error instanceof CommercialTaxConfigError) {
+      throw new OfferCheckoutPublicError(error.message, error.code, 409);
+    }
+    throw error;
+  }
+
   const commercialTermsHash = commercialTermsHashFromOfferRow({
     id: offer.id,
     version: offer.version,
@@ -564,6 +596,8 @@ export async function createCheckoutForAcceptedOffer(
     trialDays: offer.trialDays,
     recurringTotalCents: amounts.recurringTotalCents,
     oneTimeTotalCents: amounts.oneTimeTotalCents,
+    tax: taxQuote,
+    gstHstRegistrationNumber,
     preparedWorkspaceId: offer.workspaceId,
     lineItems: offer.lineItems.map((item) => ({
       kind: item.kind,
@@ -617,13 +651,24 @@ export async function createCheckoutForAcceptedOffer(
 
   const interval = cadenceToStripeInterval(offer.billingCadence);
   const currency = offer.currency.toLowerCase();
+  const taxRateId = await exclusiveStripeTaxRateId({ stripe, quote: taxQuote });
+  await stripe.customers.update(billingCustomer.stripeCustomerId, {
+    ...(taxQuote.country === "CA" && taxQuote.region
+      ? { address: { country: "CA", state: taxQuote.region } }
+      : {}),
+    invoice_settings: {
+      footer: `GST/HST registration ${gstHstRegistrationNumber}. Prices are tax-exclusive.`,
+    },
+  });
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     {
       quantity: 1,
+      ...(taxRateId ? { tax_rates: [taxRateId] } : {}),
       price_data: {
         currency,
         unit_amount: amounts.recurringTotalCents,
+        tax_behavior: "exclusive",
         recurring: { interval },
         product_data: {
           name: `HouzzatPRO ${offer.planCode}`,
@@ -636,9 +681,11 @@ export async function createCheckoutForAcceptedOffer(
   if (amounts.oneTimeTotalCents > 0) {
     lineItems.push({
       quantity: 1,
+      ...(taxRateId ? { tax_rates: [taxRateId] } : {}),
       price_data: {
         currency,
         unit_amount: amounts.oneTimeTotalCents,
+        tax_behavior: "exclusive",
         product_data: {
           name: "HouzzatPRO setup and one-time fees",
         },
@@ -668,6 +715,8 @@ export async function createCheckoutForAcceptedOffer(
     client_reference_id: subscription.id,
     return_url: returnUrl,
     line_items: lineItems,
+    automatic_tax: { enabled: false },
+    billing_address_collection: "required",
     subscription_data: subscriptionData,
     metadata: {
       [STRIPE_CHECKOUT_METADATA_KEYS.offerId]: offer.id,

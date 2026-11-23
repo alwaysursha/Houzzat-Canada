@@ -3,6 +3,7 @@ import { HouzzatProWordmark } from "@/components/auth/HouzzatProWordmark";
 import { PrivateOfferAcceptForm } from "@/components/platform/public/PrivateOfferAcceptForm";
 import { PrivateOfferCheckoutButton } from "@/components/platform/public/PrivateOfferCheckoutButton";
 import { PLATFORM_PRODUCT_NAME } from "@/lib/constants";
+import type { CommercialTaxQuote } from "@/lib/platform/billing/canadian-tax";
 import type {
   PrivateOfferAcceptedPresentation,
   PrivateOfferPresentation,
@@ -26,6 +27,52 @@ import {
   PRIVATE_OFFER_UNAVAILABLE_TITLE,
 } from "@/lib/platform/offers/private-offer-copy";
 import { resolveHouzzatProSupportCta } from "@/lib/platform/status/support";
+
+function TaxSummary({ tax }: { tax: CommercialTaxQuote }) {
+  const rate = (tax.rateBps / 100).toFixed(tax.rateBps % 100 === 0 ? 0 : 1);
+  return (
+    <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-sm">
+      <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+        {tax.treatment === "taxable" ? `Estimated ${tax.label}` : "Tax"}
+      </p>
+      <dl className="mt-3 space-y-2">
+        <div className="flex justify-between gap-4">
+          <dt className="text-slate-500">Subtotal before tax</dt>
+          <dd className="font-semibold tabular-nums text-slate-900">
+            {formatCad(tax.subtotalCents)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-slate-500">
+            {tax.treatment === "taxable" ? `${tax.label} ${rate}%` : tax.label}
+          </dt>
+          <dd className="font-semibold tabular-nums text-slate-900">
+            {formatCad(tax.taxCents)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4 border-t border-slate-200 pt-2">
+          <dt className="font-semibold text-slate-700">First payment</dt>
+          <dd className="font-semibold tabular-nums text-slate-900">
+            {formatCad(tax.firstGrossCents)}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-4">
+          <dt className="text-slate-500">
+            Then each {tax.recurringNetCents === tax.subtotalCents ? "period" : "renewal"}
+          </dt>
+          <dd className="font-semibold tabular-nums text-slate-900">
+            {formatCad(tax.recurringGrossCents)}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 text-xs leading-relaxed text-slate-500">
+        Prices are before tax. This tax is estimated from the billing location on
+        the offer. Checkout confirms it and does not add tax a second time.
+        {tax.note ? ` ${tax.note}` : ""}
+      </p>
+    </div>
+  );
+}
 
 function formatCad(cents: number): string {
   return new Intl.NumberFormat("en-CA", {
@@ -381,6 +428,7 @@ export function PrivateOfferProposal({
             </div>
           </div>
 
+          <TaxSummary tax={presentation.tax} />
           <p className="mt-6 text-xs text-slate-500">{PRIVATE_OFFER_DISCLOSURE}</p>
           {presentation.hasAdsAddon ? (
             <p className="mt-2 text-xs text-slate-500">

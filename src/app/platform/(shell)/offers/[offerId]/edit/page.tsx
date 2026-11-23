@@ -74,6 +74,8 @@ export default async function PlatformEditOfferPage({ params }: PageProps) {
   );
   const google = lineItems.find((item) => str(item.code) === "GOOGLE_PPC");
   const meta = lineItems.find((item) => str(item.code) === "META_ADS");
+  const planBase = lineItems.find((item) => str(item.code) === "PLAN_BASE");
+  const planMetadata = asRecord(planBase?.metadata);
   const prospectLabel = prospect
     ? `${str(prospect.contactName) || str(prospect.businessName)} · ${str(prospect.email)}`
     : str(offer.prospectId);
@@ -119,6 +121,10 @@ export default async function PlatformEditOfferPage({ params }: PageProps) {
             : null,
           includeMetaAds: Boolean(meta),
           metaAdsAmountCents: meta ? (meta.amountCents as number) : null,
+          billingCountry: planMetadata ? str(planMetadata.billingCountry) || null : null,
+          billingRegion: planMetadata ? str(planMetadata.billingRegion) || null : null,
+          taxExempt: planMetadata?.taxTreatment === "exempt",
+          taxExemptReason: planMetadata ? str(planMetadata.taxExemptReason) || null : null,
         }}
       />
     </>

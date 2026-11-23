@@ -88,6 +88,7 @@ export default async function PrivateOfferCheckoutPage({ params }: PageProps) {
         currency: result.presentation.currency,
         recurringTotalCents: result.presentation.recurringTotalCents,
         oneTimeTotalCents: result.presentation.oneTimeTotalCents,
+        tax: result.presentation.tax,
         preparedFor: result.presentation.preparedFor,
       }}
     />

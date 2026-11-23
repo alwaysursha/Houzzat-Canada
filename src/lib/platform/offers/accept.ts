@@ -22,7 +22,12 @@ import {
   COMMERCIAL_OFFER_AUDIT,
   COMMERCIAL_OFFER_ENTITY_TYPE,
 } from "@/lib/platform/offers/constants";
+import {
+  billingLocationFromLineItems,
+  quoteCommercialTax,
+} from "@/lib/platform/billing/canadian-tax";
 import { commercialTermsHashFromOfferRow } from "@/lib/platform/offers/commercial-terms-hash";
+import { computeOfferTotals } from "@/lib/platform/offers/line-items";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { normalizeProspectEmail } from "@/lib/platform/prospects/normalize-email";
 import { prisma as defaultPrisma } from "@/lib/prisma";
@@ -304,6 +309,15 @@ export async function acceptPrivateOfferByRawToken(
   const termsVersion = HOUZZATPRO_TERMS_VERSION;
   const privacyVersion = HOUZZATPRO_PRIVACY_VERSION;
   const commercialTermsHash = commercialTermsHashFromOfferRow(offer);
+  const totals = computeOfferTotals(offer.lineItems);
+  const location = billingLocationFromLineItems(offer.lineItems);
+  const tax = quoteCommercialTax({
+    country: location.country,
+    region: location.region,
+    taxExempt: location.taxExempt,
+    recurringNetCents: totals.recurringTotalCents,
+    oneTimeNetCents: totals.oneTimeTotalCents,
+  });
   const acceptedSnapshot = {
     offerId: offer.id,
     version: offer.version,
@@ -318,6 +332,7 @@ export async function acceptPrivateOfferByRawToken(
     commercialTermsHash,
     termsVersion,
     privacyVersion,
+    tax,
   } satisfies Prisma.InputJsonObject;
 
   // Idempotent path when acceptance already exists.

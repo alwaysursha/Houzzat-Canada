@@ -289,6 +289,7 @@ export function serializeOfferSummary(
       isRecurring: item.isRecurring,
       quantity: item.quantity,
       sortOrder: item.sortOrder,
+      metadata: item.metadata ?? null,
     })),
     ...(() => {
       const totals = computeOfferTotals(offer.lineItems ?? []);

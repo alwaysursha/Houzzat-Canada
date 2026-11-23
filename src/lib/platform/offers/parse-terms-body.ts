@@ -45,5 +45,12 @@ export function parseCommercialOfferTermsBody(
     adjustments: Array.isArray(body.adjustments)
       ? (body.adjustments as OfferTermsInput["adjustments"])
       : null,
+    billingCountry:
+      typeof body.billingCountry === "string" ? body.billingCountry : null,
+    billingRegion:
+      typeof body.billingRegion === "string" ? body.billingRegion : null,
+    taxExempt: body.taxExempt === true,
+    taxExemptReason:
+      typeof body.taxExemptReason === "string" ? body.taxExemptReason : null,
   };
 }

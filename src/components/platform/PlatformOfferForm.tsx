@@ -12,6 +12,10 @@ import {
   getAdditionalAgentUnitCents,
 } from "@/lib/platform/catalog/add-ons";
 import { ADS_MINIMUM_MONTHLY_BUDGET_CENTS } from "@/lib/platform/offers/constants";
+import {
+  CANADIAN_BILLING_REGIONS,
+  quoteCommercialTax,
+} from "@/lib/platform/billing/canadian-tax";
 import { CommercialOfferActionError } from "@/lib/platform/offers/errors";
 import { describeManualOfferDiscount } from "@/lib/platform/offers/line-items";
 
@@ -72,6 +76,10 @@ export type PlatformOfferFormInitial = {
   googlePpcAmountCents?: number | null;
   includeMetaAds?: boolean;
   metaAdsAmountCents?: number | null;
+  billingRegion?: string | null;
+  billingCountry?: string | null;
+  taxExempt?: boolean;
+  taxExemptReason?: string | null;
 };
 
 export type PlatformOfferWorkspaceOption = {
@@ -160,6 +168,15 @@ export function PlatformOfferForm({
     Boolean(initial?.includeMetaAds),
   );
   const [workspaceId, setWorkspaceId] = useState(linkedWorkspaceId ?? "");
+  const [billingRegion, setBillingRegion] = useState(
+    initial?.billingCountry && initial.billingCountry !== "CA"
+      ? "OUTSIDE"
+      : initial?.billingRegion ?? "ON",
+  );
+  const [taxExempt, setTaxExempt] = useState(Boolean(initial?.taxExempt));
+  const [taxExemptReason, setTaxExemptReason] = useState(
+    initial?.taxExemptReason ?? "",
+  );
   const [metaAdsAmount, setMetaAdsAmount] = useState(
     initial?.metaAdsAmountCents != null
       ? centsToDollarsInput(initial.metaAdsAmountCents)
@@ -246,6 +263,17 @@ export function PlatformOfferForm({
     }
   }, [billingCadence, negotiatedRecurring, planCode, setupFee]);
 
+  const taxQuote = useMemo(() => {
+    if (!pricingPreview.ok) return null;
+    return quoteCommercialTax({
+      country: billingRegion === "OUTSIDE" ? "XX" : "CA",
+      region: billingRegion === "OUTSIDE" ? null : billingRegion,
+      taxExempt,
+      recurringNetCents: summary.recurring,
+      oneTimeNetCents: summary.oneTime,
+    });
+  }, [billingRegion, pricingPreview.ok, summary.oneTime, summary.recurring, taxExempt]);
+
   const selectedWorkspace =
     workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
 
@@ -255,6 +283,13 @@ export function PlatformOfferForm({
     try {
       if (!pricingPreview.ok) {
         setFeedback({ tone: "error", message: pricingPreview.message });
+        return;
+      }
+      if (taxExempt && !taxExemptReason.trim()) {
+        setFeedback({
+          tone: "error",
+          message: "A tax-exempt offer needs a reason.",
+        });
         return;
       }
       const negotiatedRecurringAmountCents =
@@ -314,6 +349,10 @@ export function PlatformOfferForm({
           ? new Date(`${expiresAt}T23:59:59.000Z`).toISOString()
           : null,
         addOns,
+        billingCountry: billingRegion === "OUTSIDE" ? "XX" : "CA",
+        billingRegion: billingRegion === "OUTSIDE" ? null : billingRegion,
+        taxExempt,
+        taxExemptReason: taxExempt ? taxExemptReason.trim() : null,
       };
 
       const url =
@@ -511,12 +550,77 @@ export function PlatformOfferForm({
                   {summary.oneTime === 0 ? "None" : formatCadDollars(summary.oneTime)}
                 </dd>
               </div>
+              {taxQuote ? (
+                <>
+                  <div>
+                    <dt className="text-slate-500">
+                      Estimated {taxQuote.label}
+                      {taxQuote.rateBps > 0
+                        ? ` ${(taxQuote.rateBps / 100).toFixed(taxQuote.rateBps % 100 === 0 ? 0 : 1)}%`
+                        : ""}
+                    </dt>
+                    <dd className="font-semibold text-slate-100">
+                      {formatCadDollars(taxQuote.taxCents)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">First payment with tax</dt>
+                    <dd className="font-semibold text-slate-100">
+                      {formatCadDollars(taxQuote.firstGrossCents)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-slate-500">Future recurring with tax</dt>
+                    <dd className="font-semibold text-slate-100">
+                      {formatCadLabel(taxQuote.recurringGrossCents, billingCadence)}
+                    </dd>
+                  </div>
+                </>
+              ) : null}
             </dl>
           ) : (
             <p className="mt-3 text-red-200">{pricingPreview.message}</p>
           )}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className={labelClass}>
+              Billing province
+              <select
+                className={inputClass}
+                value={billingRegion}
+                onChange={(event) => setBillingRegion(event.target.value)}
+              >
+                {CANADIAN_BILLING_REGIONS.map((region) => (
+                  <option key={region.code} value={region.code}>
+                    {region.name}
+                  </option>
+                ))}
+                <option value="OUTSIDE">Outside Canada</option>
+              </select>
+            </label>
+            <label className="mt-6 flex items-center gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                checked={taxExempt}
+                onChange={(event) => setTaxExempt(event.target.checked)}
+              />
+              Tax-exempt supply
+            </label>
+          </div>
+          {taxExempt ? (
+            <label className={`${labelClass} mt-3`}>
+              Exemption reason
+              <input
+                className={inputClass}
+                value={taxExemptReason}
+                onChange={(event) => setTaxExemptReason(event.target.value)}
+              />
+            </label>
+          ) : null}
           <p className="mt-3 text-xs text-slate-500">
-            Taxes are calculated by checkout. Catalog prices stay unchanged.
+            Prices are tax-exclusive. GST/HST is estimated on the discounted
+            total for the selected province. Catalog prices stay unchanged, and
+            Checkout adds the tax once.
+            {taxQuote?.note ? ` ${taxQuote.note}` : ""}
           </p>
         </div>
       </section>

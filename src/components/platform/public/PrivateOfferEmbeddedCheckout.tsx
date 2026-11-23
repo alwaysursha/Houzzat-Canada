@@ -59,6 +59,7 @@ export function PrivateOfferEmbeddedCheckout({
     | "currency"
     | "recurringTotalCents"
     | "oneTimeTotalCents"
+    | "tax"
     | "preparedFor"
   >;
 }) {
@@ -193,6 +194,23 @@ export function PrivateOfferEmbeddedCheckout({
                     </dd>
                   </div>
                 ) : null}
+                <div className="flex justify-between gap-4">
+                  <dt className="text-slate-500">
+                    Estimated {summary.tax.label}
+                    {summary.tax.rateBps > 0
+                      ? ` ${(summary.tax.rateBps / 100).toFixed(summary.tax.rateBps % 100 === 0 ? 0 : 1)}%`
+                      : ""}
+                  </dt>
+                  <dd className="font-semibold text-slate-900">
+                    {formatCad(summary.tax.taxCents)}
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-4 border-t border-slate-100 pt-3">
+                  <dt className="font-semibold text-slate-700">First payment</dt>
+                  <dd className="font-semibold text-slate-900">
+                    {formatCad(summary.tax.firstGrossCents)}
+                  </dd>
+                </div>
               </dl>
               <p className="mt-5 text-xs leading-relaxed text-slate-400">
                 Card details are encrypted and processed by Stripe. HouzzatPRO

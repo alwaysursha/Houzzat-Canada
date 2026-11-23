@@ -24,6 +24,11 @@ import {
   getPlanDefinition,
   STANDARD_SETUP_FEE_CENTS,
 } from "@/lib/platform/catalog/plans";
+import {
+  billingLocationFromLineItems,
+  quoteCommercialTax,
+  type CommercialTaxQuote,
+} from "@/lib/platform/billing/canadian-tax";
 import { computeOfferTotals } from "@/lib/platform/offers/line-items";
 import {
   ADS_MINIMUM_MONTHLY_BUDGET_CENTS,
@@ -55,6 +60,7 @@ export type PrivateOfferAcceptedPresentation = {
   currency: string;
   recurringTotalCents: number;
   oneTimeTotalCents: number;
+  tax: CommercialTaxQuote;
 };
 
 export type PrivateOfferLineView = {
@@ -91,6 +97,7 @@ export type PrivateOfferPresentation = {
   oneTimeLines: PrivateOfferLineView[];
   recurringTotalCents: number;
   oneTimeTotalCents: number;
+  tax: CommercialTaxQuote;
   planValueLabels: string[];
   preparedFor: {
     contactName: string | null;
@@ -186,6 +193,14 @@ function buildPresentation(input: {
 }): PrivateOfferPresentation {
   const lines = input.lineItems.map(toLineView);
   const totals = computeOfferTotals(input.lineItems);
+  const location = billingLocationFromLineItems(input.lineItems);
+  const tax = quoteCommercialTax({
+    country: location.country,
+    region: location.region,
+    taxExempt: location.taxExempt,
+    recurringNetCents: totals.recurringTotalCents,
+    oneTimeNetCents: totals.oneTimeTotalCents,
+  });
   const status =
     input.offer.status === "VIEWED" ? ("VIEWED" as const) : ("SENT" as const);
 
@@ -213,6 +228,7 @@ function buildPresentation(input: {
     oneTimeLines: lines.filter((l) => !l.isRecurring),
     recurringTotalCents: totals.recurringTotalCents,
     oneTimeTotalCents: totals.oneTimeTotalCents,
+    tax,
     planValueLabels: planValueLabelsFor(input.offer.planCode),
     preparedFor: {
       contactName: input.prospect.contactName?.trim() || null,
@@ -395,6 +411,18 @@ export async function resolvePrivateOfferByRawToken(input: {
         currency: offer.currency,
         recurringTotalCents: eligibility.recurringTotalCents ?? 0,
         oneTimeTotalCents: eligibility.oneTimeTotalCents ?? 0,
+        tax: quoteCommercialTax({
+          ...(() => {
+            const location = billingLocationFromLineItems(offer.lineItems);
+            return {
+              country: location.country,
+              region: location.region,
+              taxExempt: location.taxExempt,
+            };
+          })(),
+          recurringNetCents: eligibility.recurringTotalCents ?? 0,
+          oneTimeNetCents: eligibility.oneTimeTotalCents ?? 0,
+        }),
       },
     };
   }

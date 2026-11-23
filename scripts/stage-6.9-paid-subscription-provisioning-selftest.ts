@@ -78,6 +78,7 @@ type FakeUser = {
   platformOperatorId: string | null;
   phone?: string | null;
   phoneE164?: string | null;
+  workspaceId?: string | null;
 };
 
 type FakeMember = {
@@ -886,6 +887,22 @@ function createFakePrisma(state: FakeState): PrismaClient {
       },
     },
     user: {
+      async findFirst({
+        where,
+      }: {
+        where: { email?: string; workspaceId?: string };
+        select?: Record<string, unknown>;
+      }) {
+        const email = where.email?.trim().toLowerCase();
+        const user = [...state.users.values()].find((row) => {
+          if (email && row.email !== email) return false;
+          if (where.workspaceId && row.workspaceId && row.workspaceId !== where.workspaceId) {
+            return false;
+          }
+          return true;
+        });
+        return user ? { ...user, platformOperator: null } : null;
+      },
       async findUnique({
         where,
         select,
@@ -938,6 +955,7 @@ function createFakePrisma(state: FakeState): PrismaClient {
           platformOperatorId: null,
           phone: (data.phone as string | null) ?? null,
           phoneE164: (data.phoneE164 as string | null) ?? null,
+          workspaceId: (data.workspaceId as string | null) ?? null,
         };
         state.users.set(user.id, user);
         if (!select) return { ...user };
@@ -1185,6 +1203,22 @@ function createFakePrisma(state: FakeState): PrismaClient {
       },
     },
     billingCustomer: {
+      async findUnique({
+        where,
+      }: {
+        where: { id?: string; workspaceId?: string };
+        select?: unknown;
+      }) {
+        if (where.workspaceId) {
+          return (
+            [...state.billingCustomers.values()].find(
+              (row) => row.workspaceId === where.workspaceId,
+            ) ?? null
+          );
+        }
+        if (where.id) return state.billingCustomers.get(where.id) ?? null;
+        return null;
+      },
       async update({
         where,
         data,
@@ -1525,7 +1559,7 @@ async function main() {
       (m) => m.workspaceId === ws.id && m.role === "OWNER",
     )!;
     const ownerUser = state.users.get(ownerMember.userId)!;
-    assert.equal(ownerUser.phone, "+1-416-555-0100");
+    assert.equal(ownerUser.phone, "(416) 555 - 0100");
     assert.equal(ownerUser.phoneE164, "+14165550100");
     console.log("[2] ACTIVE TEAM provisions correctly... PASS");
   }
@@ -1844,7 +1878,7 @@ async function main() {
     assert.equal(owners.length, 1);
     assert.equal(owners[0]!.role, "OWNER");
     assert.equal(ws.billingOwnerUserId, existingUserId);
-    assert.equal(user.phone, "+1-416-555-0100");
+    assert.equal(user.phone, "(416) 555 - 0100");
     assert.equal(user.phoneE164, "+14165550100");
     assertProtectedUnchanged(state, before);
     console.log("[7] Existing BUYER reused; not promoted to ADMIN... PASS");

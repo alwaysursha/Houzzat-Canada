@@ -201,6 +201,10 @@ export function resolveOfferCommercialTerms(input: {
   expiresAt?: Date | null;
   addOns?: OfferAddOnInput[] | null;
   adjustments?: OfferAdjustmentInput[] | null;
+  billingCountry?: string | null;
+  billingRegion?: string | null;
+  taxExempt?: boolean | null;
+  taxExemptReason?: string | null;
 }): ResolvedOfferCommercialTerms {
   const plan = getPlanDefinition(input.planCode);
   const standardRecurringAmountCents = standardRecurringCents(
@@ -256,6 +260,17 @@ export function resolveOfferCommercialTerms(input: {
   const lineItems: Prisma.CommercialOfferLineItemCreateWithoutOfferInput[] = [];
   let sortOrder = 0;
 
+  const taxExempt = input.taxExempt === true;
+  const taxExemptReason = input.taxExemptReason?.trim() || null;
+  if (taxExempt && !taxExemptReason) {
+    throw new CommercialOfferActionError(
+      "A tax-exempt offer needs a reason.",
+      "TAX_EXEMPT_REASON_REQUIRED",
+    );
+  }
+  const billingCountry = input.billingCountry?.trim().toUpperCase() || null;
+  const billingRegion = input.billingRegion?.trim().toUpperCase() || null;
+
   lineItems.push({
     kind: "PLAN_BASE",
     code: OFFER_LINE_CODES.PLAN_BASE,
@@ -264,6 +279,16 @@ export function resolveOfferCommercialTerms(input: {
     isRecurring: true,
     quantity: 1,
     sortOrder: sortOrder++,
+    ...(billingCountry || billingRegion || taxExempt
+      ? {
+          metadata: {
+            billingCountry,
+            billingRegion,
+            taxTreatment: taxExempt ? "exempt" : billingCountry && billingCountry !== "CA" ? "zero_rated" : "taxable",
+            taxExemptReason,
+          },
+        }
+      : {}),
   });
 
   if (quote.recurringSavingsCents > 0) {

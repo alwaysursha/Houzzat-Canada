@@ -41,6 +41,7 @@ type FakeLine = {
   isRecurring: boolean;
   quantity: number;
   sortOrder: number;
+  metadata?: unknown;
 };
 
 type FakeState = {
@@ -112,6 +113,8 @@ function seedAcceptedOffer(
     setupFeeCents: opts?.setupFeeCents ?? 0,
     additionalSeats,
     addOns: opts?.addOns ?? [],
+    billingCountry: "CA",
+    billingRegion: "ON",
   });
 
   const prospectId = `pros_${state.nextId++}`;
@@ -159,6 +162,7 @@ function seedAcceptedOffer(
       isRecurring: Boolean(item.isRecurring),
       quantity: Number(item.quantity ?? 1),
       sortOrder: Number(item.sortOrder ?? 0),
+      metadata: "metadata" in item ? item.metadata : null,
     });
   }
 
@@ -216,6 +220,17 @@ function createFakeStripe(state: FakeState) {
         state.stripeCustomers += 1;
         return { id };
       },
+      async update(id: string) {
+        return { id };
+      },
+    },
+    taxRates: {
+      async list() {
+        return { data: [] as Array<Record<string, unknown>> };
+      },
+      async create() {
+        return { id: "txr_test_hst", inclusive: false, active: true };
+      },
     },
     checkout: {
       sessions: {
@@ -231,6 +246,7 @@ function createFakeStripe(state: FakeState) {
             customer: params.customer,
             payment_status: "unpaid",
             line_items: params.line_items,
+            automatic_tax: params.automatic_tax,
             return_url: params.return_url,
             branding_settings: params.branding_settings,
             url: null,
@@ -485,6 +501,7 @@ function createFakePrisma(state: FakeState) {
 }
 
 async function main() {
+  process.env.HOUZZATPRO_GST_HST_REGISTRATION_NUMBER = "123456789RT0001";
   console.log("\n=== STAGE 6.8B — STRIPE CHECKOUT FOUNDATION ===\n");
 
   // 0. Source guards
@@ -760,6 +777,14 @@ async function main() {
     assert.equal(
       recurringLine?.price_data?.unit_amount,
       seeded.totals.recurringTotalCents,
+    );
+    assert.equal(
+      (session as { automatic_tax?: { enabled?: boolean } }).automatic_tax?.enabled,
+      false,
+    );
+    assert.deepEqual(
+      (recurringLine as { tax_rates?: string[] } | undefined)?.tax_rates,
+      ["txr_test_hst"],
     );
     assert.equal(recurringLine?.price_data?.recurring?.interval, "year");
     assert.equal(
