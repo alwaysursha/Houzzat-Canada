@@ -38,6 +38,7 @@ import {
   certificateCoversHostname,
   createVercelProjectDomainClient,
   interpretVercelDomainStatus,
+  presentedCertificateFromPeer,
   type VercelDomainReadiness,
   type VercelProjectDomainClient,
 } from "@/lib/tenancy/workspace-domain/vercel-project-domain";
@@ -703,6 +704,96 @@ async function main() {
   });
   assert.equal(certFailure.result.reason, "VERCEL_API_ERROR");
   assert.equal(certFailure.result.tlsReady, false);
+  assert.equal(certFailure.result.upstream?.status, 500);
+  assert.equal(certFailure.result.upstream?.path, "/v6/certs");
+
+  const parsedCertificate = presentedCertificateFromPeer({
+    subjectaltname: "DNS:www.highoctaneniagara.ca, DNS:highoctaneniagara.ca",
+    valid_to: "Nov 23 00:00:00 2027 GMT",
+  });
+  assert.equal(
+    certificateCoversHostname(
+      parsedCertificate.cns ?? [],
+      "highoctaneniagara.ca",
+      Date.now(),
+      parsedCertificate.expiresAt ?? 0,
+    ),
+    true,
+  );
+
+  async function inspectProjectToken(
+    hostname: string,
+    presented: { cns: string[]; expiresAt: number } | null,
+    projectBody: Record<string, unknown> = {
+      ...productionDomain,
+      projectId: "prj_NmpR3ac20jLrDtuVWNQiAE1NmSuS",
+    },
+  ) {
+    let reads = 0;
+    const calls: string[] = [];
+    const client = createVercelProjectDomainClient(
+      configured,
+      async (input) => {
+        const url = new URL(String(input));
+        calls.push(`${url.pathname}?team=${url.searchParams.get("teamId") ?? "none"}`);
+        if (url.pathname.endsWith("/config") || url.pathname.endsWith("/certs")) {
+          return new Response(JSON.stringify({ error: { code: "forbidden" } }), { status: 403 });
+        }
+        if (projectBody.projectId === "missing") {
+          return new Response(JSON.stringify({ error: { code: "forbidden" } }), { status: 403 });
+        }
+        return new Response(JSON.stringify(projectBody), { status: 200 });
+      },
+      async () => {
+        reads += 1;
+        return presented;
+      },
+    );
+    return { result: await client.inspect(hostname), reads, calls };
+  }
+
+  const scopedWww = await inspectProjectToken("www.highoctaneniagara.ca", {
+    cns: ["www.highoctaneniagara.ca"],
+    expiresAt: certNow + 86_400_000,
+  });
+  assert.equal(scopedWww.result.reason, "READY");
+  assert.equal(scopedWww.result.tlsReady, true);
+  assert.equal(scopedWww.result.attached, true);
+  assert.equal(scopedWww.reads, 1);
+  assert.equal(scopedWww.calls.some((call) => call.includes("/v6/certs?team=none")), true);
+
+  const scopedApex = await inspectProjectToken(
+    "highoctaneniagara.ca",
+    { cns: ["highoctaneniagara.ca"], expiresAt: certNow + 86_400_000 },
+    {
+      ...productionDomain,
+      projectId: "prj_NmpR3ac20jLrDtuVWNQiAE1NmSuS",
+      redirect: "www.highoctaneniagara.ca",
+      redirectStatusCode: 308,
+    },
+  );
+  assert.equal(scopedApex.result.reason, "READY");
+  assert.equal(scopedApex.result.tlsReady, true);
+
+  const scopedMissingCert = await inspectProjectToken("www.highoctaneniagara.ca", null);
+  assert.equal(scopedMissingCert.result.reason, "TLS_NOT_READY");
+  assert.equal(scopedMissingCert.reads, 1);
+
+  const otherProject = await inspectProjectToken("www.highoctaneniagara.ca", {
+    cns: ["www.highoctaneniagara.ca"],
+    expiresAt: certNow + 86_400_000,
+  }, { ...productionDomain, projectId: "prj_other" });
+  assert.equal(otherProject.result.reason, "VERCEL_NOT_ATTACHED");
+  assert.equal(otherProject.reads, 0);
+
+  const projectForbidden = await inspectProjectToken(
+    "www.highoctaneniagara.ca",
+    { cns: ["www.highoctaneniagara.ca"], expiresAt: certNow + 86_400_000 },
+    { projectId: "missing" },
+  );
+  assert.equal(projectForbidden.result.reason, "VERCEL_API_ERROR");
+  assert.equal(projectForbidden.result.upstream?.status, 403);
+  assert.equal(projectForbidden.reads, 0);
 
   const plan = buildCustomDomainDnsPlan({
     claims: [{ hostname: "highoctaneniagara.ca", verificationToken: "token" }],

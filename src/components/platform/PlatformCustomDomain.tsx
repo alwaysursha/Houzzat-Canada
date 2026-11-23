@@ -39,6 +39,7 @@ type Readiness = {
     tlsReady: boolean;
     reason: string | null;
     records: DnsRecord[];
+    upstream?: { path: string; status: number } | null;
   };
   routing: { isolated: boolean; live: boolean; reason: string | null };
 };
@@ -154,7 +155,10 @@ export function PlatformCustomDomain({
     const data = await post<Readiness>(`readiness:${domainId}`, `${base}/readiness`, { domainId });
     if (!data) return;
     setReadiness((current) => ({ ...current, [domainId]: data }));
-    setFeedback(certificateCheckMessage(data.vercel.reason, data.vercel.tlsReady));
+    const upstream = data.vercel.upstream
+      ? ` ${data.vercel.upstream.path} returned HTTP ${data.vercel.upstream.status}.`
+      : "";
+    setFeedback(`${certificateCheckMessage(data.vercel.reason, data.vercel.tlsReady)}${upstream}`);
   }
 
   async function onAttach(domainId: string) {

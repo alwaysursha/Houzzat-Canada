@@ -4,6 +4,7 @@
  * This client never edits DNS.
  */
 
+import { connect as connectTls } from "node:tls";
 import {
   SHARED_PROJECT_APEX_A_RECORDS,
   SHARED_PROJECT_CNAME_TARGET,
@@ -26,6 +27,8 @@ export type VercelDomainReadiness = {
     | "VERCEL_NOT_PRODUCTION"
     | "VERCEL_API_ERROR"
     | null;
+  /** Failing Vercel request. Null when the check completed. */
+  upstream: { path: string; status: number } | null;
 };
 
 export type VercelProjectDomainClient = {
@@ -41,6 +44,7 @@ type VercelConfig = {
 
 type ProjectDomainPayload = {
   name?: string;
+  projectId?: string;
   verified?: boolean;
   gitBranch?: string | null;
   customEnvironmentId?: string | null;
@@ -107,6 +111,8 @@ export function interpretVercelDomainStatus(input: {
   hostname: string;
   projectDomain: ProjectDomainPayload | null;
   config: DomainConfigPayload | null;
+  /** When false, a project token could not read the team domain-config endpoint. */
+  configReadable?: boolean;
   certificates: readonly CertPayload[];
   now: number;
   attached: boolean;
@@ -148,11 +154,13 @@ export function interpretVercelDomainStatus(input: {
       tlsReady: false,
       records,
       reason: "VERCEL_NOT_ATTACHED",
+      upstream: null,
     };
   }
 
   const verified = input.projectDomain.verified === true;
-  const misconfigured = input.config?.misconfigured !== false;
+  const configReadable = input.configReadable ?? true;
+  const misconfigured = configReadable ? input.config?.misconfigured !== false : false;
   const productionAssignment =
     !input.projectDomain.gitBranch && !input.projectDomain.customEnvironmentId;
   const tlsReady = input.certificates.some((cert) =>
@@ -160,7 +168,7 @@ export function interpretVercelDomainStatus(input: {
   );
 
   if (!verified) {
-    return { attached: true, verified: false, misconfigured, tlsReady: false, records, reason: "VERCEL_UNVERIFIED" };
+    return { attached: true, verified: false, misconfigured, tlsReady: false, records, reason: "VERCEL_UNVERIFIED", upstream: null };
   }
   if (!productionAssignment) {
     return {
@@ -170,15 +178,16 @@ export function interpretVercelDomainStatus(input: {
       tlsReady: false,
       records,
       reason: "VERCEL_NOT_PRODUCTION",
+      upstream: null,
     };
   }
   if (misconfigured) {
-    return { attached: true, verified: true, misconfigured: true, tlsReady: false, records, reason: "VERCEL_MISCONFIGURED" };
+    return { attached: true, verified: true, misconfigured: true, tlsReady: false, records, reason: "VERCEL_MISCONFIGURED", upstream: null };
   }
   if (!tlsReady) {
-    return { attached: true, verified: true, misconfigured: false, tlsReady: false, records, reason: "TLS_NOT_READY" };
+    return { attached: true, verified: true, misconfigured: false, tlsReady: false, records, reason: "TLS_NOT_READY", upstream: null };
   }
-  return { attached: true, verified: true, misconfigured: false, tlsReady: true, records, reason: "READY" };
+  return { attached: true, verified: true, misconfigured: false, tlsReady: true, records, reason: "READY", upstream: null };
 }
 
 function notConfigured(): VercelDomainReadiness {
@@ -189,10 +198,11 @@ function notConfigured(): VercelDomainReadiness {
     tlsReady: false,
     records: [],
     reason: "VERCEL_NOT_CONFIGURED",
+    upstream: null,
   };
 }
 
-function apiError(): VercelDomainReadiness {
+function apiError(upstream: { path: string; status: number } | null = null): VercelDomainReadiness {
   return {
     attached: false,
     verified: false,
@@ -200,6 +210,7 @@ function apiError(): VercelDomainReadiness {
     tlsReady: false,
     records: [],
     reason: "VERCEL_API_ERROR",
+    upstream,
   };
 }
 
@@ -211,9 +222,47 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
+export function presentedCertificateFromPeer(peer: {
+  subjectaltname?: string;
+  subject?: { CN?: string | string[] };
+  valid_to?: string;
+}): CertPayload {
+  const cns: string[] = [];
+  for (const part of (peer.subjectaltname ?? "").split(",")) {
+    const piece = part.trim();
+    if (piece.startsWith("DNS:")) cns.push(piece.slice(4).trim());
+  }
+  const commonName = peer.subject?.CN;
+  if (typeof commonName === "string" && commonName) cns.push(commonName);
+  if (Array.isArray(commonName)) cns.push(...commonName.filter((name) => name.length > 0));
+  const expiresAt = peer.valid_to ? Date.parse(peer.valid_to) : Number.NaN;
+  return { cns, expiresAt: Number.isFinite(expiresAt) ? expiresAt : 0 };
+}
+
+export function readPresentedCertificate(hostname: string): Promise<CertPayload | null> {
+  return new Promise((resolve) => {
+    const socket = connectTls({ host: hostname, servername: hostname, port: 443 });
+    let settled = false;
+    const finish = (certificate: CertPayload | null) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(certificate);
+    };
+    socket.setTimeout(8_000);
+    socket.once("secureConnect", () => {
+      const peer = socket.getPeerCertificate();
+      finish(Object.keys(peer).length > 0 ? presentedCertificateFromPeer(peer) : null);
+    });
+    socket.once("timeout", () => finish(null));
+    socket.once("error", () => finish(null));
+  });
+}
+
 export function createVercelProjectDomainClient(
   env: NodeJS.ProcessEnv = process.env,
   fetchImpl: typeof fetch = fetch,
+  readCertificate: (hostname: string) => Promise<CertPayload | null> = readPresentedCertificate,
 ): VercelProjectDomainClient {
   const configured = readVercelProjectDomainConfig(env);
 
@@ -222,12 +271,38 @@ export function createVercelProjectDomainClient(
     const { token, projectId, teamId } = configured.config;
     const headers = { Authorization: `Bearer ${token}` };
     const domain = encodeURIComponent(hostname);
+
+    async function send(
+      path: string,
+      query: Record<string, string>,
+      init?: RequestInit,
+    ): Promise<{ path: string; response: Response }> {
+      const url = new URL(`https://api.vercel.com${path}`);
+      for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+      const extraHeaders =
+        init?.headers && !Array.isArray(init.headers) && !(init.headers instanceof Headers)
+          ? init.headers
+          : {};
+      const response = await fetchImpl(url, {
+        ...init,
+        headers: { ...headers, ...extraHeaders },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok && response.status !== 409) {
+        console.info(JSON.stringify({ event: "vercel-domain-check", path: url.pathname, status: response.status }));
+      }
+      return { path: url.pathname, response };
+    }
+
+    async function sendForToken(path: string, query: Record<string, string>, init?: RequestInit) {
+      const withTeam = await send(path, teamId ? { ...query, teamId } : query, init);
+      if (withTeam.response.status !== 403 || !teamId) return withTeam;
+      return send(path, query, init);
+    }
+
     try {
-      const projectResponse = await fetchImpl(
-        `https://api.vercel.com/v9/projects/${projectId}/domains/${domain}?teamId=${encodeURIComponent(teamId)}`,
-        { headers, signal: AbortSignal.timeout(10_000) },
-      );
-      if (projectResponse.status === 404) {
+      const project = await sendForToken(`/v9/projects/${projectId}/domains/${domain}`, {});
+      if (project.response.status === 404) {
         return interpretVercelDomainStatus({
           hostname,
           projectDomain: null,
@@ -237,20 +312,35 @@ export function createVercelProjectDomainClient(
           attached: false,
         });
       }
-      if (!projectResponse.ok) return apiError();
-      const projectDomain = (await readJson(projectResponse)) as ProjectDomainPayload | null;
-      const configResponse = await fetchImpl(
-        `https://api.vercel.com/v6/domains/${domain}/config?teamId=${encodeURIComponent(teamId)}`,
-        { headers, signal: AbortSignal.timeout(10_000) },
-      );
-      if (!configResponse.ok) return apiError();
-      const config = (await readJson(configResponse)) as DomainConfigPayload | null;
-      const certificates = await loadMatchingCertificates(hostname, teamId, headers, fetchImpl);
-      if (!certificates.ok) return apiError();
+      if (!project.response.ok) return apiError({ path: project.path, status: project.response.status });
+      const projectDomain = (await readJson(project.response)) as ProjectDomainPayload | null;
+      if (projectDomain?.projectId && projectDomain.projectId !== projectId) {
+        return interpretVercelDomainStatus({
+          hostname,
+          projectDomain: null,
+          config: null,
+          certificates: [],
+          now: Date.now(),
+          attached: false,
+        });
+      }
+
+      const configResult = await sendForToken(`/v6/domains/${domain}/config`, {});
+      if (!configResult.response.ok && configResult.response.status !== 403) {
+        return apiError({ path: configResult.path, status: configResult.response.status });
+      }
+      const configReadable = configResult.response.ok;
+      const config = configReadable
+        ? ((await readJson(configResult.response)) as DomainConfigPayload | null)
+        : null;
+
+      const certificates = await loadCertificates(hostname, sendForToken, readCertificate);
+      if (!certificates.ok) return apiError(certificates.upstream);
       return interpretVercelDomainStatus({
         hostname,
         projectDomain,
         config,
+        configReadable,
         certificates: certificates.certs,
         now: Date.now(),
         attached: true,
@@ -267,20 +357,27 @@ export function createVercelProjectDomainClient(
     async attach(hostname) {
       if (!configured.ok) return notConfigured();
       const { token, projectId, teamId } = configured.config;
+      const headers = { Authorization: `Bearer ${token}` };
       try {
-        const response = await fetchImpl(
-          `https://api.vercel.com/v10/projects/${projectId}/domains?teamId=${encodeURIComponent(teamId)}`,
-          {
+        const url = new URL(`https://api.vercel.com/v10/projects/${projectId}/domains`);
+        if (teamId) url.searchParams.set("teamId", teamId);
+        let response = await fetchImpl(url, {
+          method: "POST",
+          headers: { ...headers, "Content-Type": "application/json" },
+          body: JSON.stringify({ name: hostname }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (response.status === 403 && teamId) {
+          response = await fetchImpl(`https://api.vercel.com/v10/projects/${projectId}/domains`, {
             method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
+            headers: { ...headers, "Content-Type": "application/json" },
             body: JSON.stringify({ name: hostname }),
             signal: AbortSignal.timeout(10_000),
-          },
-        );
-        if (!response.ok && response.status !== 409) return apiError();
+          });
+        }
+        if (!response.ok && response.status !== 409) {
+          return apiError({ path: url.pathname, status: response.status });
+        }
       } catch {
         return apiError();
       }
@@ -289,22 +386,30 @@ export function createVercelProjectDomainClient(
   };
 }
 
-async function loadMatchingCertificates(
+async function loadCertificates(
   hostname: string,
-  teamId: string,
-  headers: { Authorization: string },
-  fetchImpl: typeof fetch,
-): Promise<{ ok: true; certs: CertPayload[] } | { ok: false }> {
-  const url = new URL("https://api.vercel.com/v6/certs");
-  url.searchParams.set("limit", "100");
-  url.searchParams.set("teamId", teamId);
-  url.searchParams.set("domain", hostname);
-  const response = await fetchImpl(url, { headers, signal: AbortSignal.timeout(10_000) });
-  if (!response.ok) return { ok: false };
-  const body = (await readJson(response)) as { certs?: CertPayload[] } | null;
-  const now = Date.now();
-  const certs = (body?.certs ?? []).filter((cert) =>
-    certificateCoversHostname(cert.cns ?? [], hostname, now, cert.expiresAt ?? 0),
-  );
-  return { ok: true, certs };
+  sendForToken: (
+    path: string,
+    query: Record<string, string>,
+  ) => Promise<{ path: string; response: Response }>,
+  readCertificate: (hostname: string) => Promise<CertPayload | null>,
+): Promise<{ ok: true; certs: CertPayload[] } | { ok: false; upstream: { path: string; status: number } }> {
+  for (const path of ["/v6/certs", "/v8/certs"]) {
+    const result = await sendForToken(path, { limit: "100", domain: hostname });
+    if (result.response.ok) {
+      const body = (await readJson(result.response)) as { certs?: CertPayload[] } | null;
+      const now = Date.now();
+      return {
+        ok: true,
+        certs: (body?.certs ?? []).filter((cert) =>
+          certificateCoversHostname(cert.cns ?? [], hostname, now, cert.expiresAt ?? 0),
+        ),
+      };
+    }
+    if (result.response.status !== 403 && result.response.status !== 410) {
+      return { ok: false, upstream: { path: result.path, status: result.response.status } };
+    }
+  }
+  const presented = await readCertificate(hostname);
+  return { ok: true, certs: presented ? [presented] : [] };
 }
