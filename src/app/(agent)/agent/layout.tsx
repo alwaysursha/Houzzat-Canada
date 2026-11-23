@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { ActiveWorkspaceGate } from "@/components/agent/ActiveWorkspaceGate";
+import { ProfessionalProfileNotice } from "@/components/agent/ProfessionalProfileNotice";
 import { AgentShell } from "@/components/agent/AgentShell";
 import { StaffRouteConsumerGate } from "@/components/mobile/StaffRouteConsumerGate";
 import { ListingSheetHostLazy } from "@/components/mobile/ListingSheetHostLazy";
@@ -99,6 +100,9 @@ export default async function AgentLayout({
         showCommandCentreLink={membershipRole === "OWNER"}
       >
         {ctx.requiresWorkspaceSelection ? <ActiveWorkspaceGate /> : null}
+        {ctx.workspaceId ? (
+          <ProfessionalProfileNotice workspaceId={ctx.workspaceId} userId={ctx.user.id} />
+        ) : null}
         <StaffRouteConsumerGate />
         <Suspense fallback={null}>{children}</Suspense>
       </AgentShell>

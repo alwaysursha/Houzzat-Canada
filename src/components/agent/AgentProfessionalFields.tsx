@@ -1,14 +1,24 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import {
+  designationOptionsForJurisdiction,
+  licenseKindForJurisdiction,
+  PROFESSIONAL_FIELD_LABELS,
+  PROFESSIONAL_JURISDICTIONS,
+  type ProfessionalFieldKey,
+} from "@/lib/agent/professional-profile";
 
 export type AgentProfessionalFormValue = {
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
+  designation: string;
+  jurisdiction: string;
   recoLicenseNumber: string;
   recoLicenseExpiresAt: string;
+  registrationNumber: string;
 };
 
 export function AgentProfessionalFields({
@@ -16,18 +26,23 @@ export function AgentProfessionalFields({
   onChange,
   disabled = false,
   readOnly = false,
-  licenseRequired = true,
+  blockIncomplete = false,
+  errors,
   idPrefix,
 }: {
   value: AgentProfessionalFormValue;
   onChange?: (next: AgentProfessionalFormValue) => void;
   disabled?: boolean;
   readOnly?: boolean;
-  /** Owners can save signature details before a license is on file. */
-  licenseRequired?: boolean;
+  /** Invite forms block submit until required controls are filled. Profile edits stay saveable. */
+  blockIncomplete?: boolean;
+  errors?: Partial<Record<ProfessionalFieldKey, string>>;
   idPrefix: string;
 }) {
   const locked = disabled || readOnly;
+  const licenseKind = licenseKindForJurisdiction(value.jurisdiction);
+  const designationOptions = designationOptionsForJurisdiction(value.jurisdiction || null);
+  const jurisdiction = PROFESSIONAL_JURISDICTIONS.find((item) => item.id === value.jurisdiction);
 
   function patch(partial: Partial<AgentProfessionalFormValue>) {
     onChange?.({ ...value, ...partial });
@@ -43,6 +58,7 @@ export function AgentProfessionalFields({
         onChange={(firstName) => patch({ firstName })}
         disabled={locked}
         autoComplete="given-name"
+        error={errors?.firstName}
       />
       <Field
         id={`${idPrefix}-last-name`}
@@ -52,10 +68,11 @@ export function AgentProfessionalFields({
         onChange={(lastName) => patch({ lastName })}
         disabled={locked}
         autoComplete="family-name"
+        error={errors?.lastName}
       />
       <Field
         id={`${idPrefix}-email`}
-        label="Email"
+        label="Professional email"
         required
         type="email"
         value={value.email}
@@ -63,6 +80,7 @@ export function AgentProfessionalFields({
         disabled={locked}
         autoComplete="email"
         className="sm:col-span-2"
+        error={errors?.email}
       />
       <Field
         id={`${idPrefix}-phone`}
@@ -74,25 +92,97 @@ export function AgentProfessionalFields({
         disabled={locked}
         autoComplete="tel"
         hint="Formats as (647) 221 - 4949. Used for Agent SMS notifications."
+        error={errors?.phone}
       />
-      <Field
-        id={`${idPrefix}-reco`}
-        label="RECO license #"
-        required={licenseRequired}
-        value={value.recoLicenseNumber}
-        onChange={(recoLicenseNumber) => patch({ recoLicenseNumber })}
-        disabled={locked}
-      />
-      <Field
-        id={`${idPrefix}-reco-expiry`}
-        label="RECO license expiry date"
-        required={licenseRequired}
-        type="date"
-        value={value.recoLicenseExpiresAt}
-        onChange={(recoLicenseExpiresAt) => patch({ recoLicenseExpiresAt })}
-        disabled={locked}
-        className="sm:col-span-2"
-      />
+      <div className="space-y-1.5">
+        <label htmlFor={`${idPrefix}-jurisdiction`} className="text-sm font-medium text-ink">
+          Licensing jurisdiction
+          <span className="text-danger"> *</span>
+        </label>
+        <select
+          id={`${idPrefix}-jurisdiction`}
+          required={blockIncomplete}
+          disabled={locked}
+          value={value.jurisdiction}
+          onChange={(event) => patch({ jurisdiction: event.target.value })}
+          className="flex h-11 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink"
+        >
+          <option value="">Select a jurisdiction</option>
+          {PROFESSIONAL_JURISDICTIONS.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+        {errors?.jurisdiction ? (
+          <p className="text-[11px] text-[#b91c1c]">{errors.jurisdiction}</p>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-ink/45">
+            Registration details follow this choice. Ontario is not assumed.
+          </p>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor={`${idPrefix}-designation`} className="text-sm font-medium text-ink">
+          Professional designation
+          <span className="text-danger"> *</span>
+        </label>
+        <Input
+          id={`${idPrefix}-designation`}
+          required={blockIncomplete}
+          list={`${idPrefix}-designation-options`}
+          value={value.designation}
+          disabled={locked}
+          onChange={(event) => patch({ designation: event.target.value })}
+        />
+        <datalist id={`${idPrefix}-designation-options`}>
+          {designationOptions.map((option) => (
+            <option key={option} value={option} />
+          ))}
+        </datalist>
+        {errors?.designation ? (
+          <p className="text-[11px] text-[#b91c1c]">{errors.designation}</p>
+        ) : (
+          <p className="text-[11px] leading-relaxed text-ink/45">
+            Suggestions match the selected jurisdiction. A saved title is kept if you type your own.
+          </p>
+        )}
+      </div>
+      {licenseKind === "reco" ? (
+        <>
+          <Field
+            id={`${idPrefix}-reco`}
+            label={PROFESSIONAL_FIELD_LABELS.recoLicenseNumber}
+            required={blockIncomplete}
+            value={value.recoLicenseNumber}
+            onChange={(recoLicenseNumber) => patch({ recoLicenseNumber })}
+            disabled={locked}
+            error={errors?.recoLicenseNumber}
+          />
+          <Field
+            id={`${idPrefix}-reco-expiry`}
+            label={PROFESSIONAL_FIELD_LABELS.recoLicenseExpiresAt}
+            required={blockIncomplete}
+            type="date"
+            value={value.recoLicenseExpiresAt}
+            onChange={(recoLicenseExpiresAt) => patch({ recoLicenseExpiresAt })}
+            disabled={locked}
+            error={errors?.recoLicenseExpiresAt}
+          />
+        </>
+      ) : null}
+      {licenseKind === "registration" ? (
+        <Field
+          id={`${idPrefix}-registration`}
+          label={jurisdiction?.licenseLabel ?? PROFESSIONAL_FIELD_LABELS.registrationNumber}
+          required={blockIncomplete}
+          value={value.registrationNumber}
+          onChange={(registrationNumber) => patch({ registrationNumber })}
+          disabled={locked}
+          className="sm:col-span-2"
+          error={errors?.registrationNumber}
+        />
+      ) : null}
     </div>
   );
 }
@@ -107,6 +197,7 @@ function Field({
   disabled,
   autoComplete,
   hint,
+  error,
   className,
 }: {
   id: string;
@@ -118,6 +209,7 @@ function Field({
   disabled?: boolean;
   autoComplete?: string;
   hint?: string;
+  error?: string;
   className?: string;
 }) {
   return (
@@ -131,12 +223,13 @@ function Field({
         type={type}
         required={required}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
         readOnly={disabled}
         autoComplete={autoComplete}
       />
-      {hint ? <p className="text-[11px] leading-relaxed text-ink/45">{hint}</p> : null}
+      {error ? <p className="text-[11px] text-[#b91c1c]">{error}</p> : null}
+      {hint && !error ? <p className="text-[11px] leading-relaxed text-ink/45">{hint}</p> : null}
     </div>
   );
 }

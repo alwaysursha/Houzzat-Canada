@@ -16,11 +16,14 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   email: z.string().trim().email().max(320),
   role: z.enum(["ADMIN", "AGENT"]),
-  firstName: z.string().trim().min(1).max(80).optional(),
-  lastName: z.string().trim().min(1).max(80).optional(),
-  phone: z.string().trim().min(1).max(40).optional(),
-  recoLicenseNumber: z.string().trim().min(1).max(40).optional(),
-  recoLicenseExpiresAt: z.string().trim().min(10).max(32).optional(),
+  firstName: z.string().trim().max(80).optional().default(""),
+  lastName: z.string().trim().max(80).optional().default(""),
+  phone: z.string().trim().max(40).optional().default(""),
+  designation: z.string().trim().max(80).optional().default(""),
+  jurisdiction: z.string().trim().max(16).optional().default(""),
+  recoLicenseNumber: z.string().trim().max(40).optional().default(""),
+  recoLicenseExpiresAt: z.string().trim().max(32).optional().default(""),
+  registrationNumber: z.string().trim().max(40).optional().default(""),
 });
 
 export async function POST(request: Request) {
@@ -53,24 +56,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, role, firstName, lastName, phone, recoLicenseNumber, recoLicenseExpiresAt } =
-      parsed.data;
     const result = await createWorkspaceInvite({
       ctx,
-      email,
-      role,
-      ...(firstName && lastName && phone && recoLicenseNumber && recoLicenseExpiresAt
-        ? {
-            profile: {
-              firstName,
-              lastName,
-              email,
-              phone,
-              recoLicenseNumber,
-              recoLicenseExpiresAt,
-            },
-          }
-        : {}),
+      email: parsed.data.email,
+      role: parsed.data.role,
+      profile: {
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        email: parsed.data.email,
+        phone: parsed.data.phone,
+        designation: parsed.data.designation,
+        jurisdiction: parsed.data.jurisdiction,
+        recoLicenseNumber: parsed.data.recoLicenseNumber,
+        recoLicenseExpiresAt: parsed.data.recoLicenseExpiresAt,
+        registrationNumber: parsed.data.registrationNumber,
+      },
     });
 
     if (!result.ok) {

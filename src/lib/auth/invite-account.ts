@@ -21,12 +21,23 @@ function agentProfileCreateData(
     userId,
     active: true,
     ...(profile
-      ? {
+        ? {
           firstName: profile.firstName,
           lastName: profile.lastName,
           phone: profile.phone,
-          recoLicenseNumber: profile.recoLicenseNumber,
-          recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
+          ...(profile.recoLicenseNumber && profile.recoLicenseExpiresAt
+            ? {
+                recoLicenseNumber: profile.recoLicenseNumber,
+                recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
+              }
+            : {}),
+          ...(profile.designation !== undefined ? { designation: profile.designation } : {}),
+          ...(profile.registrationJurisdiction !== undefined
+            ? { registrationJurisdiction: profile.registrationJurisdiction }
+            : {}),
+          ...(profile.registrationNumber !== undefined
+            ? { registrationNumber: profile.registrationNumber }
+            : {}),
         }
       : {}),
   };

@@ -12,6 +12,12 @@ import {
   type PhoneColumnsForWrite,
 } from "@/lib/sms/e164";
 import { prisma } from "@/lib/prisma";
+import {
+  evaluateProfessionalAgentProfile,
+  isProfessionalJurisdictionId,
+  parseProfessionalExpiry,
+  type ProfessionalProfileCompletion,
+} from "@/lib/agent/professional-profile";
 import { workspaceTeamCanManage } from "@/lib/workspace-team";
 
 export const ADMIN_MANAGED_AGENT_PROFILE_FIELDS = [
@@ -37,8 +43,11 @@ export type ParsedAdminManagedAgentProfile = {
   phoneE164: string;
   phoneColumns: PhoneColumnsForWrite;
   recoLicenseNumber: string;
-  recoLicenseExpiresAt: Date;
+  recoLicenseExpiresAt: Date | null;
   recoLicenseExpiresAtInput: string;
+  designation?: string | null;
+  registrationJurisdiction?: string | null;
+  registrationNumber?: string | null;
 };
 
 export type AdminManagedAgentProfileView = {
@@ -57,6 +66,10 @@ export type AdminManagedAgentProfileView = {
   /** Workspace registered brokerage. Editable by the owner. */
   brokerageName: string;
   canEditBrokerage: boolean;
+  /** Licensing jurisdiction. Empty means unset, not Ontario. */
+  jurisdiction: string;
+  registrationNumber: string;
+  completion: ProfessionalProfileCompletion;
   /** Canonical per-agent headshot from User.image (never another agent's branding portrait). */
   photoUrl: string | null;
   canEdit: boolean;
@@ -211,7 +224,19 @@ export async function applyAdminManagedAgentProfile(
     },
   });
 
-  const writeReco = opts?.preserveExistingReco !== true;
+  const writeReco =
+    opts?.preserveExistingReco !== true &&
+    profile.recoLicenseNumber.trim().length > 0 &&
+    profile.recoLicenseExpiresAt != null;
+  const professional = {
+    ...(profile.designation !== undefined ? { designation: profile.designation } : {}),
+    ...(profile.registrationJurisdiction !== undefined
+      ? { registrationJurisdiction: profile.registrationJurisdiction }
+      : {}),
+    ...(profile.registrationNumber !== undefined
+      ? { registrationNumber: profile.registrationNumber }
+      : {}),
+  };
   await db.agentProfile.upsert({
     where: { userId },
     create: {
@@ -226,6 +251,7 @@ export async function applyAdminManagedAgentProfile(
             recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
           }
         : {}),
+      ...professional,
     },
     update: {
       firstName: profile.firstName,
@@ -237,6 +263,7 @@ export async function applyAdminManagedAgentProfile(
             recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
           }
         : {}),
+      ...professional,
     },
   });
 }
@@ -248,10 +275,22 @@ export function profileFromInviteSnapshot(invite: {
   phone?: string | null;
   recoLicenseNumber?: string | null;
   recoLicenseExpiresAt?: Date | string | null;
+  designation?: string | null;
+  registrationJurisdiction?: string | null;
+  registrationNumber?: string | null;
 }): ParsedAdminManagedAgentProfile | null {
   if (!invite.firstName?.trim() || !invite.lastName?.trim() || !invite.phone?.trim()) {
     return null;
   }
+  const professional = {
+    ...(invite.designation?.trim() ? { designation: invite.designation.trim().slice(0, 80) } : {}),
+    ...(invite.registrationJurisdiction?.trim()
+      ? { registrationJurisdiction: invite.registrationJurisdiction.trim() }
+      : {}),
+    ...(invite.registrationNumber?.trim()
+      ? { registrationNumber: invite.registrationNumber.trim().slice(0, 40) }
+      : {}),
+  };
   const parsed = parseAdminManagedAgentProfile({
     firstName: invite.firstName,
     lastName: invite.lastName,
@@ -260,7 +299,27 @@ export function profileFromInviteSnapshot(invite: {
     recoLicenseNumber: invite.recoLicenseNumber ?? "",
     recoLicenseExpiresAt: recoExpiryToInputValue(invite.recoLicenseExpiresAt),
   });
-  return parsed.ok ? parsed.data : null;
+  if (parsed.ok) return { ...parsed.data, ...professional };
+
+  const jurisdiction = invite.registrationJurisdiction?.trim() ?? "";
+  if (!isProfessionalJurisdictionId(jurisdiction) || jurisdiction === "CA-ON") return null;
+  const phone = parsePhoneColumnsForWrite(invite.phone);
+  if (!phone.ok || !phone.columns.phone || !phone.columns.phoneE164) return null;
+  const firstName = invite.firstName.trim();
+  const lastName = invite.lastName.trim();
+  return {
+    firstName,
+    lastName,
+    displayName: composeStaffDisplayName(firstName, lastName),
+    email: normalizeStaffEmail(invite.email),
+    phone: phone.columns.phone,
+    phoneE164: phone.columns.phoneE164,
+    phoneColumns: phone.columns,
+    recoLicenseNumber: "",
+    recoLicenseExpiresAt: null,
+    recoLicenseExpiresAtInput: "",
+    ...professional,
+  };
 }
 
 export async function loadWorkspaceAgentProfile(
@@ -292,6 +351,8 @@ export async function loadWorkspaceAgentProfile(
                 lastName: true,
                 phone: true,
                 designation: true,
+                registrationJurisdiction: true,
+                registrationNumber: true,
                 recoLicenseNumber: true,
                 recoLicenseExpiresAt: true,
               },
@@ -324,16 +385,14 @@ export async function loadWorkspaceAgentProfile(
 
   let designation = membership.user.agentProfile?.designation?.trim() ?? "";
   let brokerageName = "";
-  if (isPublicSiteAgent || membership.role === "OWNER") {
-    const professional = await db.workspaceProfessionalIdentity.findUnique({
-      where: { workspaceId: ctx.workspaceId },
-      select: { agentDesignation: true, brokerageRegisteredName: true },
-    });
-    if (!designation && isPublicSiteAgent) {
-      designation = professional?.agentDesignation?.trim() ?? "";
-    }
-    brokerageName = professional?.brokerageRegisteredName?.trim() ?? "";
+  const professional = await db.workspaceProfessionalIdentity.findUnique({
+    where: { workspaceId: ctx.workspaceId },
+    select: { agentDesignation: true, brokerageRegisteredName: true },
+  });
+  if (!designation && isPublicSiteAgent) {
+    designation = professional?.agentDesignation?.trim() ?? "";
   }
+  brokerageName = professional?.brokerageRegisteredName?.trim() ?? "";
 
   const photoUrl = membership.user.image?.trim() || null;
   const canEdit = canEditAgentProfile(ctx, userId);
@@ -356,6 +415,22 @@ export async function loadWorkspaceAgentProfile(
       designation,
       brokerageName,
       canEditBrokerage: membership.role === "OWNER",
+      jurisdiction: membership.user.agentProfile?.registrationJurisdiction?.trim() ?? "",
+      registrationNumber: membership.user.agentProfile?.registrationNumber?.trim() ?? "",
+      completion: evaluateProfessionalAgentProfile({
+        firstName,
+        lastName,
+        email: membership.user.email,
+        phone: membership.user.phone || membership.user.agentProfile?.phone || "",
+        designation,
+        brokerageName,
+        jurisdiction: membership.user.agentProfile?.registrationJurisdiction ?? null,
+        recoLicenseNumber: membership.user.agentProfile?.recoLicenseNumber ?? null,
+        recoLicenseExpiresAt: recoExpiryToInputValue(
+          membership.user.agentProfile?.recoLicenseExpiresAt ?? null,
+        ),
+        registrationNumber: membership.user.agentProfile?.registrationNumber ?? null,
+      }),
       photoUrl,
       canEdit,
       canEditPhoto: canEdit,
@@ -389,16 +464,36 @@ export async function updateWorkspaceAgentProfile(input: {
       : null;
   const recoNumber = typeof rawRecord?.recoLicenseNumber === "string" ? rawRecord.recoLicenseNumber.trim() : "";
   const recoExpiry = typeof rawRecord?.recoLicenseExpiresAt === "string" ? rawRecord.recoLicenseExpiresAt.trim() : "";
-  const preserveExistingReco =
-    loaded.profile.role === "OWNER" && recoNumber.length === 0 && recoExpiry.length === 0;
-  const parsed = preserveExistingReco
-    ? parseAdminManagedAgentProfile({
-        ...(rawRecord ?? {}),
-        recoLicenseNumber: loaded.profile.recoLicenseNumber || "KEEP",
-        recoLicenseExpiresAt: loaded.profile.recoLicenseExpiresAt || "2099-01-01",
-      })
-    : parseAdminManagedAgentProfile(input.raw);
+  const recoProvided = recoNumber.length > 0 || recoExpiry.length > 0;
+  if (recoProvided && (!recoNumber || !parseProfessionalExpiry(recoExpiry))) {
+    return {
+      ok: false,
+      error: "Enter the RECO registration number and a valid expiry together.",
+      status: 400,
+    };
+  }
+  const preserveExistingReco = !recoProvided;
+  const parsed = parseAdminManagedAgentProfile({
+    ...(rawRecord ?? {}),
+    recoLicenseNumber: recoProvided ? recoNumber : loaded.profile.recoLicenseNumber || "KEEP",
+    recoLicenseExpiresAt: recoProvided ? recoExpiry : loaded.profile.recoLicenseExpiresAt || "2099-01-01",
+  });
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
+  const designationRaw = typeof rawRecord?.designation === "string" ? rawRecord.designation : undefined;
+  const designation =
+    typeof designationRaw === "string" ? designationRaw.trim().slice(0, 80) || null : undefined;
+  let registrationJurisdiction: string | null | undefined;
+  if (rawRecord && "jurisdiction" in rawRecord) {
+    const value = typeof rawRecord.jurisdiction === "string" ? rawRecord.jurisdiction.trim() : "";
+    if (value && !isProfessionalJurisdictionId(value)) {
+      return { ok: false, error: "Choose a licensing jurisdiction.", status: 400 };
+    }
+    registrationJurisdiction = value || null;
+  }
+  const registrationNumber =
+    rawRecord && "registrationNumber" in rawRecord && typeof rawRecord.registrationNumber === "string"
+      ? rawRecord.registrationNumber.trim().slice(0, 40) || null
+      : undefined;
 
   const nextEmail = parsed.data.email;
   if (nextEmail !== normalizeStaffEmail(loaded.profile.email)) {
@@ -419,23 +514,20 @@ export async function updateWorkspaceAgentProfile(input: {
     }
   }
 
-  await applyAdminManagedAgentProfile(db, input.userId, parsed.data, {
-    email: nextEmail,
-    preserveExistingReco,
-  });
-  const designationRaw =
-    input.raw &&
-    typeof input.raw === "object" &&
-    !Array.isArray(input.raw) &&
-    "designation" in input.raw
-      ? (input.raw as { designation?: unknown }).designation
-      : undefined;
-  if (typeof designationRaw === "string") {
-    await db.agentProfile.updateMany({
-      where: { userId: input.userId },
-      data: { designation: designationRaw.trim().slice(0, 80) || null },
-    });
-  }
+  await applyAdminManagedAgentProfile(
+    db,
+    input.userId,
+    {
+      ...parsed.data,
+      ...(designation !== undefined ? { designation } : {}),
+      ...(registrationJurisdiction !== undefined ? { registrationJurisdiction } : {}),
+      ...(registrationNumber !== undefined ? { registrationNumber } : {}),
+    },
+    {
+      email: nextEmail,
+      preserveExistingReco,
+    },
+  );
   if (loaded.profile.role === "OWNER" && input.ctx.workspaceId) {
     const websiteIdentity = await db.workspaceProfessionalIdentity.findUnique({
       where: { workspaceId: input.ctx.workspaceId },

@@ -41,9 +41,9 @@ function testParseRequiredFieldsAndPhoneLockstep() {
   if (!parsed.ok) return;
   assert.equal(parsed.data.displayName, "Jordan Lee");
   assert.equal(parsed.data.email, "jordan.lee@brokerage.test");
-  assert.equal(parsed.data.phone, "416-555-1234");
+  assert.equal(parsed.data.phone, "(416) 555 - 1234");
   assert.equal(parsed.data.phoneE164, "+14165551234");
-  assert.equal(parsed.data.phoneColumns.phone, "416-555-1234");
+  assert.equal(parsed.data.phoneColumns.phone, "(416) 555 - 1234");
   assert.equal(parsed.data.phoneColumns.phoneE164, "+14165551234");
   assert.equal(parsed.data.recoLicenseNumber, "12345678");
   assert.equal(recoExpiryToInputValue(parsed.data.recoLicenseExpiresAt), "2027-06-15");
@@ -81,7 +81,7 @@ function testRecoExpiryStructured() {
 
 function testInvitePersistsCanonicalPhoneAndReusesPendingInvite() {
   const invite = read("src/lib/workspace-invite.ts");
-  assert.ok(invite.includes("parseAdminManagedAgentProfile"));
+  assert.ok(invite.includes("parseProfessionalOnboarding"));
   assert.ok(invite.includes("provisionPasswordlessAgentFromInvite"));
   assert.ok(invite.includes("sendWorkspaceInviteEmail"));
   assert.ok(invite.includes("A pending invite already exists for this email."));

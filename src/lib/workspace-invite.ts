@@ -8,11 +8,11 @@ import {
   applyAdminManagedAgentProfile,
   composeStaffDisplayName,
   inviteSnapshotFromProfile,
-  parseAdminManagedAgentProfile,
   profileFromInviteSnapshot,
   recoExpiryToInputValue,
   type ParsedAdminManagedAgentProfile,
 } from "@/lib/agent/admin-managed-profile";
+import { parseProfessionalOnboarding } from "@/lib/agent/professional-profile";
 import {
   createAgentAccountFromInvite,
   provisionPasswordlessAgentFromInvite,
@@ -295,15 +295,45 @@ export async function createWorkspaceInvite(input: {
     };
   }
 
-  let parsedProfile: ParsedAdminManagedAgentProfile | null = null;
-  if (input.profile !== undefined) {
-    const parsed = parseAdminManagedAgentProfile(input.profile);
-    if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
-    if (parsed.data.email !== email) {
-      return { ok: false, error: "Email does not match the invite.", status: 400 };
-    }
-    parsedProfile = parsed.data;
+  if (input.profile === undefined) {
+    return {
+      ok: false,
+      error: "A complete professional profile is required to invite an agent.",
+      status: 400,
+    };
   }
+  const brokerage = await prisma.workspaceProfessionalIdentity.findUnique({
+    where: { workspaceId: workspace.id },
+    select: { brokerageRegisteredName: true },
+  });
+  const parsed = parseProfessionalOnboarding(
+    input.profile,
+    brokerage?.brokerageRegisteredName ?? null,
+  );
+  if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
+  if (parsed.data.email !== email) {
+    return { ok: false, error: "Email does not match the invite.", status: 400 };
+  }
+  const parsedProfile: ParsedAdminManagedAgentProfile = {
+    firstName: parsed.data.firstName,
+    lastName: parsed.data.lastName,
+    displayName: parsed.data.displayName,
+    email: parsed.data.email,
+    phone: parsed.data.phone,
+    phoneE164: parsed.data.phoneE164,
+    phoneColumns: {
+      phone: parsed.data.phone,
+      phoneE164: parsed.data.phoneE164,
+    },
+    recoLicenseNumber: parsed.data.recoLicenseNumber ?? "",
+    recoLicenseExpiresAt: parsed.data.recoLicenseExpiresAt,
+    recoLicenseExpiresAtInput: parsed.data.recoLicenseExpiresAt
+      ? recoExpiryToInputValue(parsed.data.recoLicenseExpiresAt)
+      : "",
+    designation: parsed.data.designation,
+    registrationJurisdiction: parsed.data.registrationJurisdiction,
+    registrationNumber: parsed.data.registrationNumber,
+  };
 
   // Phase 3: never resolve invitees by global email — same workspace only.
   const existingUser = await prisma.user.findFirst({
@@ -351,9 +381,12 @@ export async function createWorkspaceInvite(input: {
   const expiresAt = new Date(Date.now() + WORKSPACE_INVITE_TTL_MS);
   const rawToken = createWorkspaceInviteRawToken();
   const tokenHash = hashWorkspaceInviteToken(rawToken);
-  const snapshot = parsedProfile
-    ? inviteSnapshotFromProfile(parsedProfile)
-    : {};
+  const snapshot = {
+    ...inviteSnapshotFromProfile(parsedProfile),
+    designation: parsedProfile.designation ?? null,
+    registrationJurisdiction: parsedProfile.registrationJurisdiction ?? null,
+    registrationNumber: parsedProfile.registrationNumber ?? null,
+  };
 
   const invite = await prisma.workspaceInvite.create({
     data: {

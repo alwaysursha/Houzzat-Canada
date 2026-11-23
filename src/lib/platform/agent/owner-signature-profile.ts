@@ -1,5 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
+import { splitStaffDisplayName } from "@/lib/agent/admin-managed-profile";
 import { ensureOwnerAgentProfile } from "@/lib/agent/ensure-owner-agent-profile";
+import {
+  evaluateProfessionalAgentProfile,
+  isProfessionalJurisdictionId,
+  parseProfessionalExpiry,
+  type ProfessionalProfileCompletion,
+} from "@/lib/agent/professional-profile";
 import { parsePhoneColumnsForWrite } from "@/lib/sms/e164";
 import { PlatformApiError } from "@/lib/platform/api/handler";
 
@@ -11,8 +18,13 @@ export type OwnerSignatureProfile = {
   phone: string;
   designation: string;
   brokerageName: string;
+  jurisdiction: string;
+  recoLicenseNumber: string;
+  recoLicenseExpiresAt: string;
+  registrationNumber: string;
   hasPhoto: boolean;
   hasAgentProfile: boolean;
+  completion: ProfessionalProfileCompletion;
 };
 
 async function resolveOwnerAgent(
@@ -43,7 +55,19 @@ async function resolveOwnerAgent(
           email: true,
           phone: true,
           image: true,
-          agentProfile: { select: { id: true, designation: true, active: true } },
+          agentProfile: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              designation: true,
+              active: true,
+              registrationJurisdiction: true,
+              registrationNumber: true,
+              recoLicenseNumber: true,
+              recoLicenseExpiresAt: true,
+            },
+          },
         },
       },
     },
@@ -66,17 +90,41 @@ function toView(
   target: Awaited<ReturnType<typeof resolveOwnerAgent>>["target"],
   brokerageName: string,
   publicDesignation: string,
+  isPrimary: boolean,
 ): OwnerSignatureProfile {
+  const names = splitStaffDisplayName(target.user.name);
+  const profile = target.user.agentProfile;
+  const designation = profile?.designation?.trim() || (isPrimary ? publicDesignation : "");
+  const expiry = profile?.recoLicenseExpiresAt
+    ? profile.recoLicenseExpiresAt.toISOString().slice(0, 10)
+    : "";
+  const completion = evaluateProfessionalAgentProfile({
+    firstName: profile?.firstName?.trim() || names.firstName,
+    lastName: profile?.lastName?.trim() || names.lastName,
+    email: target.user.email,
+    phone: target.user.phone,
+    designation,
+    brokerageName,
+    jurisdiction: profile?.registrationJurisdiction ?? null,
+    recoLicenseNumber: profile?.recoLicenseNumber ?? null,
+    recoLicenseExpiresAt: expiry,
+    registrationNumber: profile?.registrationNumber ?? null,
+  });
   return {
     userId: target.user.id,
     role: target.role,
     name: target.user.name?.trim() || "",
     email: target.user.email?.trim() || "",
     phone: target.user.phone?.trim() || "",
-    designation: target.user.agentProfile?.designation?.trim() || publicDesignation,
+    designation,
     brokerageName,
+    jurisdiction: profile?.registrationJurisdiction?.trim() || "",
+    recoLicenseNumber: profile?.recoLicenseNumber?.trim() || "",
+    recoLicenseExpiresAt: expiry,
+    registrationNumber: profile?.registrationNumber?.trim() || "",
     hasPhoto: Boolean(target.user.image?.trim()),
-    hasAgentProfile: Boolean(target.user.agentProfile?.active),
+    hasAgentProfile: Boolean(profile?.active),
+    completion,
   };
 }
 
@@ -89,6 +137,7 @@ export async function inspectOwnerSignatureProfile(
     target,
     workspace.professionalIdentity?.brokerageRegisteredName?.trim() || "",
     workspace.professionalIdentity?.agentDesignation?.trim() || "",
+    workspace.primaryAgentId === target.user.id,
   );
 }
 
@@ -99,6 +148,10 @@ export async function updateOwnerSignatureProfile(
     designation?: unknown;
     brokerageName?: unknown;
     phone?: unknown;
+    jurisdiction?: unknown;
+    registrationNumber?: unknown;
+    recoLicenseNumber?: unknown;
+    recoLicenseExpiresAt?: unknown;
   },
 ): Promise<OwnerSignatureProfile> {
   const { workspace, target } = await resolveOwnerAgent(db, workspaceId);
@@ -144,6 +197,44 @@ export async function updateOwnerSignatureProfile(
     await db.agentProfile.updateMany({
       where: { userId: target.user.id },
       data: { phone: parsed.columns.phone },
+    });
+  }
+
+  if (typeof patch.jurisdiction === "string") {
+    const jurisdiction = patch.jurisdiction.trim();
+    if (jurisdiction && !isProfessionalJurisdictionId(jurisdiction)) {
+      throw new PlatformApiError("Choose a licensing jurisdiction.", 400, "INVALID_JURISDICTION");
+    }
+    await db.agentProfile.updateMany({
+      where: { userId: target.user.id },
+      data: { registrationJurisdiction: jurisdiction || null },
+    });
+  }
+
+  if (typeof patch.registrationNumber === "string" && patch.registrationNumber.trim()) {
+    await db.agentProfile.updateMany({
+      where: { userId: target.user.id },
+      data: { registrationNumber: patch.registrationNumber.trim().slice(0, 40) },
+    });
+  }
+
+  const recoNumber = typeof patch.recoLicenseNumber === "string" ? patch.recoLicenseNumber.trim() : "";
+  const recoExpiry = typeof patch.recoLicenseExpiresAt === "string" ? patch.recoLicenseExpiresAt.trim() : "";
+  if (recoNumber || recoExpiry) {
+    const expiry = parseProfessionalExpiry(recoExpiry);
+    if (!recoNumber || !expiry) {
+      throw new PlatformApiError(
+        "Enter the RECO registration number and a valid expiry together.",
+        400,
+        "INVALID_RECO",
+      );
+    }
+    await db.agentProfile.updateMany({
+      where: { userId: target.user.id },
+      data: {
+        recoLicenseNumber: recoNumber.slice(0, 40),
+        recoLicenseExpiresAt: new Date(`${expiry}T12:00:00.000Z`),
+      },
     });
   }
 

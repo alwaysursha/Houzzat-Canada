@@ -68,8 +68,11 @@ export function TeamAdminClient({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
   const [recoLicenseNumber, setRecoLicenseNumber] = useState("");
   const [recoLicenseExpiresAt, setRecoLicenseExpiresAt] = useState("");
+  const [registrationNumber, setRegistrationNumber] = useState("");
   const [pending, setPending] = useState(false);
   const [inviteActionId, setInviteActionId] = useState<string | null>(null);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
@@ -206,8 +209,11 @@ export function TeamAdminClient({
     lastName,
     email,
     phone,
+    designation,
+    jurisdiction,
     recoLicenseNumber,
     recoLicenseExpiresAt,
+    registrationNumber,
   };
 
   return (
@@ -244,8 +250,11 @@ export function TeamAdminClient({
                         firstName,
                         lastName,
                         phone,
+                        designation,
+                        jurisdiction,
                         recoLicenseNumber,
                         recoLicenseExpiresAt,
+                        registrationNumber,
                       }
                     : { email, role },
                 ),
@@ -263,8 +272,11 @@ export function TeamAdminClient({
                 setFirstName("");
                 setLastName("");
                 setPhone("");
+                setDesignation("");
+                setJurisdiction("");
                 setRecoLicenseNumber("");
                 setRecoLicenseExpiresAt("");
+                setRegistrationNumber("");
                 setMsg(
                   json.alreadyMember
                     ? "Added to Workspace — they were already a staff account."
@@ -285,13 +297,17 @@ export function TeamAdminClient({
             <AgentProfessionalFields
               idPrefix="invite-agent"
               value={inviteProfile}
+              blockIncomplete
               onChange={(next) => {
                 setFirstName(next.firstName);
                 setLastName(next.lastName);
                 setEmail(next.email);
                 setPhone(next.phone);
+                setDesignation(next.designation);
+                setJurisdiction(next.jurisdiction);
                 setRecoLicenseNumber(next.recoLicenseNumber);
                 setRecoLicenseExpiresAt(next.recoLicenseExpiresAt);
+                setRegistrationNumber(next.registrationNumber);
               }}
             />
           ) : (

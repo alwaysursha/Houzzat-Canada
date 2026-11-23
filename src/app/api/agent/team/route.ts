@@ -41,11 +41,14 @@ const inviteSchema = z.object({
 });
 
 const workspaceAgentInviteSchema = inviteSchema.extend({
-  firstName: z.string().trim().min(1).max(80),
-  lastName: z.string().trim().min(1).max(80),
-  phone: z.string().trim().min(1).max(40),
-  recoLicenseNumber: z.string().trim().min(1).max(40),
-  recoLicenseExpiresAt: z.string().trim().min(10).max(32),
+  firstName: z.string().trim().max(80).optional().default(""),
+  lastName: z.string().trim().max(80).optional().default(""),
+  phone: z.string().trim().max(40).optional().default(""),
+  designation: z.string().trim().max(80).optional().default(""),
+  jurisdiction: z.string().trim().max(16).optional().default(""),
+  recoLicenseNumber: z.string().trim().max(40).optional().default(""),
+  recoLicenseExpiresAt: z.string().trim().max(32).optional().default(""),
+  registrationNumber: z.string().trim().max(40).optional().default(""),
 });
 
 const reassignSchema = z.object({
@@ -417,7 +420,7 @@ async function handleWorkspaceTeamPost(
   const parsed = workspaceAgentInviteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "First name, last name, email, cell phone, RECO license # and expiry are required." },
+      { error: "Enter a valid email and the professional profile fields." },
       { status: 400 },
     );
   }
@@ -431,8 +434,11 @@ async function handleWorkspaceTeamPost(
       lastName: parsed.data.lastName,
       email: parsed.data.email,
       phone: parsed.data.phone,
+      designation: parsed.data.designation,
+      jurisdiction: parsed.data.jurisdiction,
       recoLicenseNumber: parsed.data.recoLicenseNumber,
       recoLicenseExpiresAt: parsed.data.recoLicenseExpiresAt,
+      registrationNumber: parsed.data.registrationNumber,
     },
   });
   if (!result.ok) {

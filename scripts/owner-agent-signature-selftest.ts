@@ -81,7 +81,7 @@ function owner(): TenantEmailAgentIdentity {
     email: "owner@example.com",
     phone: "905-555-0100",
     image: null,
-    designation: null,
+    designation: "Sales Representative",
   };
 }
 
@@ -132,6 +132,7 @@ async function testResolution() {
   assert.equal(brand.agent?.name, "Saad Qureshi");
   assert.match(brand.signatureText, /Right at Home Realty Brokerage/);
   assert.match(brand.signatureText, /owner@example.com/);
+  assert.match(brand.signatureText, /Sales Representative/);
   assert.doesNotMatch(brand.signatureText, /Salesperson/);
   assert.equal(brand.presentation, "high-octane");
 
@@ -192,6 +193,7 @@ async function testResolution() {
   });
   for (const rendered of [appointment, alert, digest, message]) {
     assert.match(rendered.html, /Saad Qureshi/);
+    assert.match(rendered.html, /Sales Representative/);
     assert.match(rendered.text, /Right at Home Realty Brokerage/);
     assert.match(rendered.html, /#071629/);
   }

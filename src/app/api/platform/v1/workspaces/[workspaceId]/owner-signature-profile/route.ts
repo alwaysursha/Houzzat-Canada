@@ -24,6 +24,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     designation?: unknown;
     brokerageName?: unknown;
     phone?: unknown;
+    jurisdiction?: unknown;
+    registrationNumber?: unknown;
+    recoLicenseNumber?: unknown;
+    recoLicenseExpiresAt?: unknown;
   } | null;
   return runPlatformRouteWithOperator(async () =>
     updateOwnerSignatureProfile(prisma, workspaceId, body ?? {}),

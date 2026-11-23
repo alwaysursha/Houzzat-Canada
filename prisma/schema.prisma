@@ -1052,6 +1052,19 @@ model WorkspaceInvite {
   phone                String?
   recoLicenseNumber    String?
   recoLicenseExpiresAt DateTime?
+  /**
+   * Professional title captured with the invite. Empty means not provided.
+   */
+  designation                String?
+  /**
+   * CA-ON, CA-BC, … or OTHER. Null means the inviter did not choose one.
+   * Never defaulted to Ontario.
+   */
+  registrationJurisdiction   String?
+  /**
+   * Registration number outside Ontario. Ontario uses recoLicenseNumber.
+   */
+  registrationNumber         String?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -1391,6 +1404,16 @@ model AgentProfile {
    * WorkspaceProfessionalIdentity.agentDesignation stays the public-site title.
    */
   designation          String?
+  /**
+   * Licensing jurisdiction (CA-ON, CA-BC, …, OTHER).
+   * Null means unset. Do not assume Ontario.
+   */
+  registrationJurisdiction String?
+  /**
+   * Registration / licence number for jurisdictions other than Ontario.
+   * Ontario RECO stays on recoLicenseNumber.
+   */
+  registrationNumber   String?
   active               Boolean   @default(true)
   /**
    * Manual Available/Away preference. Does not imply Online by itself.

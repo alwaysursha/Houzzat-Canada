@@ -7,9 +7,11 @@ import {
   AgentProfessionalFields,
   type AgentProfessionalFormValue,
 } from "@/components/agent/AgentProfessionalFields";
+import { ProfessionalProfileStatus } from "@/components/agent/ProfessionalProfileStatus";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminManagedAgentProfileView } from "@/lib/agent/admin-managed-profile";
+import type { ProfessionalFieldKey, ProfessionalProfileCompletion } from "@/lib/agent/professional-profile";
 
 export function AgentSelfProfileClient({
   profile,
@@ -24,11 +26,17 @@ export function AgentSelfProfileClient({
     lastName: profile.lastName,
     email: profile.email,
     phone: profile.phone,
+    designation: profile.designation,
+    jurisdiction: profile.jurisdiction,
     recoLicenseNumber: profile.recoLicenseNumber,
     recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
+    registrationNumber: profile.registrationNumber,
   });
-  const [designation, setDesignation] = useState(profile.designation);
   const [brokerageName, setBrokerageName] = useState(profile.brokerageName);
+  const [completion, setCompletion] = useState<ProfessionalProfileCompletion>(profile.completion);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ProfessionalFieldKey, string>>>(
+    profile.completion.fieldErrors,
+  );
   const [photoUrl, setPhotoUrl] = useState(profile.photoUrl);
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -45,16 +53,26 @@ export function AgentSelfProfileClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...value,
-          designation,
           ...(profile.canEditBrokerage ? { brokerageName } : {}),
         }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        profile?: AdminManagedAgentProfileView;
+      };
       if (!res.ok) {
         setError(json.error || "Could not save profile.");
         return;
       }
-      setMsg("Profile saved.");
+      if (json.profile) {
+        setCompletion(json.profile.completion);
+        setFieldErrors(json.profile.completion.fieldErrors);
+      }
+      setMsg(
+        json.profile?.completion.complete
+          ? "Professional profile saved."
+          : "Profile saved. Required fields are still open.",
+      );
       router.refresh();
     } finally {
       setPending(false);
@@ -83,6 +101,11 @@ export function AgentSelfProfileClient({
         />
       ) : null}
 
+      <ProfessionalProfileStatus
+        complete={completion.complete}
+        missingLabels={completion.missingLabels}
+      />
+
       <form
         className="rounded-2xl border border-line bg-surface p-5 sm:p-6"
         onSubmit={(event) => {
@@ -100,37 +123,29 @@ export function AgentSelfProfileClient({
             onChange={setValue}
             disabled={!profile.canEdit}
             readOnly={!profile.canEdit}
-            licenseRequired={profile.role !== "OWNER"}
+            errors={fieldErrors}
           />
         </div>
-
-        <div className="mt-4">
-          <label
-            htmlFor="self-profile-title"
-            className="text-xs font-semibold text-ink/70"
-          >
-            Title / designation
-          </label>
-          <Input
-            id="self-profile-title"
-            className="mt-1.5"
-            value={designation}
-            disabled={!profile.canEdit}
-            placeholder="Salesperson, Broker, …"
-            onChange={(event) => setDesignation(event.target.value)}
-          />
-          <p className="mt-1 text-[11px] text-ink/45">
-            Shown under your name on client emails. The public-site agent title also appears on listing pages.
-          </p>
-        </div>
+        {!profile.canEditBrokerage ? (
+          <div className="mt-4">
+            <p className="text-sm font-medium text-ink">Brokerage name</p>
+            <p className="mt-1 text-sm text-ink/70">
+              {profile.brokerageName || "The workspace brokerage name is not saved yet."}
+            </p>
+            {fieldErrors.brokerageName ? (
+              <p className="mt-1 text-[11px] text-[#b91c1c]">{fieldErrors.brokerageName}</p>
+            ) : null}
+          </div>
+        ) : null}
         {profile.canEditBrokerage ? (
           <div className="mt-4">
-            <label
-              htmlFor="self-profile-brokerage"
-              className="text-xs font-semibold text-ink/70"
-            >
-              Brokerage name
-            </label>
+          <label
+            htmlFor="self-profile-brokerage"
+            className="text-sm font-medium text-ink"
+          >
+            Brokerage name
+            <span className="text-danger"> *</span>
+          </label>
             <Input
               id="self-profile-brokerage"
               className="mt-1.5"
@@ -138,9 +153,13 @@ export function AgentSelfProfileClient({
               disabled={!profile.canEdit}
               onChange={(event) => setBrokerageName(event.target.value)}
             />
-            <p className="mt-1 text-[11px] text-ink/45">
-              Saved brokerage name shown on client emails. Leave blank to keep the current name.
-            </p>
+            {fieldErrors.brokerageName ? (
+              <p className="mt-1 text-[11px] text-[#b91c1c]">{fieldErrors.brokerageName}</p>
+            ) : (
+              <p className="mt-1 text-[11px] text-ink/45">
+                Saved brokerage name shown on client emails. Leave blank to keep the current name.
+              </p>
+            )}
           </div>
         ) : null}
 
