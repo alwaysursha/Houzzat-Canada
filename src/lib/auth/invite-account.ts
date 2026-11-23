@@ -25,11 +25,11 @@ function agentProfileCreateData(
           firstName: profile.firstName,
           lastName: profile.lastName,
           phone: profile.phone,
-          ...(profile.recoLicenseNumber && profile.recoLicenseExpiresAt
-            ? {
-                recoLicenseNumber: profile.recoLicenseNumber,
-                recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
-              }
+          ...(profile.recoLicenseNumber
+            ? { recoLicenseNumber: profile.recoLicenseNumber }
+            : {}),
+          ...(profile.recoLicenseExpiresAt
+            ? { recoLicenseExpiresAt: profile.recoLicenseExpiresAt }
             : {}),
           ...(profile.designation !== undefined ? { designation: profile.designation } : {}),
           ...(profile.registrationJurisdiction !== undefined

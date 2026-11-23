@@ -245,34 +245,22 @@ export function evaluateProfessionalAgentProfile(
       ok: trimmed(snapshot.brokerageName, 160).length > 0,
       message: "Brokerage name is required.",
     },
-    {
-      key: "jurisdiction",
-      ok: known != null,
-      message: jurisdiction
-        ? "Choose a licensing jurisdiction."
-        : "Licensing jurisdiction is required.",
-    },
   ];
 
-  if (known?.license === "reco") {
-    checks.push(
-      {
-        key: "recoLicenseNumber",
-        ok: trimmed(snapshot.recoLicenseNumber, 40).length > 0,
-        message: "RECO registration number is required.",
-      },
-      {
-        key: "recoLicenseExpiresAt",
-        ok: parseProfessionalExpiry(snapshot.recoLicenseExpiresAt) != null,
-        message: "Enter a valid RECO registration expiry.",
-      },
-    );
-  } else if (known?.license === "registration") {
-    checks.push({
-      key: "registrationNumber",
-      ok: trimmed(snapshot.registrationNumber, 40).length > 0,
-      message: `${known.licenseLabel} is required.`,
-    });
+  if (jurisdiction && !known) {
+    fieldErrors.jurisdiction = "Choose a licensing jurisdiction.";
+  }
+  const recoNumber = (snapshot.recoLicenseNumber ?? "").trim();
+  const registrationNumber = (snapshot.registrationNumber ?? "").trim();
+  const expiryRaw = (snapshot.recoLicenseExpiresAt ?? "").trim();
+  if (recoNumber.length > 40) {
+    fieldErrors.recoLicenseNumber = "RECO registration number is too long.";
+  }
+  if (registrationNumber.length > 40) {
+    fieldErrors.registrationNumber = "Registration number is too long.";
+  }
+  if (expiryRaw && !parseProfessionalExpiry(expiryRaw)) {
+    fieldErrors.recoLicenseExpiresAt = "Enter a valid registration expiry date.";
   }
 
   for (const check of checks) {
@@ -300,7 +288,7 @@ export type ProfessionalOnboardingProfile = {
   phone: string;
   phoneE164: string;
   designation: string;
-  registrationJurisdiction: ProfessionalJurisdictionId;
+  registrationJurisdiction: ProfessionalJurisdictionId | null;
   recoLicenseNumber: string | null;
   recoLicenseExpiresAt: Date | null;
   registrationNumber: string | null;
@@ -339,10 +327,16 @@ export function parseProfessionalOnboarding(
     registrationNumber: text("registrationNumber"),
   };
   const completion = evaluateProfessionalAgentProfile(snapshot);
-  if (!completion.complete || !isProfessionalJurisdictionId(snapshot.jurisdiction ?? "")) {
+  const licenseError = [
+    completion.fieldErrors.jurisdiction,
+    completion.fieldErrors.recoLicenseNumber,
+    completion.fieldErrors.recoLicenseExpiresAt,
+    completion.fieldErrors.registrationNumber,
+  ].find((message) => message);
+  if (!completion.complete || licenseError) {
     const error = completion.missingLabels.length
       ? `Complete the professional profile before this agent is onboarded: ${completion.missingLabels.join(", ")}.`
-      : "Complete the professional profile before this agent is onboarded.";
+      : licenseError || "Complete the professional profile before this agent is onboarded.";
     return {
       ok: false,
       error,
@@ -363,9 +357,13 @@ export function parseProfessionalOnboarding(
     };
   }
 
-  const jurisdiction = snapshot.jurisdiction as ProfessionalJurisdictionId;
-  const rule = professionalJurisdictionById(jurisdiction);
+  const jurisdiction =
+    snapshot.jurisdiction && isProfessionalJurisdictionId(snapshot.jurisdiction)
+      ? snapshot.jurisdiction
+      : null;
   const expiry = parseProfessionalExpiry(snapshot.recoLicenseExpiresAt);
+  const recoLicenseNumber = trimmed(snapshot.recoLicenseNumber, 40);
+  const registrationNumber = trimmed(snapshot.registrationNumber, 40);
   return {
     ok: true,
     data: {
@@ -377,11 +375,9 @@ export function parseProfessionalOnboarding(
       phoneE164: phone.columns.phoneE164,
       designation: snapshot.designation!.trim().slice(0, 80),
       registrationJurisdiction: jurisdiction,
-      recoLicenseNumber: rule.license === "reco" ? snapshot.recoLicenseNumber!.trim().slice(0, 40) : null,
-      recoLicenseExpiresAt:
-        rule.license === "reco" && expiry ? new Date(`${expiry}T12:00:00.000Z`) : null,
-      registrationNumber:
-        rule.license === "registration" ? snapshot.registrationNumber!.trim().slice(0, 40) : null,
+      recoLicenseNumber: recoLicenseNumber || null,
+      recoLicenseExpiresAt: expiry ? new Date(`${expiry}T12:00:00.000Z`) : null,
+      registrationNumber: registrationNumber || null,
     },
   };
 }

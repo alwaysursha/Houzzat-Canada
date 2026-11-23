@@ -137,7 +137,7 @@ export function PlatformOwnerSignatureProfile({ workspaceId }: { workspaceId: st
           </p>
           <p className="text-sm text-slate-300 sm:col-span-2">
             {view.completion.complete
-              ? "Professional profile complete. A photograph is optional."
+              ? "Professional profile complete. A photograph and licensing details are optional."
               : `Still needed: ${view.completion.missingLabels.join(", ")}.`}
           </p>
           <label className="text-xs text-slate-400">

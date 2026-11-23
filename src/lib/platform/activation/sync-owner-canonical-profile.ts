@@ -86,33 +86,25 @@ export async function applyOwnerCanonicalProfileFromCurrentSave(
   }
 
   let recoLicenseExpiresAt: Date | undefined;
-  if (recoLicenseNumber || recoExpiryRaw) {
-    if (recoLicenseNumber && recoExpiryRaw) {
-      const parsedExpiry = parseRecoExpiry(recoExpiryRaw);
-      if (!parsedExpiry) {
-        if (!persistAsDraft) {
-          throw new OwnerActivationError(
-            "Enter a valid RECO license expiry date.",
-            "INVALID_RECO_EXPIRY",
-            400,
-          );
-        }
-      } else {
-        recoLicenseExpiresAt = parsedExpiry;
+  if (recoExpiryRaw) {
+    const parsedExpiry = parseRecoExpiry(recoExpiryRaw);
+    if (!parsedExpiry) {
+      if (!persistAsDraft) {
+        throw new OwnerActivationError(
+          "Enter a valid RECO license expiry date.",
+          "INVALID_RECO_EXPIRY",
+          400,
+        );
       }
-    } else if (!persistAsDraft) {
-      throw new OwnerActivationError(
-        "RECO license # and expiry date must be provided together.",
-        "INVALID_RECO_LICENSE",
-        400,
-      );
+    } else {
+      recoLicenseExpiresAt = parsedExpiry;
     }
   }
 
   const nameParts = displayName ? splitRegisteredName(displayName) : null;
   const shouldWriteUser = Boolean(displayName || phoneColumns);
   const shouldWriteProfile = Boolean(
-    nameParts || phoneColumns || (recoLicenseNumber && recoLicenseExpiresAt),
+    nameParts || phoneColumns || recoLicenseNumber || recoLicenseExpiresAt,
   );
   if (!shouldWriteUser && !shouldWriteProfile) return;
 
@@ -139,18 +131,16 @@ export async function applyOwnerCanonicalProfileFromCurrentSave(
         ? { firstName: nameParts.firstName, lastName: nameParts.lastName }
         : {}),
       ...(phoneColumns ? { phone: phoneColumns.phone } : {}),
-      ...(recoLicenseNumber && recoLicenseExpiresAt
-        ? { recoLicenseNumber, recoLicenseExpiresAt }
-        : {}),
+      ...(recoLicenseNumber ? { recoLicenseNumber } : {}),
+      ...(recoLicenseExpiresAt ? { recoLicenseExpiresAt } : {}),
     },
     update: {
       ...(nameParts
         ? { firstName: nameParts.firstName, lastName: nameParts.lastName }
         : {}),
       ...(phoneColumns ? { phone: phoneColumns.phone } : {}),
-      ...(recoLicenseNumber && recoLicenseExpiresAt
-        ? { recoLicenseNumber, recoLicenseExpiresAt }
-        : {}),
+      ...(recoLicenseNumber ? { recoLicenseNumber } : {}),
+      ...(recoLicenseExpiresAt ? { recoLicenseExpiresAt } : {}),
     },
   });
 }

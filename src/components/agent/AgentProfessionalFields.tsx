@@ -97,11 +97,9 @@ export function AgentProfessionalFields({
       <div className="space-y-1.5">
         <label htmlFor={`${idPrefix}-jurisdiction`} className="text-sm font-medium text-ink">
           Licensing jurisdiction
-          <span className="text-danger"> *</span>
         </label>
         <select
           id={`${idPrefix}-jurisdiction`}
-          required={blockIncomplete}
           disabled={locked}
           value={value.jurisdiction}
           onChange={(event) => patch({ jurisdiction: event.target.value })}
@@ -118,7 +116,7 @@ export function AgentProfessionalFields({
           <p className="text-[11px] text-[#b91c1c]">{errors.jurisdiction}</p>
         ) : (
           <p className="text-[11px] leading-relaxed text-ink/45">
-            Registration details follow this choice. Ontario is not assumed.
+            Optional. Registration details follow this choice. Ontario is not assumed.
           </p>
         )}
       </div>
@@ -148,41 +146,42 @@ export function AgentProfessionalFields({
           </p>
         )}
       </div>
-      {licenseKind === "reco" ? (
-        <>
-          <Field
-            id={`${idPrefix}-reco`}
-            label={PROFESSIONAL_FIELD_LABELS.recoLicenseNumber}
-            required={blockIncomplete}
-            value={value.recoLicenseNumber}
-            onChange={(recoLicenseNumber) => patch({ recoLicenseNumber })}
-            disabled={locked}
-            error={errors?.recoLicenseNumber}
-          />
-          <Field
-            id={`${idPrefix}-reco-expiry`}
-            label={PROFESSIONAL_FIELD_LABELS.recoLicenseExpiresAt}
-            required={blockIncomplete}
-            type="date"
-            value={value.recoLicenseExpiresAt}
-            onChange={(recoLicenseExpiresAt) => patch({ recoLicenseExpiresAt })}
-            disabled={locked}
-            error={errors?.recoLicenseExpiresAt}
-          />
-        </>
-      ) : null}
       {licenseKind === "registration" ? (
         <Field
           id={`${idPrefix}-registration`}
           label={jurisdiction?.licenseLabel ?? PROFESSIONAL_FIELD_LABELS.registrationNumber}
-          required={blockIncomplete}
           value={value.registrationNumber}
           onChange={(registrationNumber) => patch({ registrationNumber })}
           disabled={locked}
           className="sm:col-span-2"
           error={errors?.registrationNumber}
+          hint="Optional."
         />
-      ) : null}
+      ) : (
+        <Field
+          id={`${idPrefix}-reco`}
+          label={
+            licenseKind === "reco"
+              ? PROFESSIONAL_FIELD_LABELS.recoLicenseNumber
+              : "RECO / registration number"
+          }
+          value={value.recoLicenseNumber}
+          onChange={(recoLicenseNumber) => patch({ recoLicenseNumber })}
+          disabled={locked}
+          error={errors?.recoLicenseNumber}
+          hint="Optional."
+        />
+      )}
+      <Field
+        id={`${idPrefix}-reco-expiry`}
+        label="Registration expiry date"
+        type="date"
+        value={value.recoLicenseExpiresAt}
+        onChange={(recoLicenseExpiresAt) => patch({ recoLicenseExpiresAt })}
+        disabled={locked}
+        error={errors?.recoLicenseExpiresAt}
+        hint="Optional."
+      />
     </div>
   );
 }

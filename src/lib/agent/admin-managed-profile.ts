@@ -212,7 +212,7 @@ export async function applyAdminManagedAgentProfile(
   db: ProfileDb,
   userId: string,
   profile: ParsedAdminManagedAgentProfile,
-  opts?: { email?: string; preserveExistingReco?: boolean },
+  opts?: { email?: string; preserveExistingReco?: boolean; partialReco?: boolean },
 ): Promise<void> {
   await db.user.update({
     where: { id: userId },
@@ -224,10 +224,18 @@ export async function applyAdminManagedAgentProfile(
     },
   });
 
-  const writeReco =
+  const writeRecoNumber =
     opts?.preserveExistingReco !== true &&
     profile.recoLicenseNumber.trim().length > 0 &&
-    profile.recoLicenseExpiresAt != null;
+    (opts?.partialReco === true || profile.recoLicenseExpiresAt != null);
+  const writeRecoExpiry =
+    opts?.preserveExistingReco !== true &&
+    profile.recoLicenseExpiresAt != null &&
+    (opts?.partialReco === true || profile.recoLicenseNumber.trim().length > 0);
+  const recoWrite = {
+    ...(writeRecoNumber ? { recoLicenseNumber: profile.recoLicenseNumber.trim() } : {}),
+    ...(writeRecoExpiry ? { recoLicenseExpiresAt: profile.recoLicenseExpiresAt } : {}),
+  };
   const professional = {
     ...(profile.designation !== undefined ? { designation: profile.designation } : {}),
     ...(profile.registrationJurisdiction !== undefined
@@ -245,24 +253,14 @@ export async function applyAdminManagedAgentProfile(
       firstName: profile.firstName,
       lastName: profile.lastName,
       phone: profile.phone,
-      ...(writeReco
-        ? {
-            recoLicenseNumber: profile.recoLicenseNumber,
-            recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
-          }
-        : {}),
+      ...recoWrite,
       ...professional,
     },
     update: {
       firstName: profile.firstName,
       lastName: profile.lastName,
       phone: profile.phone,
-      ...(writeReco
-        ? {
-            recoLicenseNumber: profile.recoLicenseNumber,
-            recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
-          }
-        : {}),
+      ...recoWrite,
       ...professional,
     },
   });
@@ -301,8 +299,6 @@ export function profileFromInviteSnapshot(invite: {
   });
   if (parsed.ok) return { ...parsed.data, ...professional };
 
-  const jurisdiction = invite.registrationJurisdiction?.trim() ?? "";
-  if (!isProfessionalJurisdictionId(jurisdiction) || jurisdiction === "CA-ON") return null;
   const phone = parsePhoneColumnsForWrite(invite.phone);
   if (!phone.ok || !phone.columns.phone || !phone.columns.phoneE164) return null;
   const firstName = invite.firstName.trim();
@@ -315,9 +311,11 @@ export function profileFromInviteSnapshot(invite: {
     phone: phone.columns.phone,
     phoneE164: phone.columns.phoneE164,
     phoneColumns: phone.columns,
-    recoLicenseNumber: "",
-    recoLicenseExpiresAt: null,
-    recoLicenseExpiresAtInput: "",
+    recoLicenseNumber: invite.recoLicenseNumber?.trim().slice(0, 40) || "",
+    recoLicenseExpiresAt: invite.recoLicenseExpiresAt
+      ? new Date(invite.recoLicenseExpiresAt)
+      : null,
+    recoLicenseExpiresAtInput: recoExpiryToInputValue(invite.recoLicenseExpiresAt),
     ...professional,
   };
 }
@@ -464,19 +462,18 @@ export async function updateWorkspaceAgentProfile(input: {
       : null;
   const recoNumber = typeof rawRecord?.recoLicenseNumber === "string" ? rawRecord.recoLicenseNumber.trim() : "";
   const recoExpiry = typeof rawRecord?.recoLicenseExpiresAt === "string" ? rawRecord.recoLicenseExpiresAt.trim() : "";
-  const recoProvided = recoNumber.length > 0 || recoExpiry.length > 0;
-  if (recoProvided && (!recoNumber || !parseProfessionalExpiry(recoExpiry))) {
-    return {
-      ok: false,
-      error: "Enter the RECO registration number and a valid expiry together.",
-      status: 400,
-    };
+  if (recoNumber.length > 40) {
+    return { ok: false, error: "RECO registration number is too long.", status: 400 };
   }
-  const preserveExistingReco = !recoProvided;
+  if (recoExpiry && !parseProfessionalExpiry(recoExpiry)) {
+    return { ok: false, error: "Enter a valid registration expiry date.", status: 400 };
+  }
+  const preserveExistingReco = recoNumber.length === 0 && recoExpiry.length === 0;
+  const parsedExpiry = parseProfessionalExpiry(recoExpiry);
   const parsed = parseAdminManagedAgentProfile({
     ...(rawRecord ?? {}),
-    recoLicenseNumber: recoProvided ? recoNumber : loaded.profile.recoLicenseNumber || "KEEP",
-    recoLicenseExpiresAt: recoProvided ? recoExpiry : loaded.profile.recoLicenseExpiresAt || "2099-01-01",
+    recoLicenseNumber: recoNumber || loaded.profile.recoLicenseNumber || "KEEP",
+    recoLicenseExpiresAt: parsedExpiry || loaded.profile.recoLicenseExpiresAt || "2099-01-01",
   });
   if (!parsed.ok) return { ok: false, error: parsed.error, status: 400 };
   const designationRaw = typeof rawRecord?.designation === "string" ? rawRecord.designation : undefined;
@@ -519,6 +516,8 @@ export async function updateWorkspaceAgentProfile(input: {
     input.userId,
     {
       ...parsed.data,
+      recoLicenseNumber: recoNumber,
+      recoLicenseExpiresAt: parsedExpiry ? new Date(`${parsedExpiry}T12:00:00.000Z`) : null,
       ...(designation !== undefined ? { designation } : {}),
       ...(registrationJurisdiction !== undefined ? { registrationJurisdiction } : {}),
       ...(registrationNumber !== undefined ? { registrationNumber } : {}),
@@ -526,6 +525,7 @@ export async function updateWorkspaceAgentProfile(input: {
     {
       email: nextEmail,
       preserveExistingReco,
+      partialReco: true,
     },
   );
   if (loaded.profile.role === "OWNER" && input.ctx.workspaceId) {

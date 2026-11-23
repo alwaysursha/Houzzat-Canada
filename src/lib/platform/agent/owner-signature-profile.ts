@@ -220,20 +220,19 @@ export async function updateOwnerSignatureProfile(
 
   const recoNumber = typeof patch.recoLicenseNumber === "string" ? patch.recoLicenseNumber.trim() : "";
   const recoExpiry = typeof patch.recoLicenseExpiresAt === "string" ? patch.recoLicenseExpiresAt.trim() : "";
-  if (recoNumber || recoExpiry) {
-    const expiry = parseProfessionalExpiry(recoExpiry);
-    if (!recoNumber || !expiry) {
-      throw new PlatformApiError(
-        "Enter the RECO registration number and a valid expiry together.",
-        400,
-        "INVALID_RECO",
-      );
-    }
+  if (recoNumber.length > 40) {
+    throw new PlatformApiError("RECO registration number is too long.", 400, "INVALID_RECO");
+  }
+  if (recoExpiry && !parseProfessionalExpiry(recoExpiry)) {
+    throw new PlatformApiError("Enter a valid registration expiry date.", 400, "INVALID_RECO");
+  }
+  const expiry = parseProfessionalExpiry(recoExpiry);
+  if (recoNumber || expiry) {
     await db.agentProfile.updateMany({
       where: { userId: target.user.id },
       data: {
-        recoLicenseNumber: recoNumber.slice(0, 40),
-        recoLicenseExpiresAt: new Date(`${expiry}T12:00:00.000Z`),
+        ...(recoNumber ? { recoLicenseNumber: recoNumber } : {}),
+        ...(expiry ? { recoLicenseExpiresAt: new Date(`${expiry}T12:00:00.000Z`) } : {}),
       },
     });
   }

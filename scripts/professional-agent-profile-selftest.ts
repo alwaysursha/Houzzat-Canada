@@ -46,11 +46,18 @@ function testOntarioAndOtherJurisdictions() {
   assert.equal(designationOptionsForJurisdiction(null).includes("Broker of Record"), false);
 
   const missingLicence = evaluateProfessionalAgentProfile(
-    snapshot({ recoLicenseNumber: "", recoLicenseExpiresAt: "" }),
+    snapshot({
+      jurisdiction: null,
+      recoLicenseNumber: "",
+      recoLicenseExpiresAt: "",
+      registrationNumber: "",
+    }),
   );
-  assert.equal(missingLicence.onboarded, false);
-  assert.ok(missingLicence.missing.includes("recoLicenseNumber"));
-  assert.equal(missingLicence.fieldErrors.recoLicenseNumber?.includes("RECO"), true);
+  assert.equal(missingLicence.onboarded, true);
+  assert.equal(missingLicence.missing.includes("jurisdiction"), false);
+  assert.equal(missingLicence.missing.includes("recoLicenseNumber"), false);
+  assert.equal(missingLicence.missing.includes("recoLicenseExpiresAt"), false);
+  assert.equal(missingLicence.missing.includes("registrationNumber"), false);
 
   const britishColumbia = evaluateProfessionalAgentProfile(
     snapshot({
@@ -58,28 +65,21 @@ function testOntarioAndOtherJurisdictions() {
       designation: "Representative",
       recoLicenseNumber: null,
       recoLicenseExpiresAt: null,
-      registrationNumber: "BC-100",
+      registrationNumber: null,
     }),
   );
   assert.equal(britishColumbia.onboarded, true);
-  assert.equal(britishColumbia.missing.includes("recoLicenseNumber"), false);
 
-  const britishColumbiaMissing = evaluateProfessionalAgentProfile(
-    snapshot({
-      jurisdiction: "CA-BC",
-      designation: "Representative",
-      recoLicenseNumber: null,
-      recoLicenseExpiresAt: null,
-      registrationNumber: "",
-    }),
+  const badExpiry = evaluateProfessionalAgentProfile(
+    snapshot({ recoLicenseExpiresAt: "15/06/2027" }),
   );
-  assert.equal(britishColumbiaMissing.onboarded, false);
-  assert.ok(britishColumbiaMissing.missing.includes("registrationNumber"));
+  assert.equal(badExpiry.onboarded, true);
+  assert.equal(badExpiry.missing.includes("recoLicenseExpiresAt"), false);
+  assert.match(badExpiry.fieldErrors.recoLicenseExpiresAt ?? "", /valid registration expiry/);
 
-  const unset = evaluateProfessionalAgentProfile(snapshot({ jurisdiction: null }));
-  assert.equal(unset.onboarded, false);
-  assert.ok(unset.missing.includes("jurisdiction"));
-  assert.equal(unset.missing.includes("recoLicenseNumber"), false);
+  const badJurisdiction = evaluateProfessionalAgentProfile(snapshot({ jurisdiction: "CA-XX" }));
+  assert.equal(badJurisdiction.missing.includes("jurisdiction"), false);
+  assert.match(badJurisdiction.fieldErrors.jurisdiction ?? "", /licensing jurisdiction/);
 }
 
 function testExistingIncompleteStaysUnboarded() {
@@ -91,9 +91,9 @@ function testExistingIncompleteStaysUnboarded() {
       recoLicenseExpiresAt: null,
     }),
   );
-  assert.equal(legacy.onboarded, false);
+  assert.equal(legacy.onboarded, true);
   assert.equal(legacy.fieldErrors.designation, undefined);
-  assert.ok(legacy.missing.includes("jurisdiction"));
+  assert.equal(legacy.missing.includes("jurisdiction"), false);
   const layout = readFileSync(join(root, "src/app/(agent)/agent/layout.tsx"), "utf8");
   assert.ok(layout.includes("ProfessionalProfileNotice"));
   assert.equal(layout.includes('redirect("/agent/profile")'), false);
@@ -126,17 +126,52 @@ function testInviteRefusesIncompleteProfiles() {
       email: "jordan.lee@brokerage.test",
       phone: "416-555-1234",
       designation: "Representative",
-      jurisdiction: "CA-BC",
-      registrationNumber: "BC-100",
+      jurisdiction: "",
+      recoLicenseNumber: "",
+      recoLicenseExpiresAt: "",
+      registrationNumber: "",
     },
     "Other Brokerage",
   );
   assert.equal(otherTenant.ok, true);
   if (otherTenant.ok) {
-    assert.equal(otherTenant.data.registrationJurisdiction, "CA-BC");
+    assert.equal(otherTenant.data.registrationJurisdiction, null);
     assert.equal(otherTenant.data.recoLicenseNumber, null);
+    assert.equal(otherTenant.data.recoLicenseExpiresAt, null);
     assert.equal(otherTenant.data.designation, "Representative");
   }
+
+  const voluntaryLicence = parseProfessionalOnboarding(
+    {
+      firstName: "Jordan",
+      lastName: "Lee",
+      email: "jordan.lee@brokerage.test",
+      phone: "416-555-1234",
+      designation: "Sales Representative",
+      jurisdiction: "CA-ON",
+      recoLicenseNumber: "12345678",
+      recoLicenseExpiresAt: "",
+    },
+    "Right at Home Realty Brokerage",
+  );
+  assert.equal(voluntaryLicence.ok, true);
+  if (voluntaryLicence.ok) {
+    assert.equal(voluntaryLicence.data.recoLicenseNumber, "12345678");
+    assert.equal(voluntaryLicence.data.recoLicenseExpiresAt, null);
+  }
+
+  const invalidExpiry = parseProfessionalOnboarding(
+    {
+      firstName: "Jordan",
+      lastName: "Lee",
+      email: "jordan.lee@brokerage.test",
+      phone: "416-555-1234",
+      designation: "Sales Representative",
+      recoLicenseExpiresAt: "not-a-date",
+    },
+    "Right at Home Realty Brokerage",
+  );
+  assert.equal(invalidExpiry.ok, false);
 
   const wrongBrokerage = parseProfessionalOnboarding(
     {

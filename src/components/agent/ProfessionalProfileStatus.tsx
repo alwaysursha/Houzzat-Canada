@@ -8,7 +8,7 @@ export function ProfessionalProfileStatus({
   if (complete) {
     return (
       <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-        Professional profile complete. A photograph is optional.
+        Professional profile complete. A photograph and licensing details are optional.
       </p>
     );
   }
@@ -20,7 +20,7 @@ export function ProfessionalProfileStatus({
         Still needed: {missingLabels.join(", ")}.
       </p>
       <p className="mt-1 text-xs">
-        A photograph is optional. This profile is marked onboarded when every required field is saved.
+        A photograph and licensing details are optional. This profile is marked onboarded when every required field is saved.
       </p>
     </div>
   );
