@@ -20,6 +20,7 @@ const offerInclude = {
   },
   provisioningRun: true,
   prospect: true,
+  workspace: { select: { id: true, name: true, slug: true } },
 } satisfies Prisma.CommercialOfferInclude;
 
 export async function listPlatformOffers(params: PlatformListParams) {
@@ -60,5 +61,12 @@ export async function getPlatformOfferDetail(offerId: string) {
   return {
     ...serializeOfferSummary(offer),
     prospect: serializeProspect(offer.prospect),
+    linkedWorkspace: offer.workspace
+      ? {
+          id: offer.workspace.id,
+          name: offer.workspace.name,
+          slug: offer.workspace.slug,
+        }
+      : null,
   };
 }

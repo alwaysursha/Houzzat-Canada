@@ -710,7 +710,7 @@ async function main() {
     const state = emptyState();
     const seeded = seedAcceptedOffer(state, {
       cadence: "ANNUAL",
-      setupFeeCents: 50_000,
+      setupFeeCents: 25_000,
       additionalSeats: 1,
     });
     const stripe = createFakeStripe(state);

@@ -2,14 +2,10 @@
  * Master Admin manual onboarding.
  * Preparing a workspace does not send email, open checkout, or touch DNS.
  */
-import type { PlanCode, Prisma, PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { writePlatformAuditEvent } from "@/lib/platform/audit";
-import { getPlanDefinition } from "@/lib/platform/catalog/plans";
 import { notifyOfferInvitationEmail } from "@/lib/platform/offers/offer-invitation-emails";
-import {
-  createDraftCommercialOffer,
-  sendCommercialOffer,
-} from "@/lib/platform/offers/manage";
+import { sendCommercialOffer } from "@/lib/platform/offers/manage";
 import { resendCommercialOfferInvitation } from "@/lib/platform/offers/resend-invitation";
 import { ProvisioningActionError } from "@/lib/platform/provisioning/errors";
 import {
@@ -271,11 +267,23 @@ export async function prepareCommercialOfferForWorkspace(input: {
   prisma: PrismaClient;
   operatorId: string;
   workspaceId: string;
-}): Promise<{
-  outcome: "created" | "already_present";
-  offerId: string;
-  emailSent: false;
-}> {
+}): Promise<
+  | {
+      outcome: "already_present";
+      offerId: string;
+      offerStatus: string;
+      emailSent: false;
+    }
+  | {
+      outcome: "terms_required";
+      offerId: null;
+      prospectId: string;
+      workspaceId: string;
+      workspaceName: string;
+      workspaceSlug: string;
+      emailSent: false;
+    }
+> {
   const db = input.prisma;
   await requireMasterAdmin(db, input.operatorId);
   const workspace = await db.workspace.findUnique({
@@ -283,7 +291,7 @@ export async function prepareCommercialOfferForWorkspace(input: {
     select: {
       id: true,
       name: true,
-      currentSubscription: { select: { planCode: true } },
+      slug: true,
       members: {
         where: { role: "OWNER", status: "ACTIVE" },
         select: { user: { select: { email: true, name: true, phone: true } } },
@@ -307,7 +315,12 @@ export async function prepareCommercialOfferForWorkspace(input: {
     select: { id: true, status: true },
   });
   if (linked && linked.status !== "CANCELLED" && linked.status !== "EXPIRED") {
-    return { outcome: "already_present", offerId: linked.id, emailSent: false };
+    return {
+      outcome: "already_present",
+      offerId: linked.id,
+      offerStatus: linked.status,
+      emailSent: false,
+    };
   }
   if (linked) {
     await db.commercialOffer.update({
@@ -336,23 +349,15 @@ export async function prepareCommercialOfferForWorkspace(input: {
     });
   }
 
-  const planCode = (workspace.currentSubscription?.planCode ?? "TEAM") as PlanCode;
-  getPlanDefinition(planCode);
-  const draft = await createDraftCommercialOffer({
-    prisma: db,
-    operatorId: input.operatorId,
+  return {
+    outcome: "terms_required",
+    offerId: null,
     prospectId: prospect.id,
-    terms: {
-      planCode,
-      billingCadence: "MONTHLY",
-      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-    },
-  });
-  await db.commercialOffer.update({
-    where: { id: draft.offerId },
-    data: { workspaceId: workspace.id },
-  });
-  return { outcome: "created", offerId: draft.offerId, emailSent: false };
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    workspaceSlug: workspace.slug,
+    emailSent: false,
+  };
 }
 
 export async function sendPreparedPaymentInvitation(input: {

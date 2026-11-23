@@ -67,6 +67,87 @@ function standardRecurringCents(
   return cadence === "ANNUAL" ? plan.annualPriceCents : plan.monthlyPriceCents;
 }
 
+/** Savings as a percentage with one decimal, using integer cents. */
+export function catalogSavingsPercent(
+  standardCents: number,
+  savingsCents: number,
+): number {
+  if (standardCents <= 0 || savingsCents <= 0) return 0;
+  return Math.round((savingsCents * 1000) / standardCents) / 10;
+}
+
+export type ManualOfferDiscountQuote = {
+  standardRecurringAmountCents: number;
+  negotiatedRecurringAmountCents: number;
+  recurringSavingsCents: number;
+  recurringSavingsPercent: number;
+  standardSetupFeeCents: number;
+  setupFeeCents: number;
+  setupSavingsCents: number;
+  setupSavingsPercent: number;
+};
+
+/**
+ * Compare an entered final price with the catalog for the selected plan and interval.
+ * A setup fee of 0 is a waiver. A price above the catalog is rejected.
+ */
+export function describeManualOfferDiscount(input: {
+  planCode: PlanCode;
+  billingCadence: BillingCadence;
+  negotiatedRecurringAmountCents: number;
+  setupFeeCents: number;
+}): ManualOfferDiscountQuote {
+  const standardRecurringAmountCents = standardRecurringCents(
+    input.planCode,
+    input.billingCadence,
+  );
+  const negotiatedRecurringAmountCents = assertFiniteNonNegativeCents(
+    input.negotiatedRecurringAmountCents,
+    "Negotiated recurring amount",
+  );
+  const setupFeeCents = assertFiniteNonNegativeCents(
+    input.setupFeeCents,
+    "Setup fee",
+  );
+  if (negotiatedRecurringAmountCents <= 0) {
+    throw new CommercialOfferActionError(
+      "Recurring price must stay above zero.",
+      "INVALID_AMOUNT",
+    );
+  }
+  if (negotiatedRecurringAmountCents > standardRecurringAmountCents) {
+    throw new CommercialOfferActionError(
+      "Recurring price cannot exceed the catalog price for this plan and billing interval.",
+      "PRICE_ABOVE_CATALOG",
+    );
+  }
+  if (setupFeeCents > STANDARD_SETUP_FEE_CENTS) {
+    throw new CommercialOfferActionError(
+      "Setup fee cannot exceed the catalog setup fee.",
+      "SETUP_ABOVE_CATALOG",
+    );
+  }
+  const recurringSavingsCents =
+    standardRecurringAmountCents - negotiatedRecurringAmountCents;
+  const setupSavingsCents = STANDARD_SETUP_FEE_CENTS - setupFeeCents;
+  return {
+    standardRecurringAmountCents,
+    negotiatedRecurringAmountCents,
+    recurringSavingsCents,
+    recurringSavingsPercent: catalogSavingsPercent(
+      standardRecurringAmountCents,
+      recurringSavingsCents,
+    ),
+    standardSetupFeeCents: STANDARD_SETUP_FEE_CENTS,
+    setupFeeCents,
+    setupSavingsCents,
+    setupSavingsPercent: catalogSavingsPercent(
+      STANDARD_SETUP_FEE_CENTS,
+      setupSavingsCents,
+    ),
+  };
+}
+
 function assertFiniteNonNegativeCents(value: number, label: string): number {
   if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
     throw new CommercialOfferActionError(
@@ -126,19 +207,15 @@ export function resolveOfferCommercialTerms(input: {
     input.planCode,
     input.billingCadence,
   );
-
-  const negotiatedRecurringAmountCents =
-    input.negotiatedRecurringAmountCents == null
-      ? standardRecurringAmountCents
-      : assertFiniteNonNegativeCents(
-          input.negotiatedRecurringAmountCents,
-          "Negotiated recurring amount",
-        );
-
-  const setupFeeCents =
-    input.setupFeeCents == null
-      ? STANDARD_SETUP_FEE_CENTS
-      : assertFiniteNonNegativeCents(input.setupFeeCents, "Setup fee");
+  const quote = describeManualOfferDiscount({
+    planCode: input.planCode,
+    billingCadence: input.billingCadence,
+    negotiatedRecurringAmountCents:
+      input.negotiatedRecurringAmountCents ?? standardRecurringAmountCents,
+    setupFeeCents: input.setupFeeCents ?? STANDARD_SETUP_FEE_CENTS,
+  });
+  const negotiatedRecurringAmountCents = quote.negotiatedRecurringAmountCents;
+  const setupFeeCents = quote.setupFeeCents;
 
   const additionalSeatsRaw = input.additionalSeats ?? 0;
   if (
@@ -183,18 +260,41 @@ export function resolveOfferCommercialTerms(input: {
     kind: "PLAN_BASE",
     code: OFFER_LINE_CODES.PLAN_BASE,
     description: `${input.planCode} plan · ${input.billingCadence.toLowerCase()}`,
-    amountCents: negotiatedRecurringAmountCents,
+    amountCents: standardRecurringAmountCents,
     isRecurring: true,
     quantity: 1,
     sortOrder: sortOrder++,
   });
 
-  if (setupFeeCents > 0) {
+  if (quote.recurringSavingsCents > 0) {
     lineItems.push({
-      kind: "SETUP_FEE",
-      code: OFFER_LINE_CODES.SETUP_FEE,
-      description: "One-time setup fee",
-      amountCents: setupFeeCents,
+      kind: "DISCOUNT",
+      code: OFFER_LINE_CODES.PLAN_RECURRING_DISCOUNT,
+      description: "Recurring plan discount",
+      amountCents: quote.recurringSavingsCents,
+      isRecurring: true,
+      quantity: 1,
+      sortOrder: sortOrder++,
+    });
+  }
+
+  lineItems.push({
+    kind: "SETUP_FEE",
+    code: OFFER_LINE_CODES.SETUP_FEE,
+    description: "One-time setup fee",
+    amountCents: STANDARD_SETUP_FEE_CENTS,
+    isRecurring: false,
+    quantity: 1,
+    sortOrder: sortOrder++,
+  });
+
+  if (quote.setupSavingsCents > 0) {
+    lineItems.push({
+      kind: "DISCOUNT",
+      code: OFFER_LINE_CODES.SETUP_FEE_DISCOUNT,
+      description:
+        setupFeeCents === 0 ? "Setup fee waived" : "Setup fee discount",
+      amountCents: quote.setupSavingsCents,
       isRecurring: false,
       quantity: 1,
       sortOrder: sortOrder++,
@@ -302,6 +402,15 @@ export function resolveOfferCommercialTerms(input: {
 
   for (const adj of input.adjustments ?? []) {
     const code = adj.code.trim();
+    if (
+      code === OFFER_LINE_CODES.PLAN_RECURRING_DISCOUNT ||
+      code === OFFER_LINE_CODES.SETUP_FEE_DISCOUNT
+    ) {
+      throw new CommercialOfferActionError(
+        "Plan and setup discounts are calculated from the entered prices.",
+        "RESERVED_DISCOUNT_CODE",
+      );
+    }
     const description = adj.description.trim();
     if (!code || !description) {
       throw new CommercialOfferActionError(
@@ -348,6 +457,18 @@ export function resolveOfferCommercialTerms(input: {
       isRecurring: Boolean(item.isRecurring),
     })),
   );
+  if (!Number.isInteger(totals.recurringTotalCents) || totals.recurringTotalCents <= 0) {
+    throw new CommercialOfferActionError(
+      "Recurring total must stay above zero after discounts.",
+      "INVALID_RECURRING_TOTAL",
+    );
+  }
+  if (!Number.isInteger(totals.oneTimeTotalCents) || totals.oneTimeTotalCents < 0) {
+    throw new CommercialOfferActionError(
+      "One-time total cannot be negative.",
+      "INVALID_ONE_TIME_TOTAL",
+    );
+  }
 
   return {
     planCode: input.planCode,

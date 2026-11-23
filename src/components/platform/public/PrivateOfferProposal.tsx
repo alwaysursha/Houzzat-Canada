@@ -309,7 +309,13 @@ export function PrivateOfferProposal({
                       </p>
                     ) : null}
                   </div>
-                  <p className="shrink-0 font-semibold tabular-nums text-slate-900">
+                  <p
+                    className={
+                      line.isDiscount
+                        ? "shrink-0 font-semibold tabular-nums text-emerald-700"
+                        : "shrink-0 font-semibold tabular-nums text-slate-900"
+                    }
+                  >
                     {formatCad(line.lineTotalCents)}
                   </p>
                 </li>
@@ -352,7 +358,13 @@ export function PrivateOfferProposal({
                         </p>
                       ) : null}
                     </div>
-                    <p className="shrink-0 font-semibold tabular-nums text-slate-900">
+                    <p
+                      className={
+                        line.isDiscount
+                          ? "shrink-0 font-semibold tabular-nums text-emerald-700"
+                          : "shrink-0 font-semibold tabular-nums text-slate-900"
+                      }
+                    >
                       {formatCad(line.lineTotalCents)}
                     </p>
                   </li>

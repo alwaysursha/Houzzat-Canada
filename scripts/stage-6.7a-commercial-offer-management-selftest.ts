@@ -384,6 +384,41 @@ async function main() {
     assert.equal(terms.setupFeeCents, 0);
     assert.equal(STANDARD_SETUP_FEE_CENTS, before);
     assert.equal(terms.includedSeats, 4);
+    const planBase = terms.lineItems.find((line) => line.code === "PLAN_BASE");
+    const recurringDiscount = terms.lineItems.find(
+      (line) => line.code === "PLAN_RECURRING_DISCOUNT",
+    );
+    const setupFee = terms.lineItems.find((line) => line.code === "SETUP_FEE");
+    const setupDiscount = terms.lineItems.find((line) => line.code === "SETUP_FEE_DISCOUNT");
+    assert.equal(planBase?.amountCents, 599_000);
+    assert.equal(recurringDiscount?.kind, "DISCOUNT");
+    assert.equal(recurringDiscount?.amountCents, 99_000);
+    assert.equal(recurringDiscount?.isRecurring, true);
+    assert.equal(setupFee?.amountCents, STANDARD_SETUP_FEE_CENTS);
+    assert.equal(setupDiscount?.amountCents, STANDARD_SETUP_FEE_CENTS);
+    assert.equal(terms.recurringTotalCents, 500_000);
+    assert.equal(terms.oneTimeTotalCents, 0);
+    assert.throws(
+      () =>
+        resolveOfferCommercialTerms({
+          planCode: "TEAM",
+          billingCadence: "ANNUAL",
+          negotiatedRecurringAmountCents: 600_000,
+          setupFeeCents: 0,
+        }),
+      (error: unknown) =>
+        error instanceof CommercialOfferActionError && error.code === "PRICE_ABOVE_CATALOG",
+    );
+    assert.throws(
+      () =>
+        resolveOfferCommercialTerms({
+          planCode: "TEAM",
+          billingCadence: "MONTHLY",
+          setupFeeCents: STANDARD_SETUP_FEE_CENTS + 1,
+        }),
+      (error: unknown) =>
+        error instanceof CommercialOfferActionError && error.code === "SETUP_ABOVE_CATALOG",
+    );
     console.log("[1] Standard catalog + negotiated prices... PASS");
   }
 

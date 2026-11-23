@@ -32,6 +32,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const result = await updateDraftCommercialOffer({
       offerId,
       operatorId: operator.operatorId,
+      workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : undefined,
       terms: parseCommercialOfferTermsBody(body),
     });
     const offer = await getPlatformOfferDetail(result.offerId);

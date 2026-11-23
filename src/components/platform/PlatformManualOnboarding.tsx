@@ -34,17 +34,36 @@ export function PlatformManualOnboarding({
         method: "POST",
         headers: { Accept: "application/json" },
       });
-      const body = (await response.json()) as ApiEnvelope<{ offerId?: string }>;
+      const body = (await response.json()) as ApiEnvelope<{
+        offerId?: string | null;
+        offerStatus?: string;
+        prospectId?: string;
+        workspaceId?: string;
+        outcome?: string;
+      }>;
       if (!response.ok || !body.ok) {
         setError(body.ok === false ? body.message : "The action could not be completed.");
+        return;
+      }
+      if (action === "offer" && body.data.outcome === "terms_required" && body.data.prospectId) {
+        router.push(
+          `/platform/offers/new?prospectId=${encodeURIComponent(body.data.prospectId)}&workspaceId=${encodeURIComponent(workspaceId)}`,
+        );
+        return;
+      }
+      if (action === "offer" && body.data.offerId) {
+        const edit = body.data.offerStatus === "DRAFT";
+        router.push(
+          edit
+            ? `/platform/offers/${encodeURIComponent(body.data.offerId)}/edit`
+            : `/platform/offers/${encodeURIComponent(body.data.offerId)}`,
+        );
         return;
       }
       setFeedback(
         action === "prepare"
           ? "Workspace prepared. No email was sent."
-          : action === "offer"
-            ? "Commercial offer prepared. No payment email was sent."
-            : "Payment invitation sent.",
+          : "Payment invitation sent.",
       );
       router.refresh();
     } catch {
@@ -91,7 +110,7 @@ export function PlatformManualOnboarding({
             onClick={() => void post("offer", `${base}/prepare-offer`)}
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-100 hover:bg-slate-800 disabled:opacity-60"
           >
-            {pending === "offer" ? "Preparing…" : "Prepare Commercial Offer"}
+            {pending === "offer" ? "Opening…" : "Enter commercial terms"}
           </button>
           <button
             type="button"

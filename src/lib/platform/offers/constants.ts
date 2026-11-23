@@ -29,6 +29,8 @@ export const OFFER_LINE_CODES = {
   CUSTOM_CONSUMER_APP: "CUSTOM_CONSUMER_APP",
   GOOGLE_PPC: "GOOGLE_PPC",
   META_ADS: "META_ADS",
+  PLAN_RECURRING_DISCOUNT: "PLAN_RECURRING_DISCOUNT",
+  SETUP_FEE_DISCOUNT: "SETUP_FEE_DISCOUNT",
 } as const;
 
 export function buildPrivateOfferUrl(rawToken: string): string {

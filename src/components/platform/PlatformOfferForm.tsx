@@ -12,6 +12,8 @@ import {
   getAdditionalAgentUnitCents,
 } from "@/lib/platform/catalog/add-ons";
 import { ADS_MINIMUM_MONTHLY_BUDGET_CENTS } from "@/lib/platform/offers/constants";
+import { CommercialOfferActionError } from "@/lib/platform/offers/errors";
+import { describeManualOfferDiscount } from "@/lib/platform/offers/line-items";
 
 type PlanCode = "SOLO" | "TEAM" | "BROKERAGE";
 type BillingCadence = "MONTHLY" | "ANNUAL";
@@ -31,9 +33,21 @@ function centsToDollarsInput(cents: number): string {
 function dollarsInputToCents(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return Number.NaN;
   const n = Number(trimmed);
   if (!Number.isFinite(n) || n < 0) return Number.NaN;
   return Math.round(n * 100);
+}
+
+function formatPercent(value: number): string {
+  return Number.isInteger(value) ? `${value}%` : `${value.toFixed(1)}%`;
+}
+
+function formatCadDollars(cents: number): string {
+  return (cents / 100).toLocaleString("en-CA", {
+    style: "currency",
+    currency: "CAD",
+  });
 }
 
 function formatCadLabel(cents: number, cadence: BillingCadence): string {
@@ -60,12 +74,21 @@ export type PlatformOfferFormInitial = {
   metaAdsAmountCents?: number | null;
 };
 
+export type PlatformOfferWorkspaceOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 type PlatformOfferFormProps = {
   mode: "create" | "edit";
   offerId?: string;
   prospectId: string;
   prospectLabel?: string;
   initial?: PlatformOfferFormInitial;
+  workspaces?: PlatformOfferWorkspaceOption[];
+  linkedWorkspaceId?: string | null;
+  lockWorkspace?: boolean;
 };
 
 export function PlatformOfferForm({
@@ -74,6 +97,9 @@ export function PlatformOfferForm({
   prospectId,
   prospectLabel,
   initial,
+  workspaces = [],
+  linkedWorkspaceId = null,
+  lockWorkspace = false,
 }: PlatformOfferFormProps) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -89,6 +115,7 @@ export function PlatformOfferForm({
     initial?.billingCadence ?? "ANNUAL",
   );
   const plan = getPlanDefinition(planCode);
+  const customAppOneTimeCents = plan.consumerBrandedApp.oneTimeCents;
   const standardRecurring =
     billingCadence === "ANNUAL"
       ? plan.annualPriceCents
@@ -132,6 +159,7 @@ export function PlatformOfferForm({
   const [includeMetaAds, setIncludeMetaAds] = useState(
     Boolean(initial?.includeMetaAds),
   );
+  const [workspaceId, setWorkspaceId] = useState(linkedWorkspaceId ?? "");
   const [metaAdsAmount, setMetaAdsAmount] = useState(
     initial?.metaAdsAmountCents != null
       ? centsToDollarsInput(initial.metaAdsAmountCents)
@@ -167,8 +195,8 @@ export function PlatformOfferForm({
     if (seats > 0) {
       recurring += seats * getAdditionalAgentUnitCents(billingCadence);
     }
-    if (includeCustomApp && plan.consumerBrandedApp.oneTimeCents != null) {
-      oneTime += plan.consumerBrandedApp.oneTimeCents;
+    if (includeCustomApp && customAppOneTimeCents != null) {
+      oneTime += customAppOneTimeCents;
     }
     const g = dollarsInputToCents(googlePpcAmount);
     if (includeGooglePpc && g != null && Number.isFinite(g)) oneTime += g;
@@ -184,29 +212,54 @@ export function PlatformOfferForm({
     includeMetaAds,
     metaAdsAmount,
     negotiatedRecurring,
-    plan.consumerBrandedApp.oneTimeCents,
+    customAppOneTimeCents,
     setupFee,
   ]);
+
+  const pricingPreview = useMemo(() => {
+    const negotiatedRecurringAmountCents = dollarsInputToCents(negotiatedRecurring);
+    const setupFeeCents = dollarsInputToCents(setupFee);
+    if (
+      negotiatedRecurringAmountCents == null ||
+      Number.isNaN(negotiatedRecurringAmountCents) ||
+      setupFeeCents == null ||
+      Number.isNaN(setupFeeCents)
+    ) {
+      return { ok: false as const, message: "Enter prices in CAD with at most two decimal places." };
+    }
+    try {
+      const quote = describeManualOfferDiscount({
+        planCode,
+        billingCadence,
+        negotiatedRecurringAmountCents,
+        setupFeeCents,
+      });
+      return { ok: true as const, quote };
+    } catch (error) {
+      return {
+        ok: false as const,
+        message:
+          error instanceof CommercialOfferActionError
+            ? error.message
+            : "The entered prices are not valid.",
+      };
+    }
+  }, [billingCadence, negotiatedRecurring, planCode, setupFee]);
+
+  const selectedWorkspace =
+    workspaces.find((workspace) => workspace.id === workspaceId) ?? null;
 
   async function submit() {
     setSubmitting(true);
     setFeedback(null);
     try {
-      const negotiatedRecurringAmountCents =
-        dollarsInputToCents(negotiatedRecurring);
-      const setupFeeCents = dollarsInputToCents(setupFee);
-      if (
-        negotiatedRecurringAmountCents == null ||
-        Number.isNaN(negotiatedRecurringAmountCents) ||
-        setupFeeCents == null ||
-        Number.isNaN(setupFeeCents)
-      ) {
-        setFeedback({
-          tone: "error",
-          message: "Enter valid dollar amounts for recurring and setup fees.",
-        });
+      if (!pricingPreview.ok) {
+        setFeedback({ tone: "error", message: pricingPreview.message });
         return;
       }
+      const negotiatedRecurringAmountCents =
+        pricingPreview.quote.negotiatedRecurringAmountCents;
+      const setupFeeCents = pricingPreview.quote.setupFeeCents;
 
       const addOns: Array<Record<string, unknown>> = [];
       if (includeCustomApp) {
@@ -247,6 +300,7 @@ export function PlatformOfferForm({
 
       const payload = {
         prospectId,
+        ...(workspaceId ? { workspaceId } : {}),
         planCode,
         billingCadence,
         negotiatedRecurringAmountCents,
@@ -322,6 +376,38 @@ export function PlatformOfferForm({
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-[#111827] p-5">
+        <h2 className="text-sm font-semibold text-slate-200">Existing workspace</h2>
+        {lockWorkspace ? (
+          <p className="mt-2 text-sm text-slate-300">
+            {selectedWorkspace
+              ? `${selectedWorkspace.name} (${selectedWorkspace.slug})`
+              : workspaceId}
+          </p>
+        ) : (
+          <label className={`${labelClass} mt-3`}>
+            Link a workspace
+            <select
+              className={inputClass}
+              value={workspaceId}
+              onChange={(event) => setWorkspaceId(event.target.value)}
+            >
+              <option value="">New tenant after payment</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name} ({workspace.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <p className="mt-2 text-xs text-slate-400">
+          {workspaceId
+            ? "Payment stays on this workspace and does not create a second tenant."
+            : "No workspace is linked. Payment will create a new tenant."}
+        </p>
+      </section>
+
+      <section className="rounded-xl border border-slate-800 bg-[#111827] p-5">
         <h2 className="text-sm font-semibold text-slate-200">Plan & billing</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className={labelClass}>
@@ -358,7 +444,7 @@ export function PlatformOfferForm({
             </p>
           </div>
           <label className={labelClass}>
-            Negotiated recurring (CAD)
+            Final recurring price (CAD)
             <input
               className={inputClass}
               inputMode="decimal"
@@ -366,6 +452,72 @@ export function PlatformOfferForm({
               onChange={(e) => setNegotiatedRecurring(e.target.value)}
             />
           </label>
+        </div>
+        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Pricing preview
+          </h3>
+          {pricingPreview.ok ? (
+            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <dt className="text-slate-500">Original recurring</dt>
+                <dd className="text-slate-400 line-through">
+                  {formatCadLabel(pricingPreview.quote.standardRecurringAmountCents, billingCadence)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Discounted recurring</dt>
+                <dd className="font-semibold text-emerald-200">
+                  {formatCadLabel(pricingPreview.quote.negotiatedRecurringAmountCents, billingCadence)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Recurring savings</dt>
+                <dd className="text-slate-200">
+                  {formatCadDollars(pricingPreview.quote.recurringSavingsCents)}{" "}
+                  ({formatPercent(pricingPreview.quote.recurringSavingsPercent)})
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Original setup fee</dt>
+                <dd className="text-slate-400 line-through">
+                  {formatCadDollars(pricingPreview.quote.standardSetupFeeCents)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Discounted setup fee</dt>
+                <dd className="font-semibold text-emerald-200">
+                  {pricingPreview.quote.setupFeeCents === 0
+                    ? "Waived"
+                    : formatCadDollars(pricingPreview.quote.setupFeeCents)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Setup fee savings</dt>
+                <dd className="text-slate-200">
+                  {formatCadDollars(pricingPreview.quote.setupSavingsCents)}{" "}
+                  ({formatPercent(pricingPreview.quote.setupSavingsPercent)})
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Checkout recurring</dt>
+                <dd className="font-semibold text-slate-100">
+                  {formatCadLabel(summary.recurring, billingCadence)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Checkout one-time</dt>
+                <dd className="font-semibold text-slate-100">
+                  {summary.oneTime === 0 ? "None" : formatCadDollars(summary.oneTime)}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-3 text-red-200">{pricingPreview.message}</p>
+          )}
+          <p className="mt-3 text-xs text-slate-500">
+            Taxes are calculated by checkout. Catalog prices stay unchanged.
+          </p>
         </div>
       </section>
 
@@ -393,7 +545,7 @@ export function PlatformOfferForm({
             </p>
           </label>
           <label className={labelClass}>
-            Setup fee (CAD)
+            Final setup fee (CAD)
             <input
               className={inputClass}
               inputMode="decimal"
@@ -401,8 +553,7 @@ export function PlatformOfferForm({
               onChange={(e) => setSetupFee(e.target.value)}
             />
             <p className="mt-1 text-[11px] text-slate-500">
-              Standard ${STANDARD_SETUP_FEE_CENTS / 100} — reduce or waive as
-              needed
+              Catalog is ${STANDARD_SETUP_FEE_CENTS / 100}. Enter 0 to waive it.
             </p>
           </label>
         </div>
@@ -562,7 +713,7 @@ export function PlatformOfferForm({
         </dl>
         <button
           type="button"
-          disabled={submitting}
+          disabled={submitting || !pricingPreview.ok}
           onClick={() => void submit()}
           className="mt-5 inline-flex rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60"
         >

@@ -134,10 +134,51 @@ async function loadOfferForWrite(db: PrismaClient, offerId: string) {
   return offer;
 }
 
+async function linkDraftOfferToWorkspace(
+  db: PrismaClient,
+  offerId: string,
+  workspaceId: string,
+): Promise<void> {
+  const workspace = await db.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { id: true },
+  });
+  if (!workspace) {
+    throw new CommercialOfferActionError(
+      "Workspace not found.",
+      "WORKSPACE_NOT_FOUND",
+      404,
+    );
+  }
+  const linked = await db.commercialOffer.findUnique({
+    where: { workspaceId },
+    select: { id: true, status: true },
+  });
+  if (linked && linked.id !== offerId) {
+    if (linked.status === "CANCELLED" || linked.status === "EXPIRED") {
+      await db.commercialOffer.update({
+        where: { id: linked.id },
+        data: { workspaceId: null },
+      });
+    } else {
+      throw new CommercialOfferActionError(
+        "This workspace already has an open commercial offer.",
+        "WORKSPACE_OFFER_EXISTS",
+        409,
+      );
+    }
+  }
+  await db.commercialOffer.update({
+    where: { id: offerId },
+    data: { workspaceId },
+  });
+}
+
 export async function createDraftCommercialOffer(input: {
   prospectId: string;
   operatorId: string;
   terms: OfferTermsInput;
+  workspaceId?: string | null;
   prisma?: PrismaClient;
 }) {
   const db = input.prisma ?? defaultPrisma;
@@ -207,6 +248,11 @@ export async function createDraftCommercialOffer(input: {
     });
   }
 
+  const workspaceId = input.workspaceId?.trim() || null;
+  if (workspaceId) {
+    await linkDraftOfferToWorkspace(db, offer.id, workspaceId);
+  }
+
   const audit = await writePlatformAuditEvent(
     {
       actorOperatorId: input.operatorId,
@@ -217,8 +263,10 @@ export async function createDraftCommercialOffer(input: {
       summary: `Created DRAFT offer ${terms.planCode} ${terms.billingCadence}`,
       metadata: {
         prospectId: input.prospectId,
+        workspaceId,
         planCode: terms.planCode,
         billingCadence: terms.billingCadence,
+        standardRecurringAmountCents: terms.standardRecurringAmountCents,
         negotiatedRecurringAmountCents: terms.negotiatedRecurringAmountCents,
         setupFeeCents: terms.setupFeeCents,
         additionalSeats: terms.additionalSeats,
@@ -242,6 +290,7 @@ export async function updateDraftCommercialOffer(input: {
   offerId: string;
   operatorId: string;
   terms: OfferTermsInput;
+  workspaceId?: string | null;
   prisma?: PrismaClient;
 }) {
   const db = input.prisma ?? defaultPrisma;
@@ -295,6 +344,20 @@ export async function updateDraftCommercialOffer(input: {
   });
 
   await replaceLineItems(db, existing.id, terms.lineItems);
+
+  if (input.workspaceId !== undefined) {
+    const requested = input.workspaceId?.trim() || null;
+    if (existing.workspaceId && requested !== existing.workspaceId) {
+      throw new CommercialOfferActionError(
+        "An existing workspace link cannot be changed on this offer.",
+        "WORKSPACE_LINK_LOCKED",
+        409,
+      );
+    }
+    if (!existing.workspaceId && requested) {
+      await linkDraftOfferToWorkspace(db, existing.id, requested);
+    }
+  }
 
   const audit = await writePlatformAuditEvent(
     {

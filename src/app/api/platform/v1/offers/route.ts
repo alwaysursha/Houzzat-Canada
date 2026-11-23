@@ -36,6 +36,7 @@ export async function POST(request: Request) {
     const result = await createDraftCommercialOffer({
       prospectId,
       operatorId: operator.operatorId,
+      workspaceId: typeof body.workspaceId === "string" ? body.workspaceId : null,
       terms: parseCommercialOfferTermsBody(body),
     });
 

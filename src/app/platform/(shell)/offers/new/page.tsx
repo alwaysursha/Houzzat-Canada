@@ -7,16 +7,19 @@ import {
 } from "@/components/platform/PlatformUi";
 import {
   getPlatformProspect,
+  getPlatformWorkspace,
+  listPlatformWorkspaces,
   PlatformApiClientError,
 } from "@/lib/platform/ui/api-client";
 
 type PageProps = {
-  searchParams: Promise<{ prospectId?: string }>;
+  searchParams: Promise<{ prospectId?: string; workspaceId?: string }>;
 };
 
 export default async function PlatformNewOfferPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const prospectId = params.prospectId?.trim();
+  const workspaceId = params.workspaceId?.trim() || null;
   if (!prospectId) {
     return (
       <>
@@ -64,16 +67,44 @@ export default async function PlatformNewOfferPage({ searchParams }: PageProps) 
     );
   }
 
+  let workspaces: { id: string; name: string; slug: string }[] = [];
+  try {
+    const page = await listPlatformWorkspaces({ limit: 100 });
+    workspaces = page.items.map((workspace) => ({
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+    }));
+  } catch {
+    workspaces = [];
+  }
+  if (workspaceId && !workspaces.some((workspace) => workspace.id === workspaceId)) {
+    try {
+      const workspace = await getPlatformWorkspace(workspaceId);
+      if (typeof workspace.name === "string" && typeof workspace.slug === "string") {
+        workspaces = [
+          { id: workspaceId, name: workspace.name, slug: workspace.slug },
+          ...workspaces,
+        ];
+      }
+    } catch {
+      workspaces = [{ id: workspaceId, name: workspaceId, slug: workspaceId }, ...workspaces];
+    }
+  }
+
   return (
     <>
       <PlatformPageHeader
         title="Create Offer"
-        description="Negotiate commercial terms from the locked HouzzatPRO catalog. Stripe/checkout is not part of this stage."
+        description="Enter the final recurring price and setup fee. Catalog prices stay unchanged, and checkout charges the saved totals."
       />
       <PlatformOfferForm
         mode="create"
         prospectId={prospectId}
         prospectLabel={prospectLabel}
+        workspaces={workspaces}
+        linkedWorkspaceId={workspaceId}
+        lockWorkspace={Boolean(workspaceId)}
       />
     </>
   );

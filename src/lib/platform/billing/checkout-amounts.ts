@@ -1,10 +1,14 @@
 /**
  * Stage 6.8B — deterministic Checkout amounts from accepted commercial line items.
  *
- * Authority rule (Stage 6.7A):
- * - negotiatedRecurringAmountCents is PLAN_BASE only (not the full recurring total).
+ * Authority rule:
+ * - Stored line items are the charge authority. PLAN_BASE and SETUP_FEE keep the
+ *   catalog amounts. PLAN_RECURRING_DISCOUNT and SETUP_FEE_DISCOUNT are separate
+ *   lines when the agreed price is lower. The offer columns store the catalog
+ *   standard and the agreed final amounts.
  * - Seats, add-ons, discounts, and one-time fees live in CommercialOfferLineItem rows.
- * - Charge amounts = computeOfferTotals(lineItems) — never double-count negotiated + seats.
+ * - Charge amounts = computeOfferTotals(lineItems) — never double-count the agreed
+ *   recurring price plus seats, and never replace these rows with a later catalog.
  *
  * Stripe line items use these net totals (1 recurring + optional 1 one-time) so
  * discounts reconcile without negative Stripe price lines.

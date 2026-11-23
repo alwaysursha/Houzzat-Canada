@@ -250,6 +250,7 @@ const offerFn = prepareSource.slice(
 );
 assert.equal(offerFn.includes("notifyOfferInvitationEmail"), false);
 assert.equal(offerFn.includes("sendCommercialOffer"), false);
+assert.equal(offerFn.includes("createDraftCommercialOffer"), false);
 
 const checkout = readFileSync(
   join(root, "src/lib/platform/billing/checkout.ts"),

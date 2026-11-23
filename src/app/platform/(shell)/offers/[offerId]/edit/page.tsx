@@ -65,6 +65,7 @@ export default async function PlatformEditOfferPage({ params }: PageProps) {
   }
 
   const prospect = asRecord(offer.prospect);
+  const linkedWorkspace = asRecord(offer.linkedWorkspace);
   const lineItems = Array.isArray(offer.lineItems)
     ? (offer.lineItems as JsonRecord[])
     : [];
@@ -88,6 +89,19 @@ export default async function PlatformEditOfferPage({ params }: PageProps) {
         offerId={offerId}
         prospectId={str(offer.prospectId)}
         prospectLabel={prospectLabel}
+        workspaces={
+          linkedWorkspace
+            ? [
+                {
+                  id: str(linkedWorkspace.id),
+                  name: str(linkedWorkspace.name),
+                  slug: str(linkedWorkspace.slug),
+                },
+              ]
+            : []
+        }
+        linkedWorkspaceId={linkedWorkspace ? str(linkedWorkspace.id) : null}
+        lockWorkspace={Boolean(linkedWorkspace)}
         initial={{
           planCode: str(offer.planCode) as "SOLO" | "TEAM" | "BROKERAGE",
           billingCadence: str(offer.billingCadence) as "MONTHLY" | "ANNUAL",
