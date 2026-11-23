@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { AppointmentStatus } from "@prisma/client";
 import { requireAgentContextFromRequest } from "@/lib/agent";
 import { canMutateAppointment } from "@/lib/crm-read-scope";
-import { sendNotification } from "@/lib/notifications";
+import { sendAppointmentCustomerEmail } from "@/lib/email/appointment-customer-email";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
@@ -77,41 +77,41 @@ export async function PATCH(request: Request) {
     },
   });
 
+  const customerEmail = appointment.customer?.email?.trim() || null;
+  const workspaceId = appointment.lead?.workspaceId ?? null;
   if (
-    parsed.data.status === "CONFIRMED" &&
-    appointment.customer?.email
+    customerEmail &&
+    workspaceId &&
+    (parsed.data.status === "CONFIRMED" ||
+      parsed.data.status === "RESCHEDULED" ||
+      parsed.data.status === "CANCELLED")
   ) {
-    const label =
-      appointment.type === "VIRTUAL_VIEWING"
-        ? "Virtual Viewing"
-        : "Showing";
-    void sendNotification({
-      toEmail: appointment.customer.email,
-      toPhone: appointment.customer.phone,
-      subject: `Your ${label} is confirmed`,
-      text: [
-        `Hi ${appointment.customer.name ?? "there"},`,
-        `Your ${label} for ${appointment.listingMls ?? "a property"} is confirmed.`,
-        updated.startsAt
-          ? `When: ${updated.startsAt.toLocaleString("en-CA")}`
-          : null,
-        updated.videoJoinUrl
-          ? `Join link: ${updated.videoJoinUrl}`
-          : appointment.type === "VIRTUAL_VIEWING"
-            ? "Your agent will share the video link shortly."
-            : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
-      workspaceId: appointment.lead?.workspaceId ?? null,
-      smsClass: "transactional",
+    void sendAppointmentCustomerEmail({
+      workspaceId,
+      toEmail: customerEmail,
+      toPhone: appointment.customer?.phone,
+      recipientName: appointment.customer?.name,
+      type: updated.type,
+      status: parsed.data.status,
+      startsAt: updated.startsAt,
+      endsAt: updated.endsAt,
+      listingMls: updated.listingMls,
+      videoJoinUrl: updated.videoJoinUrl,
+      agentId: updated.agentId,
+      leadId: updated.leadId,
+      customerId: appointment.customer?.id,
+    }).catch((error) => {
+      console.error("[appointments] customer email failed", error);
     });
+  }
+  if (parsed.data.status === "CONFIRMED" && appointment.customer) {
+    const label =
+      updated.type === "VIRTUAL_VIEWING" ? "Virtual viewing" : "Showing";
     void sendPushToUser(appointment.customer.id, {
       type: "viewing_reminder",
       title: `${label} confirmed`,
-      body: appointment.listingMls
-        ? `MLS® ${appointment.listingMls}`
+      body: updated.listingMls
+        ? `MLS® ${updated.listingMls}`
         : "Your appointment is confirmed",
       href: "/account",
     });

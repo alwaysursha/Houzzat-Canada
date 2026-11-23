@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { AppointmentStatus } from "@prisma/client";
 import { canMobileMutateAppointment } from "@/lib/mobile/v2/appointment-scope";
 import { authorizeMobileWorkspaceAccess } from "@/lib/mobile/v2/workspace-access";
-import { sendNotification } from "@/lib/notifications";
+import { sendAppointmentCustomerEmail } from "@/lib/email/appointment-customer-email";
 import { sendPushToUser } from "@/lib/notifications/push";
 import { prisma } from "@/lib/prisma";
 
@@ -209,31 +209,36 @@ export async function PATCH(
       },
     });
 
-    if (nextStatus === "CONFIRMED" && existing.customer?.email) {
-      const label =
-        existing.type === "VIRTUAL_VIEWING" ? "Virtual Viewing" : "Showing";
-      void sendNotification({
-        toEmail: existing.customer.email,
-        toPhone: existing.customer.phone,
-        subject: `Your ${label} is confirmed`,
-        workspaceId: existing.lead?.workspaceId ?? access.workspaceId,
-        smsClass: "transactional",
-        text: [
-          `Hi ${existing.customer.name ?? "there"},`,
-          `Your ${label} for ${existing.listingMls ?? "a property"} is confirmed.`,
-          updated.startsAt
-            ? `When: ${updated.startsAt.toLocaleString("en-CA")}`
-            : null,
-          updated.videoJoinUrl
-            ? `Join link: ${updated.videoJoinUrl}`
-            : existing.type === "VIRTUAL_VIEWING"
-              ? "Your agent will share the video link shortly."
-              : null,
-        ]
-          .filter(Boolean)
-          .join("\n"),
-        smsText: `Houzzat: ${label} confirmed${updated.startsAt ? ` ${updated.startsAt.toLocaleString("en-CA")}` : ""}.`,
+    const customerEmail = existing.customer?.email?.trim() || null;
+    const workspaceId = existing.lead?.workspaceId ?? access.workspaceId;
+    if (
+      customerEmail &&
+      workspaceId &&
+      (nextStatus === "CONFIRMED" ||
+        nextStatus === "RESCHEDULED" ||
+        nextStatus === "CANCELLED")
+    ) {
+      void sendAppointmentCustomerEmail({
+        workspaceId,
+        toEmail: customerEmail,
+        toPhone: existing.customer?.phone,
+        recipientName: existing.customer?.name,
+        type: existing.type,
+        status: nextStatus,
+        startsAt: updated.startsAt,
+        endsAt: updated.endsAt,
+        listingMls: updated.listingMls,
+        videoJoinUrl: updated.videoJoinUrl,
+        agentId: existing.agentId ?? access.userId,
+        leadId: existing.leadId,
+        customerId: existing.customer?.id,
+      }).catch((error) => {
+        console.error("[mobile-appointments] customer email failed", error);
       });
+    }
+    if (nextStatus === "CONFIRMED" && existing.customer) {
+      const label =
+        existing.type === "VIRTUAL_VIEWING" ? "Virtual viewing" : "Showing";
       void sendPushToUser(existing.customer.id, {
         type: "viewing_reminder",
         title: `${label} confirmed`,

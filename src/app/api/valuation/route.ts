@@ -15,6 +15,7 @@ import {
   publicLeadRoutingErrorResponse,
   publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
+import { sendAppointmentCustomerEmail } from "@/lib/email/appointment-customer-email";
 import {
   createCallNewLeadTask,
   resolveLeadIntent,
@@ -615,6 +616,22 @@ export async function POST(request: Request) {
           notes: `Valuation follow-up for ${data.address}`,
         },
       });
+      if (lead.workspaceId && contactEmail) {
+        void sendAppointmentCustomerEmail({
+          workspaceId: lead.workspaceId,
+          toEmail: contactEmail,
+          recipientName: contactNameResolved,
+          type: "VALUATION_CALL",
+          status: "REQUESTED",
+          startsAt: null,
+          locationLabel: data.address,
+          agentId: assignedAgentId,
+          leadId: lead.id,
+          customerId: customerId ?? resolved.customerId,
+        }).catch((error) => {
+          console.error("[valuation] customer acknowledgement failed", error);
+        });
+      }
     }
 
     if (resolved.created) {

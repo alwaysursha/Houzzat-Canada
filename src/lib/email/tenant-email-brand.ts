@@ -12,8 +12,8 @@
  * From is overridden only when custom sending is verified and enabled for this workspace.
  *
  * Phase 3B — premium personal agent signature (User.image + ACTIVE membership)
- * via Phase 3A photo resolver. Designation omitted until a verified per-agent
- * field exists (workspace WPI designation is not per-agent).
+ * via Phase 3A photo resolver. Title comes from AgentProfile.designation.
+ * The workspace public-site title is used only for that registered agent.
  *
  * Phase 3D.4.2 — prefer verified AgentEmailHeadshot thumbnail when association
  * matches current User.image; otherwise sanitized canonical User.image.
@@ -60,10 +60,7 @@ export type TenantEmailAgentIdentity = {
   phone: string | null;
   /** Canonical User.image; sanitized via Phase 3A PERSONAL resolver. */
   image?: string | null;
-  /**
-   * Per-agent designation only. Null in Phase 3B — do not use workspace-level
-   * WorkspaceProfessionalIdentity.agentDesignation (not per-agent).
-   */
+  /** Persisted professional title. Null when the profile has none. */
   designation?: string | null;
 };
 
@@ -126,6 +123,9 @@ export type TenantEmailBrandResolveInput = {
 
 export type TenantEmailProfessionalIdentity = {
   brokerageRegisteredName: string | null;
+  agentRegisteredName?: string | null;
+  agentDesignation?: string | null;
+  agentCellPhone?: string | null;
 };
 
 export type TenantEmailBrandDeps = {
@@ -256,7 +256,7 @@ type AgentUserRowForEmail = {
   email: string | null;
   phone: string | null;
   image: string | null;
-  agentProfile: { phone: string | null; active: boolean } | null;
+  agentProfile: { phone: string | null; active: boolean; designation: string | null } | null;
 };
 
 /** ACTIVE membership alone is insufficient — AgentProfile must be active. */
@@ -275,8 +275,39 @@ function mapUserToAgentIdentity(
     email: user.email,
     phone: user.phone?.trim() || user.agentProfile?.phone?.trim() || null,
     image: user.image ?? null,
-    // No verified per-agent designation field in Phase 3B.
-    designation: null,
+    designation: user.agentProfile?.designation?.trim() || null,
+  };
+}
+
+/**
+ * The public-site title and cell live on the workspace, not on every agent.
+ * Use them only for the registered owner or primary agent, and only to fill
+ * blanks. Never write those values back onto another member.
+ */
+async function fillRegisteredAgentContact(
+  workspaceId: string,
+  userId: string,
+  role: string,
+  agent: TenantEmailAgentIdentity,
+): Promise<TenantEmailAgentIdentity> {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: {
+      primaryAgentId: true,
+      professionalIdentity: {
+        select: { agentDesignation: true, agentCellPhone: true },
+      },
+    },
+  });
+  const registered =
+    role === "OWNER" || workspace?.primaryAgentId === userId;
+  if (!registered || !workspace?.professionalIdentity) return agent;
+  const title = workspace.professionalIdentity.agentDesignation?.trim() || null;
+  const cell = workspace.professionalIdentity.agentCellPhone?.trim() || null;
+  return {
+    ...agent,
+    designation: agent.designation?.trim() || title,
+    phone: agent.phone?.trim() || cell,
   };
 }
 
@@ -286,12 +317,13 @@ const agentUserSelect = {
   email: true,
   phone: true,
   image: true,
-  agentProfile: { select: { phone: true, active: true } },
+  agentProfile: { select: { phone: true, active: true, designation: true } },
 } as const;
 
 /**
  * Premium personal signature (two-column table) or company-level fallback.
- * Never includes agent email. Never uses OWNER as implicit primary.
+ * Agent email is included only when that agent has a saved address.
+ * Never uses an unassigned owner as the personal signature.
  */
 export function buildAgentEmailSignature(input: {
   workspaceId: string;
@@ -300,15 +332,14 @@ export function buildAgentEmailSignature(input: {
   contactPhone: string | null;
   senderDisplayName: string | null;
   brokerageRegisteredName: string | null;
+  /** Tenant fallback title when no assigned agent is present. */
+  fallbackTitle?: string | null;
   primaryColor: string;
   /** Optional persisted email-headshot association for this agent (read-only). */
   emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
 }): { html: string; text: string; photoUrl: string | null } {
   const accent = resolveSignatureAccent(input.primaryColor);
-  const brokerage =
-    input.brokerageRegisteredName?.trim() ||
-    input.displayName.trim() ||
-    null;
+  const brokerage = input.brokerageRegisteredName?.trim() || null;
 
   if (input.agent) {
     const membership = verifiedActiveMembership(
@@ -334,8 +365,9 @@ export function buildAgentEmailSignature(input: {
     const designation = input.agent.designation?.trim() || null;
     const phoneDisplay = input.agent.phone?.trim() || null;
     const tel = buildTelHref(phoneDisplay);
+    const email = isValidReplyToEmail(input.agent.email) ? input.agent.email!.trim() : null;
 
-    const textLines = [name, designation, phoneDisplay, brokerage].filter(
+    const textLines = [name, designation, phoneDisplay, email, brokerage].filter(
       (line): line is string => Boolean(line),
     );
 
@@ -362,6 +394,10 @@ export function buildAgentEmailSignature(input: {
         : `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#334155">${escapeHtml(phoneDisplay)}</div>`
       : "";
 
+    const emailHtml = email
+      ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4"><a href="${escapeAttr(`mailto:${email}`)}" style="color:${escapeAttr(accent)};text-decoration:none">${escapeHtml(email)}</a></div>`
+      : "";
+
     const brokerageHtml = brokerage
       ? `<div style="margin:6px 0 0;font-size:13px;line-height:1.4;color:#475569">${escapeHtml(brokerage)}</div>`
       : "";
@@ -373,6 +409,7 @@ export function buildAgentEmailSignature(input: {
           <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:${escapeAttr(accent)}">${escapeHtml(name)}</div>
           ${designationHtml}
           ${phoneHtml}
+          ${emailHtml}
           ${brokerageHtml}
         </td>
       </tr>
@@ -388,9 +425,9 @@ export function buildAgentEmailSignature(input: {
   // Company-level signature — no personal headshot, no agent email.
   const companyName =
     input.senderDisplayName?.trim() ||
-    brokerage ||
     input.displayName.trim() ||
     "Your team";
+  const fallbackTitle = input.fallbackTitle?.trim() || null;
   const phoneDisplay = input.contactPhone?.trim() || null;
   const tel = buildTelHref(phoneDisplay);
   const showBrokerage =
@@ -399,7 +436,7 @@ export function buildAgentEmailSignature(input: {
       ? brokerage
       : null;
 
-  const textLines = [companyName, phoneDisplay, showBrokerage].filter(
+  const textLines = [companyName, fallbackTitle, phoneDisplay, showBrokerage].filter(
     (line): line is string => Boolean(line),
   );
 
@@ -416,6 +453,7 @@ export function buildAgentEmailSignature(input: {
     <tr>
       <td valign="top" style="padding:0;vertical-align:top;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif">
         <div style="margin:0;font-size:16px;line-height:1.3;font-weight:700;color:${escapeAttr(accent)}">${escapeHtml(companyName)}</div>
+        ${fallbackTitle ? `<div style="margin:2px 0 0;font-size:13px;line-height:1.35;color:#334155">${escapeHtml(fallbackTitle)}</div>` : ""}
         ${phoneHtml}
         ${brokerageHtml}
       </td>
@@ -525,10 +563,15 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
     loadProfessionalIdentity: async (workspaceId) => {
       const row = await prisma.workspaceProfessionalIdentity.findUnique({
         where: { workspaceId },
-        select: { brokerageRegisteredName: true },
+        select: {
+          brokerageRegisteredName: true,
+          agentRegisteredName: true,
+          agentDesignation: true,
+          agentCellPhone: true,
+        },
       });
       if (!row) return null;
-      return { brokerageRegisteredName: row.brokerageRegisteredName };
+      return row;
     },
     loadAgentInWorkspace: async (workspaceId, userId) => {
       const member = await prisma.workspaceMember.findUnique({
@@ -537,12 +580,18 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
         },
         select: {
           status: true,
+          role: true,
           user: { select: agentUserSelect },
         },
       });
       if (!member?.user || member.status !== "ACTIVE") return null;
       if (!isEligibleAgentProfile(member.user.agentProfile)) return null;
-      return mapUserToAgentIdentity(member.user);
+      return fillRegisteredAgentContact(
+        workspaceId,
+        userId,
+        member.role,
+        mapUserToAgentIdentity(member.user),
+      );
     },
     loadAssignedAgentForLead: async (workspaceId, leadId) => {
       const lead = await prisma.lead.findFirst({
@@ -561,11 +610,16 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
             userId: lead.assignedAgentId,
           },
         },
-        select: { userId: true, status: true },
+        select: { userId: true, status: true, role: true },
       });
       if (!member || member.status !== "ACTIVE") return null;
       if (!isEligibleAgentProfile(lead.assignedAgent.agentProfile)) return null;
-      return mapUserToAgentIdentity(lead.assignedAgent);
+      return fillRegisteredAgentContact(
+        workspaceId,
+        lead.assignedAgentId,
+        member.role,
+        mapUserToAgentIdentity(lead.assignedAgent),
+      );
     },
     loadAssignedAgentForCustomer: async (workspaceId, customerId) => {
       const lead = await prisma.lead.findFirst({
@@ -588,11 +642,16 @@ export function createDefaultTenantEmailBrandDeps(): TenantEmailBrandDeps {
             userId: lead.assignedAgentId,
           },
         },
-        select: { userId: true, status: true },
+        select: { userId: true, status: true, role: true },
       });
       if (!member || member.status !== "ACTIVE") return null;
       if (!isEligibleAgentProfile(lead.assignedAgent.agentProfile)) return null;
-      return mapUserToAgentIdentity(lead.assignedAgent);
+      return fillRegisteredAgentContact(
+        workspaceId,
+        lead.assignedAgentId,
+        member.role,
+        mapUserToAgentIdentity(lead.assignedAgent),
+      );
     },
     loadAgentEmailHeadshotAssociation: async (workspaceId, userId) => {
       const row = await prisma.agentEmailHeadshot.findUnique({
@@ -631,6 +690,9 @@ export function assembleTenantEmailBrand(input: {
   agent: TenantEmailAgentIdentity | null;
   websiteUrl: string;
   brokerageRegisteredName?: string | null;
+  fallbackTitle?: string | null;
+  fallbackName?: string | null;
+  fallbackPhone?: string | null;
   emailHeadshotAssociation?: AgentEmailHeadshotAssociationView | null;
   workspaceSlug?: string | null;
 }): TenantEmailBrand {
@@ -655,9 +717,12 @@ export function assembleTenantEmailBrand(input: {
     workspaceId: input.workspaceId,
     agent: input.agent,
     displayName: mapped.displayName,
-    contactPhone,
-    senderDisplayName: input.identity?.senderDisplayName ?? null,
+    contactPhone: input.agent ? contactPhone : input.fallbackPhone?.trim() || contactPhone,
+    senderDisplayName: input.agent
+      ? input.identity?.senderDisplayName ?? null
+      : input.fallbackName?.trim() || input.identity?.senderDisplayName || null,
     brokerageRegisteredName: input.brokerageRegisteredName ?? null,
+    fallbackTitle: input.agent ? null : input.fallbackTitle,
     primaryColor: mapped.colors.primary,
     emailHeadshotAssociation: input.emailHeadshotAssociation ?? null,
   });
@@ -693,22 +758,20 @@ export function assembleTenantEmailBrand(input: {
   };
 }
 
-export async function resolveTenantEmailBrand(
+/**
+ * Workspace brand, signature, and sender fields for one tenant.
+ * Does not consult the rollout flag. Callers that must stay on the Houzzat
+ * shell while branding is off should use resolveTenantEmailBrand.
+ */
+export async function resolveWorkspaceEmailBrand(
   input: TenantEmailBrandResolveInput,
   deps: TenantEmailBrandDeps = createDefaultTenantEmailBrandDeps(),
-  env: NodeJS.ProcessEnv = process.env,
 ): Promise<TenantEmailBrand | null> {
   const workspaceId = input.workspaceId?.trim();
   if (!workspaceId) return null;
-  const brandingEnabled = isTenantEmailBrandingEnabledForWorkspace(
-    workspaceId,
-    env,
-  );
   const workspaceSlug = deps.loadWorkspaceSlug
     ? await deps.loadWorkspaceSlug(workspaceId)
     : null;
-  const highOctane = workspaceSlug === HIGH_OCTANE_STAGING_WORKSPACE_SLUG;
-  if (!brandingEnabled && !highOctane) return null;
 
   const [branding, identity, professional, websiteUrl] = await Promise.all([
     deps.loadBranding(workspaceId),
@@ -756,9 +819,29 @@ export async function resolveTenantEmailBrand(
     agent,
     websiteUrl,
     brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
+    fallbackTitle: professional?.agentDesignation ?? null,
+    fallbackName: professional?.agentRegisteredName ?? null,
+    fallbackPhone: professional?.agentCellPhone ?? null,
     emailHeadshotAssociation,
     workspaceSlug,
   });
+}
+
+export async function resolveTenantEmailBrand(
+  input: TenantEmailBrandResolveInput,
+  deps: TenantEmailBrandDeps = createDefaultTenantEmailBrandDeps(),
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<TenantEmailBrand | null> {
+  const workspaceId = input.workspaceId?.trim();
+  if (!workspaceId) return null;
+  const brandingEnabled = isTenantEmailBrandingEnabledForWorkspace(
+    workspaceId,
+    env,
+  );
+  const brand = await resolveWorkspaceEmailBrand(input, deps);
+  if (!brand) return null;
+  if (!brandingEnabled && brand.presentation !== "high-octane") return null;
+  return brand;
 }
 
 /**
@@ -823,6 +906,9 @@ export async function resolveLeadCustomerEmailChrome(
     agent,
     websiteUrl,
     brokerageRegisteredName: professional?.brokerageRegisteredName ?? null,
+    fallbackTitle: professional?.agentDesignation ?? null,
+    fallbackName: professional?.agentRegisteredName ?? null,
+    fallbackPhone: professional?.agentCellPhone ?? null,
     emailHeadshotAssociation,
   });
   return {

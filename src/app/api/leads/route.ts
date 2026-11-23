@@ -24,6 +24,10 @@ import {
 } from "@/lib/notifications/staff-events";
 import { prisma } from "@/lib/prisma";
 import { currentPublicBrandName } from "@/lib/tenancy/resolve-marketing-tenancy";
+import {
+  sendAppointmentCustomerEmail,
+  sendLeadRequestAcknowledgement,
+} from "@/lib/email/appointment-customer-email";
 import { scheduleViewingRequestedSmsAutomation } from "@/lib/sms/automations";
 import { isHighOctaneDevelopmentListingMls } from "@/lib/tenancy/templates/high-octane-development-listings";
 
@@ -209,6 +213,37 @@ export async function POST(request: Request) {
           focusNotes: data.focusNotes,
           leadId: lead.id,
         },
+      });
+    }
+
+    if (lead.workspaceId && contactEmail) {
+      const location = [listing.addressLine, listing.city].filter(Boolean).join(", ");
+      const customerMail = appointmentType
+        ? sendAppointmentCustomerEmail({
+            workspaceId: lead.workspaceId,
+            toEmail: contactEmail,
+            recipientName: contactName,
+            type: appointmentType,
+            status: "REQUESTED",
+            startsAt: null,
+            listingMls: listing.mlsNumber,
+            locationLabel: location || null,
+            agentId: assignedAgentId,
+            leadId: lead.id,
+            customerId: customer.id,
+          })
+        : sendLeadRequestAcknowledgement({
+            workspaceId: lead.workspaceId,
+            toEmail: contactEmail,
+            recipientName: contactName,
+            locationLabel: location || null,
+            listingMls: listing.mlsNumber,
+            agentId: assignedAgentId,
+            leadId: lead.id,
+            customerId: customer.id,
+          });
+      void customerMail.catch((error) => {
+        console.error("[leads] customer acknowledgement failed", error);
       });
     }
 

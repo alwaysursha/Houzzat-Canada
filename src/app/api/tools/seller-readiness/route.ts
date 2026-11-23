@@ -7,6 +7,7 @@ import {
   publicResolveOrCreateLead,
 } from "@/lib/agent/public-lead-api";
 import { createCallNewLeadTask } from "@/lib/agent/lead-intake";
+import { sendAppointmentCustomerEmail } from "@/lib/email/appointment-customer-email";
 import { BookDemoPublicError } from "@/lib/platform/public/book-demo";
 import { normalizeProspectEmail } from "@/lib/platform/prospects/normalize-email";
 import {
@@ -138,6 +139,21 @@ export async function POST(request: Request) {
           notes: `Seller readiness follow-up (${parsed.data.score}/100)`,
         },
       });
+      if (lead.workspaceId && email) {
+        void sendAppointmentCustomerEmail({
+          workspaceId: lead.workspaceId,
+          toEmail: email,
+          recipientName: parsed.data.name,
+          type: "VALUATION_CALL",
+          status: "REQUESTED",
+          startsAt: null,
+          locationLabel: parsed.data.address,
+          agentId: assignedAgentId,
+          leadId: lead.id,
+        }).catch((error) => {
+          console.error("[seller-readiness] customer acknowledgement failed", error);
+        });
+      }
 
       if (assignedAgentId && organizationId) {
         await createCallNewLeadTask({

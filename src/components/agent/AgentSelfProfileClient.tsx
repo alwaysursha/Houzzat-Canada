@@ -101,27 +101,25 @@ export function AgentSelfProfileClient({
           />
         </div>
 
-        {profile.role === "OWNER" || Boolean(profile.designation) ? (
-          <div className="mt-4">
-            <label
-              htmlFor="self-profile-title"
-              className="text-xs font-semibold text-ink/70"
-            >
-              Title / designation
-            </label>
-            <Input
-              id="self-profile-title"
-              className="mt-1.5"
-              value={designation}
-              disabled={!profile.canEdit}
-              placeholder="Salesperson, Broker, …"
-              onChange={(event) => setDesignation(event.target.value)}
-            />
-            <p className="mt-1 text-[11px] text-ink/45">
-              Shown under your name on listing pages.
-            </p>
-          </div>
-        ) : null}
+        <div className="mt-4">
+          <label
+            htmlFor="self-profile-title"
+            className="text-xs font-semibold text-ink/70"
+          >
+            Title / designation
+          </label>
+          <Input
+            id="self-profile-title"
+            className="mt-1.5"
+            value={designation}
+            disabled={!profile.canEdit}
+            placeholder="Salesperson, Broker, …"
+            onChange={(event) => setDesignation(event.target.value)}
+          />
+          <p className="mt-1 text-[11px] text-ink/45">
+            Shown under your name on client emails. The public-site agent title also appears on listing pages.
+          </p>
+        </div>
 
         {profile.canEdit ? (
           <div className="mt-6 flex flex-wrap items-center gap-3">

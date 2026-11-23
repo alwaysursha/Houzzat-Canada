@@ -274,15 +274,16 @@ export async function loadWorkspaceAgentProfile(
           phone: true,
           phoneE164: true,
           image: true,
-          agentProfile: {
-            select: {
-              firstName: true,
-              lastName: true,
-              phone: true,
-              recoLicenseNumber: true,
-              recoLicenseExpiresAt: true,
+            agentProfile: {
+              select: {
+                firstName: true,
+                lastName: true,
+                phone: true,
+                designation: true,
+                recoLicenseNumber: true,
+                recoLicenseExpiresAt: true,
+              },
             },
-          },
         },
       },
     },
@@ -309,8 +310,8 @@ export async function loadWorkspaceAgentProfile(
   const isPublicSiteAgent =
     membership.role === "OWNER" || primaryAgentId === membership.user.id;
 
-  let designation = "";
-  if (isPublicSiteAgent) {
+  let designation = membership.user.agentProfile?.designation?.trim() ?? "";
+  if (!designation && isPublicSiteAgent) {
     const professional = await db.workspaceProfessionalIdentity.findUnique({
       where: { workspaceId: ctx.workspaceId },
       select: { agentDesignation: true },
@@ -389,18 +390,24 @@ export async function updateWorkspaceAgentProfile(input: {
   await applyAdminManagedAgentProfile(db, input.userId, parsed.data, {
     email: nextEmail,
   });
+  const designationRaw =
+    input.raw &&
+    typeof input.raw === "object" &&
+    !Array.isArray(input.raw) &&
+    "designation" in input.raw
+      ? (input.raw as { designation?: unknown }).designation
+      : undefined;
+  if (typeof designationRaw === "string") {
+    await db.agentProfile.updateMany({
+      where: { userId: input.userId },
+      data: { designation: designationRaw.trim().slice(0, 80) || null },
+    });
+  }
   if (loaded.profile.role === "OWNER" && input.ctx.workspaceId) {
     const websiteIdentity = await db.workspaceProfessionalIdentity.findUnique({
       where: { workspaceId: input.ctx.workspaceId },
       select: { workspaceId: true },
     });
-    const designationRaw =
-      input.raw &&
-      typeof input.raw === "object" &&
-      !Array.isArray(input.raw) &&
-      "designation" in input.raw
-        ? (input.raw as { designation?: unknown }).designation
-        : undefined;
     const designation =
       typeof designationRaw === "string" ? designationRaw.trim().slice(0, 80) : null;
     if (websiteIdentity) {

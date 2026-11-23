@@ -1386,6 +1386,11 @@ model AgentProfile {
   lastName             String?
   recoLicenseNumber    String?
   recoLicenseExpiresAt DateTime?
+  /**
+   * Per-agent professional title. Empty means omit it.
+   * WorkspaceProfessionalIdentity.agentDesignation stays the public-site title.
+   */
+  designation          String?
   active               Boolean   @default(true)
   /**
    * Manual Available/Away preference. Does not imply Online by itself.

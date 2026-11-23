@@ -616,9 +616,9 @@ function testPlainTextFallback() {
   });
   assert.equal(
     sig.text,
-    ["Ali Syed", "647-221-4949", BROKERAGE].join("\n"),
+    ["Ali Syed", "647-221-4949", "ali@example.com", BROKERAGE].join("\n"),
   );
-  assert.doesNotMatch(sig.text, /ali@example\.com/);
+  assert.match(sig.text, /ali@example\.com/);
   section("Plain-text fallback");
 }
 
@@ -655,11 +655,19 @@ function testNoAgentEmailInSignature() {
     websiteUrl: "https://tenant-canary.houzzatpro.com",
     brokerageRegisteredName: BROKERAGE,
   });
-  assert.doesNotMatch(brand.signatureHtml, /ali@example\.com/i);
-  assert.doesNotMatch(brand.signatureText, /ali@example\.com/i);
-  // Reply-To may still use agent email — that is not the visible signature.
+  assert.match(brand.signatureHtml, /ali@example\.com/i);
+  assert.match(brand.signatureText, /ali@example\.com/i);
   assert.equal(brand.replyTo, "ali@example.com");
-  section("No agent email address in signature");
+  const omitted = assembleTenantEmailBrand({
+    workspaceId: WS,
+    branding: TENANT_B_TEST_BRANDING_ROW,
+    identity: identity(WS),
+    agent: agentA({ email: null }),
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+    brokerageRegisteredName: BROKERAGE,
+  });
+  assert.doesNotMatch(omitted.signatureHtml, /mailto:/i);
+  section("Saved agent email is in the signature");
 }
 
 const HOUZZAT_STYLE_FOOTER = [
