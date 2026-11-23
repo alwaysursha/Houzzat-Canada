@@ -4,6 +4,7 @@ import { PlatformDetailGrid, PlatformSection } from "@/components/platform/Platf
 import { PlatformItsoListingSources } from "@/components/platform/PlatformItsoListingSources";
 import { PlatformCustomDomain } from "@/components/platform/PlatformCustomDomain";
 import { PlatformCustomSending } from "@/components/platform/PlatformCustomSending";
+import { PlatformOwnerSignatureProfile } from "@/components/platform/PlatformOwnerSignatureProfile";
 import { PlatformManualOnboarding } from "@/components/platform/PlatformManualOnboarding";
 import { PlatformOwnerActivationActions } from "@/components/platform/PlatformOwnerActivationActions";
 import { PlatformWorkspaceActions } from "@/components/platform/PlatformWorkspaceActions";
@@ -107,6 +108,8 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
         />
 
         <PlatformCustomSending workspaceId={str(workspace.id)} />
+
+        <PlatformOwnerSignatureProfile workspaceId={str(workspace.id)} />
 
         <PlatformOwnerActivationActions
           workspaceId={str(workspace.id)}

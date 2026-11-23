@@ -21,6 +21,7 @@ import {
   selectProvisionWorkspaceTarget,
   workspaceStatusAfterPaidProvision,
 } from "@/lib/platform/onboarding/prepared-workspace";
+import { ensureOwnerAgentProfile } from "@/lib/agent/ensure-owner-agent-profile";
 import { seedOwnerServiceAreasFromProspect } from "@/lib/agent/service-areas-store";
 import { provisioningPhoneSeedFromProspect } from "@/lib/platform/activation/sync-owner-canonical-profile";
 import {
@@ -558,6 +559,10 @@ async function stepCreateOwnerMembership(ctx: StepContext): Promise<void> {
     user.id,
     ctx.subscription.offer?.prospect.region,
   );
+  await ensureOwnerAgentProfile(ctx.db, {
+    workspaceId: ctx.workspaceId,
+    userId: user.id,
+  });
 
   const workspace = await ctx.db.workspace.findUnique({
     where: { id: ctx.workspaceId },

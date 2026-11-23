@@ -16,12 +16,15 @@ export function AgentProfessionalFields({
   onChange,
   disabled = false,
   readOnly = false,
+  licenseRequired = true,
   idPrefix,
 }: {
   value: AgentProfessionalFormValue;
   onChange?: (next: AgentProfessionalFormValue) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  /** Owners can save signature details before a license is on file. */
+  licenseRequired?: boolean;
   idPrefix: string;
 }) {
   const locked = disabled || readOnly;
@@ -75,7 +78,7 @@ export function AgentProfessionalFields({
       <Field
         id={`${idPrefix}-reco`}
         label="RECO license #"
-        required
+        required={licenseRequired}
         value={value.recoLicenseNumber}
         onChange={(recoLicenseNumber) => patch({ recoLicenseNumber })}
         disabled={locked}
@@ -83,7 +86,7 @@ export function AgentProfessionalFields({
       <Field
         id={`${idPrefix}-reco-expiry`}
         label="RECO license expiry date"
-        required
+        required={licenseRequired}
         type="date"
         value={value.recoLicenseExpiresAt}
         onChange={(recoLicenseExpiresAt) => patch({ recoLicenseExpiresAt })}

@@ -28,6 +28,7 @@ export function AgentSelfProfileClient({
     recoLicenseExpiresAt: profile.recoLicenseExpiresAt,
   });
   const [designation, setDesignation] = useState(profile.designation);
+  const [brokerageName, setBrokerageName] = useState(profile.brokerageName);
   const [photoUrl, setPhotoUrl] = useState(profile.photoUrl);
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function AgentSelfProfileClient({
         body: JSON.stringify({
           ...value,
           designation,
+          ...(profile.canEditBrokerage ? { brokerageName } : {}),
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -98,6 +100,7 @@ export function AgentSelfProfileClient({
             onChange={setValue}
             disabled={!profile.canEdit}
             readOnly={!profile.canEdit}
+            licenseRequired={profile.role !== "OWNER"}
           />
         </div>
 
@@ -120,6 +123,26 @@ export function AgentSelfProfileClient({
             Shown under your name on client emails. The public-site agent title also appears on listing pages.
           </p>
         </div>
+        {profile.canEditBrokerage ? (
+          <div className="mt-4">
+            <label
+              htmlFor="self-profile-brokerage"
+              className="text-xs font-semibold text-ink/70"
+            >
+              Brokerage name
+            </label>
+            <Input
+              id="self-profile-brokerage"
+              className="mt-1.5"
+              value={brokerageName}
+              disabled={!profile.canEdit}
+              onChange={(event) => setBrokerageName(event.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-ink/45">
+              Saved brokerage name shown on client emails. Leave blank to keep the current name.
+            </p>
+          </div>
+        ) : null}
 
         {profile.canEdit ? (
           <div className="mt-6 flex flex-wrap items-center gap-3">
