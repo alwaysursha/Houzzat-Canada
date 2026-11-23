@@ -1,7 +1,9 @@
 import { fromForStream, type EmailStream } from "@/lib/email/config";
+import { isValidMailbox } from "@/lib/email/custom-sending-policy";
 import { emailEnv } from "@/lib/email/env";
 import { sendRenderedEmail } from "@/lib/email/send";
 import { resolveEnabledCustomFrom } from "@/lib/platform/email/master-custom-sending";
+import { prisma } from "@/lib/prisma";
 import { sendSms as sendTwilioSms } from "@/lib/sms/transport";
 import type { SmsClass } from "@/lib/sms/types";
 
@@ -20,20 +22,34 @@ type NotifyPayload = {
   /** When set, also attempt WhatsApp via Twilio WhatsApp sender. */
   whatsappText?: string;
   preferWhatsApp?: boolean;
+  /** Overrides the workspace email identity Reply-To. */
+  replyTo?: string | null;
 };
+
+async function resolveWorkspaceReplyTo(workspaceId: string): Promise<string | null> {
+  const row = await prisma.workspaceEmailIdentity.findUnique({
+    where: { workspaceId },
+    select: { replyToEmail: true },
+  });
+  const email = row?.replyToEmail?.trim().toLowerCase() ?? "";
+  return isValidMailbox(email) ? email : null;
+}
 
 export async function sendNotification(payload: NotifyPayload) {
   const results = {
     email: "skipped" as "sent" | "skipped" | "failed",
+    emailProviderId: undefined as string | undefined,
     sms: "skipped" as "sent" | "skipped" | "failed",
     whatsapp: "skipped" as "sent" | "skipped" | "failed",
   };
 
   if (payload.toEmail) {
     let customFrom: string | null = null;
+    let replyTo = payload.replyTo?.trim() || null;
     if (payload.workspaceId) {
       try {
         customFrom = await resolveEnabledCustomFrom(payload.workspaceId);
+        if (!replyTo) replyTo = await resolveWorkspaceReplyTo(payload.workspaceId);
       } catch (error) {
         console.error("[email:custom-from]", error);
       }
@@ -43,6 +59,7 @@ export async function sendNotification(payload: NotifyPayload) {
         to: payload.toEmail,
         stream: payload.stream ?? "notify",
         from: customFrom,
+        replyTo,
         rendered: {
           subject: payload.subject,
           text: payload.text,
@@ -56,14 +73,18 @@ export async function sendNotification(payload: NotifyPayload) {
           : sent.status === "skipped"
             ? "skipped"
             : "failed";
+      if (sent.status === "sent") results.emailProviderId = sent.providerId;
     } else {
-      results.email = await sendEmail({
+      const sent = await sendEmail({
         to: payload.toEmail,
         subject: payload.subject,
         text: payload.text,
         stream: payload.stream,
         from: customFrom,
+        replyTo,
       });
+      results.email = sent.status;
+      results.emailProviderId = sent.providerId;
     }
   }
 
@@ -99,13 +120,14 @@ async function sendEmail(input: {
   text: string;
   stream?: EmailStream;
   from?: string | null;
-}): Promise<"sent" | "skipped" | "failed"> {
+  replyTo?: string | null;
+}): Promise<{ status: "sent" | "skipped" | "failed"; providerId?: string }> {
   const apiKey = emailEnv("RESEND_API_KEY");
   const from = input.from?.trim() || fromForStream(input.stream ?? "notify");
 
   if (!apiKey) {
     console.info("[notify:email:stub]", input.to, input.subject);
-    return "skipped";
+    return { status: "skipped" };
   }
 
   try {
@@ -120,16 +142,18 @@ async function sendEmail(input: {
         to: [input.to],
         subject: input.subject,
         text: input.text,
+        ...(input.replyTo ? { reply_to: input.replyTo } : {}),
       }),
     });
     if (!res.ok) {
-      console.error("[notify:email]", await res.text());
-      return "failed";
+      console.error("[notify:email]", res.status);
+      return { status: "failed" };
     }
-    return "sent";
+    const body = (await res.json().catch(() => null)) as { id?: string } | null;
+    return { status: "sent", providerId: body?.id };
   } catch (error) {
     console.error("[notify:email]", error);
-    return "failed";
+    return { status: "failed" };
   }
 }
 

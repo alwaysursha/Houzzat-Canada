@@ -3,6 +3,7 @@
  * Run: TMPDIR=/tmp node --import tsx scripts/custom-sending-selftest.ts
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   customFromAppliesToKind,
   enabledCustomFromHeader,
@@ -86,6 +87,12 @@ function testProductionFromStaysOffUntilEnabled() {
   assert.equal(customFromAppliesToKind("price_reduction"), true);
   assert.equal(customFromAppliesToKind("password_reset"), false);
   assert.equal(customFromAppliesToKind("verify_email"), false);
+  const notifications = readFileSync(
+    new URL("../src/lib/notifications.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(notifications, /resolveWorkspaceReplyTo/);
+  assert.match(notifications, /reply_to/);
 }
 
 function testProviderRecordsAreQualified() {
