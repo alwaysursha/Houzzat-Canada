@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PlatformDetailGrid, PlatformSection } from "@/components/platform/PlatformDetailGrid";
 import { PlatformItsoListingSources } from "@/components/platform/PlatformItsoListingSources";
 import { PlatformCustomDomain } from "@/components/platform/PlatformCustomDomain";
+import { PlatformCustomSending } from "@/components/platform/PlatformCustomSending";
 import { PlatformManualOnboarding } from "@/components/platform/PlatformManualOnboarding";
 import { PlatformOwnerActivationActions } from "@/components/platform/PlatformOwnerActivationActions";
 import { PlatformWorkspaceActions } from "@/components/platform/PlatformWorkspaceActions";
@@ -104,6 +105,8 @@ export default async function PlatformWorkspaceDetailPage({ params }: PageProps)
             status: str(domain.status),
           }))}
         />
+
+        <PlatformCustomSending workspaceId={str(workspace.id)} />
 
         <PlatformOwnerActivationActions
           workspaceId={str(workspace.id)}

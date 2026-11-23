@@ -16,6 +16,8 @@ import {
   type RenderedEmail,
   type SendEmailResult,
 } from "@/lib/email";
+import { customFromAppliesToKind } from "@/lib/email/custom-sending-policy";
+import { resolveEnabledCustomFrom } from "@/lib/platform/email/master-custom-sending";
 
 /**
  * Send a templated email to a client and attach it to their CRM lead activity
@@ -42,8 +44,9 @@ export async function sendAndLogClientEmail(input: {
 }): Promise<
   SendEmailResult & { emailLogId?: string; leadId?: string }
 > {
+  let workspaceId: string | null = null;
   try {
-    const workspaceId = await resolveEmailSendWorkspace({
+    workspaceId = await resolveEmailSendWorkspace({
       customerId: input.customerId,
       leadId: input.leadId,
     });
@@ -69,10 +72,12 @@ export async function sendAndLogClientEmail(input: {
     input.customerId
   ) {
     try {
-      const workspaceId = await resolveEmailSendWorkspace({
-        customerId: input.customerId,
-        leadId: input.leadId,
-      });
+      workspaceId =
+        workspaceId ??
+        (await resolveEmailSendWorkspace({
+          customerId: input.customerId,
+          leadId: input.leadId,
+        }));
       if (workspaceId) {
         const chrome = await buildCustomerPreferenceEmailChrome({
           userId: input.customerId,
@@ -88,11 +93,21 @@ export async function sendAndLogClientEmail(input: {
     }
   }
 
+  let from: string | null = null;
+  if (workspaceId && customFromAppliesToKind(input.rendered.kind)) {
+    try {
+      from = await resolveEnabledCustomFrom(workspaceId);
+    } catch (error) {
+      console.error("[email:custom-from]", error);
+    }
+  }
+
   const result = await sendRenderedEmail({
     to: input.to,
     rendered: input.rendered,
     stream: input.stream,
     replyTo: input.replyTo,
+    from,
     headers,
   });
 

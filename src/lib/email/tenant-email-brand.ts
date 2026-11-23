@@ -9,7 +9,7 @@
  * When global on: only allowlisted workspace IDs resolve (unset/empty allowlist → none).
  * Brand is always loaded for the recipient workspace only — never another tenant.
  *
- * From addresses are never overridden here (custom domains stay VERIFIED-gated later).
+ * From is overridden only when custom sending is verified and enabled for this workspace.
  *
  * Phase 3B — premium personal agent signature (User.image + ACTIVE membership)
  * via Phase 3A photo resolver. Designation omitted until a verified per-agent
@@ -19,8 +19,8 @@
  * matches current User.image; otherwise sanitized canonical User.image.
  *
  * HIGH OCTANE (slug high-octane-real-estate) may resolve even when the global
- * flag is off, and only to attach presentation: "high-octane". From stays on
- * the verified Houzzat stream (fromOverride is always null).
+ * flag is off, and only to attach presentation: "high-octane". Its From stays
+ * on the Houzzat stream until custom sending is verified and enabled.
  * Customer verification (`renderVerifyEmail`), welcome (`renderWelcomeEmail`),
  * and password reset (`password-reset-email`) do not call this resolver.
  * HouzzatPRO platform administration / Book Demo / offer emails stay
@@ -33,6 +33,7 @@ import type {
   WorkspaceEmailIdentity,
 } from "@prisma/client";
 import { SITE_URL } from "@/lib/constants";
+import { enabledCustomFromHeader } from "@/lib/email/custom-sending-policy";
 import { escapeAttr, escapeHtml } from "@/lib/email/layout";
 import { isWorkspaceIdAllowlisted } from "@/lib/email/workspace-id-allowlist";
 import { prisma } from "@/lib/prisma";
@@ -74,10 +75,10 @@ export type TenantEmailBrand = {
   websiteUrl: string;
   contactEmail: string | null;
   contactPhone: string | null;
-  /** Safe Reply-To only. Never a From override. */
+  /** Safe Reply-To only. Never used as the authenticated From. */
   replyTo: string | null;
-  /** Always null — From stays on global verified Houzzat streams until domains are verified. */
-  fromOverride: null;
+  /** Set only when this workspace's sending domain is verified and enabled. */
+  fromOverride: string | null;
   agent: TenantEmailAgentIdentity | null;
   signatureHtml: string;
   signatureText: string;
@@ -678,7 +679,7 @@ export function assembleTenantEmailBrand(input: {
     contactEmail,
     contactPhone,
     replyTo,
-    fromOverride: null,
+    fromOverride: enabledCustomFromHeader(input.identity),
     agent: input.agent,
     signatureHtml: signature.html,
     signatureText: signature.text,

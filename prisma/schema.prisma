@@ -3906,16 +3906,25 @@ model PlatformAuditEvent {
 }
 
 model WorkspaceEmailIdentity {
-  workspaceId       String                     @id
-  contactEmail      String?
-  replyToEmail      String?
-  senderDisplayName String?
-  customDomain      String?
-  domainStatus      WorkspaceEmailDomainStatus @default(NONE)
-  dnsRecordsJson    Json?
-  fallbackFrom      String?
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
+  workspaceId           String                     @id
+  contactEmail          String?
+  replyToEmail          String?
+  senderDisplayName     String?
+  /**
+   * Domain registered with the email provider. The From address must use this
+   * domain. A return-path subdomain alone is not a From domain.
+   */
+  customDomain          String?
+  fromEmail             String?
+  /** Single DNS label, such as "send", for the provider return path. */
+  returnPathLabel       String?
+  providerDomainId      String?
+  customSendingEnabled  Boolean                    @default(false)
+  domainStatus          WorkspaceEmailDomainStatus @default(NONE)
+  dnsRecordsJson        Json?
+  fallbackFrom          String?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
 
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 }

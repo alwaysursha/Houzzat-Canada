@@ -84,6 +84,10 @@ function identity(
     replyToEmail: null,
     senderDisplayName: null,
     customDomain: null,
+    fromEmail: null,
+    returnPathLabel: null,
+    providerDomainId: null,
+    customSendingEnabled: false,
     domainStatus: "NONE",
     dnsRecordsJson: null,
     fallbackFrom: null,
@@ -370,8 +374,35 @@ function testInvalidReplyToAndNoFromOverride() {
   });
   assert.equal(brand.replyTo, null);
   assert.equal(brand.fromOverride, null);
-  // Unverified domain must never surface as From.
-  assert.equal(brand.fromOverride, null);
+  const verified = assembleTenantEmailBrand({
+    workspaceId: CANARY_WS,
+    branding: TENANT_B_TEST_BRANDING_ROW,
+    identity: identity(CANARY_WS, {
+      domainStatus: "VERIFIED",
+      customSendingEnabled: true,
+      customDomain: "canary.test",
+      fromEmail: "alerts@canary.test",
+      senderDisplayName: "Canary Realty",
+      returnPathLabel: "send",
+    }),
+    agent: null,
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+  });
+  assert.equal(verified.fromOverride, "Canary Realty <alerts@canary.test>");
+  const pending = assembleTenantEmailBrand({
+    workspaceId: CANARY_WS,
+    branding: TENANT_B_TEST_BRANDING_ROW,
+    identity: identity(CANARY_WS, {
+      domainStatus: "VERIFIED",
+      customSendingEnabled: false,
+      customDomain: "canary.test",
+      fromEmail: "alerts@canary.test",
+      senderDisplayName: "Canary Realty",
+    }),
+    agent: null,
+    websiteUrl: "https://tenant-canary.houzzatpro.com",
+  });
+  assert.equal(pending.fromOverride, null);
 }
 
 async function testSuppressionStillBlocks() {
@@ -507,7 +538,9 @@ function testWiringAndNoDuplicateSendPaths() {
   assert.match(sendTs, /fromForStream/);
   // Branding module must not invent From overrides in send path wiring.
   const brandMod = read("src/lib/email/tenant-email-brand.ts");
-  assert.match(brandMod, /fromOverride: null/);
+  assert.match(brandMod, /enabledCustomFromHeader/);
+  assert.match(read("src/lib/email/client-send.ts"), /resolveEnabledCustomFrom/);
+  assert.match(read("src/lib/email/custom-sending-policy.ts"), /password_reset/);
   assert.match(brandMod, /TENANT_EMAIL_BRANDING/);
 }
 

@@ -1,6 +1,7 @@
 import { fromForStream, type EmailStream } from "@/lib/email/config";
 import { emailEnv } from "@/lib/email/env";
 import { sendRenderedEmail } from "@/lib/email/send";
+import { resolveEnabledCustomFrom } from "@/lib/platform/email/master-custom-sending";
 import { sendSms as sendTwilioSms } from "@/lib/sms/transport";
 import type { SmsClass } from "@/lib/sms/types";
 
@@ -29,10 +30,19 @@ export async function sendNotification(payload: NotifyPayload) {
   };
 
   if (payload.toEmail) {
+    let customFrom: string | null = null;
+    if (payload.workspaceId) {
+      try {
+        customFrom = await resolveEnabledCustomFrom(payload.workspaceId);
+      } catch (error) {
+        console.error("[email:custom-from]", error);
+      }
+    }
     if (payload.html) {
       const sent = await sendRenderedEmail({
         to: payload.toEmail,
         stream: payload.stream ?? "notify",
+        from: customFrom,
         rendered: {
           subject: payload.subject,
           text: payload.text,
@@ -52,6 +62,7 @@ export async function sendNotification(payload: NotifyPayload) {
         subject: payload.subject,
         text: payload.text,
         stream: payload.stream,
+        from: customFrom,
       });
     }
   }
@@ -87,9 +98,10 @@ async function sendEmail(input: {
   subject: string;
   text: string;
   stream?: EmailStream;
+  from?: string | null;
 }): Promise<"sent" | "skipped" | "failed"> {
   const apiKey = emailEnv("RESEND_API_KEY");
-  const from = fromForStream(input.stream ?? "notify");
+  const from = input.from?.trim() || fromForStream(input.stream ?? "notify");
 
   if (!apiKey) {
     console.info("[notify:email:stub]", input.to, input.subject);

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { CustomSendingError } from "@/lib/email/custom-sending-policy";
 import {
   PlatformOperatorAuthError,
   requirePlatformOperator,
@@ -44,6 +45,7 @@ export async function withPlatformOperator<T>(
       error instanceof SmsAutomationActionError ||
       error instanceof SmsQuickTextActionError ||
       error instanceof SignupAnalyticsQueryError ||
+      error instanceof CustomSendingError ||
       error instanceof Prisma.PrismaClientKnownRequestError
     ) {
       throw error;
@@ -89,6 +91,9 @@ export function toPlatformHttpError(error: unknown) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof SmsQuickTextActionError) {
+    return platformError(error.status, error.code, error.message);
+  }
+  if (error instanceof CustomSendingError) {
     return platformError(error.status, error.code, error.message);
   }
   if (error instanceof SignupAnalyticsQueryError) {
