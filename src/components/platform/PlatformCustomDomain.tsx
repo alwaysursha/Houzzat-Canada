@@ -105,16 +105,20 @@ export function PlatformCustomDomain({
   }
 
   async function onVerify(domainId: string) {
-    const data = await post<{ outcome: string; reason: string | null }>(
-      `verify:${domainId}`,
-      `${base}/verify`,
-      { domainId },
-    );
+    const data = await post<{
+      outcome: string;
+      reason: string | null;
+      observedTxt: string[] | null;
+    }>(`verify:${domainId}`, `${base}/verify`, { domainId });
     if (!data) return;
+    const observed =
+      data.reason === "TXT_MISMATCH" && data.observedTxt && data.observedTxt.length > 0
+        ? ` Published TXT: ${data.observedTxt.join(" | ")}. It must match the saved token exactly, including 0 and O.`
+        : "";
     setFeedback(
       data.outcome === "VERIFIED" || data.outcome === "ALREADY_VERIFIED"
         ? "Ownership verified. The domain is still pending."
-        : `Ownership not verified${data.reason ? ` (${data.reason})` : ""}.`,
+        : `Ownership not verified${data.reason ? ` (${data.reason})` : ""}.${observed}`,
     );
     await load();
   }
@@ -233,7 +237,7 @@ export function PlatformCustomDomain({
                   <tr key={`${record.purpose}-${record.type}-${record.host}-${record.value}`}>
                     <td className="py-1 pr-3">{record.type}</td>
                     <td className="py-1 pr-3">{record.host}</td>
-                    <td className="max-w-md break-all py-1 pr-3">{record.value}</td>
+                    <td className="max-w-md break-all py-1 pr-3 font-mono">{record.value}</td>
                     <td className="py-1">{record.purpose}</td>
                   </tr>
                 ))}
@@ -256,6 +260,11 @@ export function PlatformCustomDomain({
                     {domain.status} · {domain.role}
                   </span>
                 </p>
+                {domain.ownershipValue ? (
+                  <p className="mt-1 break-all font-mono text-xs text-slate-300">
+                    {domain.ownershipHost} = {domain.ownershipValue}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xs text-slate-500">
                   {verified ? "Ownership verified." : "Ownership not verified."}{" "}
                   {check

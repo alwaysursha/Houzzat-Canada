@@ -28,7 +28,10 @@ import {
   createCloudflareDohTxtLookup,
   type DnsTxtLookup,
 } from "@/lib/tenancy/workspace-domain/dns-txt-lookup";
-import { txtAnswersMatchOwnershipToken } from "@/lib/tenancy/workspace-domain/txt-match";
+import {
+  normalizeDnsTxtAnswer,
+  txtAnswersMatchOwnershipToken,
+} from "@/lib/tenancy/workspace-domain/txt-match";
 import {
   createVercelProjectDomainClient,
   type VercelDomainReadiness,
@@ -441,6 +444,8 @@ export async function verifyMasterCustomDomainOwnership(input: {
   outcome: "VERIFIED" | "ALREADY_VERIFIED" | "NOT_VERIFIED" | "DNS_RETRYABLE_ERROR";
   reason: "TXT_NOT_FOUND" | "TXT_MISMATCH" | "DNS_TIMEOUT" | "DNS_RESOLVER_ERROR" | null;
   domain: MasterCustomDomainDto;
+  /** Normalized TXT strings the resolver returned. Null unless the check found a non-matching record. */
+  observedTxt: string[] | null;
 }> {
   assertAuthorization(input.authorization, VERIFY_CUSTOM_DOMAIN_AUTHORIZATION);
   await requireMasterAdmin(input.prisma, input.operatorId);
@@ -460,7 +465,7 @@ export async function verifyMasterCustomDomainOwnership(input: {
     );
   }
   if (row.verifiedAt) {
-    return { outcome: "ALREADY_VERIFIED", reason: null, domain: toDto(row) };
+    return { outcome: "ALREADY_VERIFIED", reason: null, domain: toDto(row), observedTxt: null };
   }
 
   const lookup = input.dnsTxtLookup ?? createCloudflareDohTxtLookup();
@@ -470,13 +475,17 @@ export async function verifyMasterCustomDomainOwnership(input: {
       outcome: "DNS_RETRYABLE_ERROR",
       reason: dns.reason === "timeout" ? "DNS_TIMEOUT" : "DNS_RESOLVER_ERROR",
       domain: toDto(row),
+      observedTxt: null,
     };
   }
   if (dns.empty || dns.answers.length === 0) {
-    return { outcome: "NOT_VERIFIED", reason: "TXT_NOT_FOUND", domain: toDto(row) };
+    return { outcome: "NOT_VERIFIED", reason: "TXT_NOT_FOUND", domain: toDto(row), observedTxt: null };
   }
+  const observedTxt = dns.answers
+    .map((answer) => normalizeDnsTxtAnswer(answer))
+    .filter((answer) => answer.length > 0);
   if (!txtAnswersMatchOwnershipToken(dns.answers, row.verificationToken)) {
-    return { outcome: "NOT_VERIFIED", reason: "TXT_MISMATCH", domain: toDto(row) };
+    return { outcome: "NOT_VERIFIED", reason: "TXT_MISMATCH", domain: toDto(row), observedTxt };
   }
 
   const updated = await input.prisma.workspaceDomain.update({
@@ -491,7 +500,7 @@ export async function verifyMasterCustomDomainOwnership(input: {
       500,
     );
   }
-  return { outcome: "VERIFIED", reason: null, domain: toDto(updated) };
+  return { outcome: "VERIFIED", reason: null, domain: toDto(updated), observedTxt: null };
 }
 
 async function assertPlatformHostnamePreserved(db: PrismaClient, workspaceId: string): Promise<string> {

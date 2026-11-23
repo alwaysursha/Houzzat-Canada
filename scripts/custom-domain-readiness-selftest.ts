@@ -18,6 +18,12 @@ import {
   verifyMasterCustomDomainOwnership,
 } from "@/lib/platform/domains/master-custom-domain";
 import { clearHostResolutionCacheForTests } from "@/lib/tenancy/resolve-workspace-host";
+import { createCloudflareDohTxtLookup } from "@/lib/tenancy/workspace-domain/dns-txt-lookup";
+import { buildWebsiteDomainTxtOwnershipHost } from "@/lib/tenancy/workspace-domain/dns-instructions";
+import {
+  normalizeDnsTxtAnswer,
+  txtAnswersMatchOwnershipToken,
+} from "@/lib/tenancy/workspace-domain/txt-match";
 import type { HostResolutionDeps } from "@/lib/tenancy/resolve-workspace-host";
 import {
   SHARED_PROJECT_APEX_A_RECORDS,
@@ -453,6 +459,138 @@ async function main() {
   });
   assert.equal(missingCert.tlsReady, false);
   assert.equal(missingCert.reason, "TLS_NOT_READY");
+
+  const savedApex = "xQPzF8FeUosRvRIk6HMKt7y9ZnddNVo907ebRUmco_E";
+  const publishedApex = "xQPzF8FeUosRvRIk6HMKt7y9ZnddNVo9O7ebRUmco_E";
+  const savedWww = "WEwcBer4vHMSp8BXw-C5Gm80J0ELpG7zWFdtbQASQYQ";
+  const publishedWww = "WEwcBer4vHMSp8BXw-C5Gm8OJOELpG7zWFdtbQASQYQ";
+  assert.equal(savedApex === publishedApex, false);
+  assert.equal(savedWww === publishedWww, false);
+  assert.equal(
+    txtAnswersMatchOwnershipToken([`"${publishedApex}"`], savedApex),
+    false,
+  );
+  assert.equal(
+    txtAnswersMatchOwnershipToken([publishedApex], publishedApex),
+    true,
+  );
+  assert.equal(
+    txtAnswersMatchOwnershipToken([`"${publishedWww}"`], savedWww),
+    false,
+  );
+  assert.equal(normalizeDnsTxtAnswer(`"${publishedApex}"`), publishedApex);
+  assert.equal(normalizeDnsTxtAnswer('"chunk-a" "chunk-b"'), "chunk-achunk-b");
+  assert.equal(
+    buildWebsiteDomainTxtOwnershipHost("highoctaneniagara.ca"),
+    "_houzzatpro-challenge.highoctaneniagara.ca",
+  );
+  assert.equal(
+    buildWebsiteDomainTxtOwnershipHost("www.highoctaneniagara.ca"),
+    "_houzzatpro-challenge.www.highoctaneniagara.ca",
+  );
+  assert.notEqual(
+    buildWebsiteDomainTxtOwnershipHost("highoctaneniagara.ca"),
+    "_houzzatpro-challenge.highoctaneniagara.ca.highoctaneniagara.ca",
+  );
+
+  const fresh = createStore();
+  const preparedFresh = await prepareMasterCustomDomain({
+    prisma: fresh.prisma,
+    operatorId: "op_master",
+    authorization: PREPARE_CUSTOM_DOMAIN_AUTHORIZATION,
+    workspaceId: "ws_high_octane",
+    hostname: "highoctaneniagara.ca",
+  });
+  const freshApex = preparedFresh.domains.find((domain) => domain.hostname === "highoctaneniagara.ca");
+  const freshWww = preparedFresh.domains.find((domain) => domain.hostname === "www.highoctaneniagara.ca");
+  assert.ok(freshApex?.ownershipValue && freshWww?.ownershipValue);
+  const lookedUp: string[] = [];
+  const lookalike = await verifyMasterCustomDomainOwnership({
+    prisma: fresh.prisma,
+    operatorId: "op_master",
+    authorization: VERIFY_CUSTOM_DOMAIN_AUTHORIZATION,
+    workspaceId: "ws_high_octane",
+    domainId: freshApex.id,
+    dnsTxtLookup: async ({ name }) => {
+      lookedUp.push(name);
+      return { ok: true, answers: [`"${publishedApex}"`], empty: false };
+    },
+  });
+  assert.deepEqual(lookedUp, ["_houzzatpro-challenge.highoctaneniagara.ca"]);
+  assert.equal(lookalike.outcome, "NOT_VERIFIED");
+  assert.equal(lookalike.reason, "TXT_MISMATCH");
+  assert.deepEqual(lookalike.observedTxt, [publishedApex]);
+  assert.equal(fresh.domains.find((domain) => domain.id === freshApex.id)?.verifiedAt, null);
+  assert.equal(fresh.domains.find((domain) => domain.id === freshApex.id)?.status, "PENDING");
+
+  const wwwLookalike = await verifyMasterCustomDomainOwnership({
+    prisma: fresh.prisma,
+    operatorId: "op_master",
+    authorization: VERIFY_CUSTOM_DOMAIN_AUTHORIZATION,
+    workspaceId: "ws_high_octane",
+    domainId: freshWww.id,
+    dnsTxtLookup: async ({ name }) => {
+      assert.equal(name, "_houzzatpro-challenge.www.highoctaneniagara.ca");
+      return { ok: true, answers: [publishedWww], empty: false };
+    },
+  });
+  assert.equal(wwwLookalike.outcome, "NOT_VERIFIED");
+  assert.equal(wwwLookalike.reason, "TXT_MISMATCH");
+  assert.equal(fresh.domains.find((domain) => domain.id === freshWww.id)?.verifiedAt, null);
+
+  const quoted = await verifyMasterCustomDomainOwnership({
+    prisma: fresh.prisma,
+    operatorId: "op_master",
+    authorization: VERIFY_CUSTOM_DOMAIN_AUTHORIZATION,
+    workspaceId: "ws_high_octane",
+    domainId: freshApex.id,
+    dnsTxtLookup: async ({ name }) => {
+      assert.equal(name, "_houzzatpro-challenge.highoctaneniagara.ca");
+      return { ok: true, answers: [`"${freshApex.ownershipValue}"`], empty: false };
+    },
+  });
+  assert.equal(quoted.outcome, "VERIFIED");
+  assert.equal(quoted.domain.status, "PENDING");
+  assert.equal(quoted.observedTxt, null);
+
+  const unquoted = await verifyMasterCustomDomainOwnership({
+    prisma: fresh.prisma,
+    operatorId: "op_master",
+    authorization: VERIFY_CUSTOM_DOMAIN_AUTHORIZATION,
+    workspaceId: "ws_high_octane",
+    domainId: freshWww.id,
+    dnsTxtLookup: async ({ name }) => {
+      assert.equal(name, "_houzzatpro-challenge.www.highoctaneniagara.ca");
+      return {
+        ok: true,
+        answers: [freshWww.ownershipValue!, `"other-record"`],
+        empty: false,
+      };
+    },
+  });
+  assert.equal(unquoted.outcome, "VERIFIED");
+  assert.equal(unquoted.domain.status, "PENDING");
+
+  const resolver = createCloudflareDohTxtLookup({
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+      assert.equal(url.searchParams.get("type"), "TXT");
+      assert.equal(url.searchParams.get("name"), "_houzzatpro-challenge.cached.example");
+      return new Response(
+        JSON.stringify({
+          Status: 0,
+          Answer: [{ type: 16, data: `"${publishedApex}"` }],
+        }),
+        { status: 200, headers: { "content-type": "application/dns-json" } },
+      );
+    },
+  });
+  const parsed = await resolver({ name: "_houzzatpro-challenge.cached.example" });
+  assert.equal(parsed.ok, true);
+  if (parsed.ok) {
+    assert.equal(txtAnswersMatchOwnershipToken(parsed.answers, savedApex), false);
+    assert.equal(txtAnswersMatchOwnershipToken(parsed.answers, publishedApex), true);
+  }
 
   const plan = buildCustomDomainDnsPlan({
     claims: [{ hostname: "highoctaneniagara.ca", verificationToken: "token" }],
