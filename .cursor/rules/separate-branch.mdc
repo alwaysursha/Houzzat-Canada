@@ -1,0 +1,17 @@
+---
+description: Keep all project work on a separate branch and warn before changing main
+alwaysApply: true
+---
+
+# Work on a separate branch
+
+Before editing any project file, check the current git branch.
+
+If the current branch is `main` or `master`:
+
+- Stop before making changes.
+- Warn the user in plain language that this work is on the main branch and must move to a separate branch first.
+- Create a new branch for that work, then continue.
+- Do not commit, push, or open a pull request from `main`.
+
+This applies to every task, including small edits.
