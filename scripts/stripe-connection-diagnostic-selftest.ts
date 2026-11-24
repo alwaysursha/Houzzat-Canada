@@ -52,6 +52,24 @@ assert.doesNotThrow(() =>
     }),
   ),
 );
+assert.doesNotThrow(() =>
+  assertStripeConnectionDiagnosticOrigin(
+    request({
+      origin: "https://www.houzzatpro.com",
+      host: "www.houzzatpro.com",
+      "sec-fetch-site": "same-origin",
+    }),
+  ),
+);
+assert.doesNotThrow(() =>
+  assertStripeConnectionDiagnosticOrigin(
+    request({
+      origin: "https://www.houzzatpro.com",
+      "x-forwarded-host": "www.houzzatpro.com",
+      host: "houzzat-vercel-test.vercel.app",
+    }),
+  ),
+);
 
 for (const headers of [
   { host: "houzzatpro.com" },
@@ -59,6 +77,26 @@ for (const headers of [
   { ...allowedHeaders, origin: "https://houzzatpro.com.evil.example" },
   { ...allowedHeaders, "sec-fetch-site": "cross-site" },
   { ...allowedHeaders, host: "www.houzzatpro.com", "x-forwarded-host": "" },
+  {
+    origin: "https://houzzatpro.com",
+    "x-forwarded-host": "www.houzzatpro.com",
+    "sec-fetch-site": "same-origin",
+  },
+  {
+    origin: "https://www.houzzatpro.com",
+    host: "houzzatpro.com",
+    "sec-fetch-site": "same-origin",
+  },
+  {
+    origin: "https://www.houzzatpro.com",
+    host: "www.houzzatpro.com",
+    "sec-fetch-site": "same-site",
+  },
+  {
+    origin: "https://app.houzzatpro.com",
+    host: "app.houzzatpro.com",
+    "sec-fetch-site": "same-origin",
+  },
   {
     origin: "https://houzzatpro.com",
     host: "preview.vercel.app",

@@ -11,7 +11,10 @@ import {
   readStripeSecretKey,
 } from "@/lib/platform/billing/stripe-env";
 
-export const STRIPE_CONNECTION_DIAGNOSTIC_ORIGIN = "https://houzzatpro.com";
+const STRIPE_CONNECTION_DIAGNOSTIC_HOSTS = new Set([
+  "houzzatpro.com",
+  "www.houzzatpro.com",
+]);
 export const EXPECTED_STRIPE_ACCOUNT_ID = "acct_1UBmnTPvAzmlpNB4";
 export const EXPECTED_STRIPE_WEBHOOK_URL =
   "https://houzzatpro.com/api/stripe/webhook";
@@ -157,14 +160,12 @@ function publicHost(request: Request): string {
 
 export function assertStripeConnectionDiagnosticOrigin(request: Request): void {
   const origin = request.headers.get("origin")?.trim() ?? "";
-  if (origin !== STRIPE_CONNECTION_DIAGNOSTIC_ORIGIN) {
+  const host = publicHost(request);
+  if (!STRIPE_CONNECTION_DIAGNOSTIC_HOSTS.has(host) || origin !== `https://${host}`) {
     throw new StripeConnectionDiagnosticGuardError(403, "ORIGIN_REJECTED");
   }
   const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase() ?? "";
   if (fetchSite && fetchSite !== "same-origin") {
-    throw new StripeConnectionDiagnosticGuardError(403, "ORIGIN_REJECTED");
-  }
-  if (publicHost(request) !== "houzzatpro.com") {
     throw new StripeConnectionDiagnosticGuardError(403, "ORIGIN_REJECTED");
   }
 }
