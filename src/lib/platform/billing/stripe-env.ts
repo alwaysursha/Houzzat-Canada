@@ -3,6 +3,9 @@
  * Never expose these to the client. Never log raw values.
  */
 
+import { assertStagingStripeCredentials } from "@/lib/platform/billing/staging-isolation";
+import { readHouzzatProStagingOrigin } from "@/lib/platform/billing/staging-origin";
+
 export class StripeConfigError extends Error {
   readonly code = "STRIPE_CONFIG";
 
@@ -12,8 +15,11 @@ export class StripeConfigError extends Error {
   }
 }
 
-export function readStripeSecretKey(): string {
-  const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
+export function readStripeSecretKey(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  assertStagingStripeCredentials(env);
+  const key = env.STRIPE_SECRET_KEY?.trim() ?? "";
   if (!key) {
     throw new StripeConfigError("STRIPE_SECRET_KEY is not configured.");
   }
@@ -23,8 +29,10 @@ export function readStripeSecretKey(): string {
   return key;
 }
 
-export function readStripeWebhookSecret(): string {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
+export function readStripeWebhookSecret(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const secret = env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
   if (!secret) {
     throw new StripeConfigError("STRIPE_WEBHOOK_SECRET is not configured.");
   }
@@ -37,8 +45,19 @@ export function readStripeWebhookSecret(): string {
 }
 
 /** True when both secrets are present (does not validate with Stripe). */
-export function isStripeBillingConfigured(): boolean {
-  const key = process.env.STRIPE_SECRET_KEY?.trim() ?? "";
-  const whsec = process.env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
+export function isStripeBillingConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (readHouzzatProStagingOrigin(env).status !== "absent") {
+    try {
+      assertStagingStripeCredentials(env);
+    } catch {
+      return false;
+    }
+    const whsec = env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
+    return whsec.startsWith("whsec_");
+  }
+  const key = env.STRIPE_SECRET_KEY?.trim() ?? "";
+  const whsec = env.STRIPE_WEBHOOK_SECRET?.trim() ?? "";
   return key.startsWith("sk_") && whsec.startsWith("whsec_");
 }

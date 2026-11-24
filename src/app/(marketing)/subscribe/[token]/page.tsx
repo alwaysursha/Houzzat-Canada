@@ -7,8 +7,9 @@ import {
   PrivateOfferUnavailable,
 } from "@/components/platform/public/PrivateOfferProposal";
 import { PRIVATE_OFFER_DOCUMENT_TITLE } from "@/lib/platform/offers/private-offer-copy";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
+import { StagingBillingSafetyError } from "@/lib/platform/billing/staging-origin";
 import { resolvePrivateOfferByRawToken } from "@/lib/platform/offers/private-offer";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ async function assertPlatformHost(): Promise<boolean> {
     headerStore.get("host")?.split(":")[0]?.trim() ??
     null;
   if (!host) return false;
-  return isHouzzatProPlatformRoot(host);
+  return isHouzzatProCommercialBillingHost(host);
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -50,7 +51,15 @@ export default async function PrivateSubscribeOfferPage({ params }: PageProps) {
   }
 
   const { token } = await params;
-  const result = await resolvePrivateOfferByRawToken({ rawToken: token });
+  let result: Awaited<ReturnType<typeof resolvePrivateOfferByRawToken>>;
+  try {
+    result = await resolvePrivateOfferByRawToken({ rawToken: token });
+  } catch (error) {
+    if (error instanceof StagingBillingSafetyError) {
+      return <PrivateOfferUnavailable />;
+    }
+    throw error;
+  }
 
   if (!result.ok) {
     return <PrivateOfferUnavailable />;

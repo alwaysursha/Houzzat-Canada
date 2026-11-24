@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { PrismaNeon, PrismaNeonHttp } from "@prisma/adapter-neon";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { assertStagingConnectionString } from "@/lib/platform/billing/staging-isolation";
 import {
   tryGetCloudflareEnvSync,
   tryGetCloudflareWaitUntil,
@@ -70,6 +71,7 @@ function createPrismaClient(
   connectionString: string,
   neonKind: NeonAdapterKind = "ws",
 ) {
+  assertStagingConnectionString(connectionString);
   if (shouldUseNeonAdapter(connectionString)) {
     switch (neonKind) {
       case "http":

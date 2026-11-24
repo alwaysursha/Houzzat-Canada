@@ -5,6 +5,7 @@
 
 import type { PrismaClient, SubscriptionStatus } from "@prisma/client";
 import { isPaidSubscriptionStatus } from "@/lib/platform/billing/checkout-eligibility";
+import { assertStagingBillingIsolation } from "@/lib/platform/billing/staging-isolation";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 export type CheckoutPaymentUiPhase =
@@ -67,6 +68,7 @@ export async function resolveCheckoutPaymentStatus(input: {
   stripeCheckoutSessionId: string;
   prisma?: PrismaClient;
 }): Promise<CheckoutPaymentStatusView> {
+  assertStagingBillingIsolation();
   const db = input.prisma ?? defaultPrisma;
   const sessionId = input.stripeCheckoutSessionId.trim();
 

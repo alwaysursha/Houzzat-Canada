@@ -5,8 +5,9 @@ import {
   isPlausibleStripeCheckoutSessionId,
 } from "@/lib/platform/billing";
 import { clientIpFromPublicRequest } from "@/lib/platform/public/book-demo-rate-limit";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
+import { StagingBillingSafetyError } from "@/lib/platform/billing/staging-origin";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,7 @@ function noStoreJson(body: unknown, status = 200) {
  */
 export async function POST(request: Request) {
   const hostname = extractTrustedRequestHostname(request);
-  if (!hostname || !isHouzzatProPlatformRoot(hostname)) {
+  if (!hostname || !isHouzzatProCommercialBillingHost(hostname)) {
     return noStoreJson({ ok: false, code: "NOT_FOUND", message: "Not found" }, 404);
   }
 
@@ -68,9 +69,20 @@ export async function POST(request: Request) {
     );
   }
 
-  const result = await continueAfterCheckoutPayment({
-    stripeCheckoutSessionId: sessionId,
-  });
+  let result: Awaited<ReturnType<typeof continueAfterCheckoutPayment>>;
+  try {
+    result = await continueAfterCheckoutPayment({
+      stripeCheckoutSessionId: sessionId,
+    });
+  } catch (error) {
+    if (error instanceof StagingBillingSafetyError) {
+      return noStoreJson(
+        { ok: false, code: "NOT_FOUND", message: "Not found" },
+        404,
+      );
+    }
+    throw error;
+  }
 
   if (!result.ok) {
     const status =

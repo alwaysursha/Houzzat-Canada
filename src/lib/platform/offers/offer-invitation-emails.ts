@@ -14,11 +14,11 @@ import {
   sendRenderedEmail,
   type SendEmailResult,
 } from "@/lib/email/send";
+import { privateOfferPublicOrigin } from "@/lib/platform/billing/staging-origin";
 import {
   COMMERCIAL_OFFER_ENTITY_TYPE,
   COMMERCIAL_OFFER_TOKEN_ENTITY_TYPE,
   PRIVATE_OFFER_PATH_PREFIX,
-  PRIVATE_OFFER_PUBLIC_ORIGIN,
 } from "@/lib/platform/offers/constants";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { renderOfferInvitationEmail } from "./offer-invitation-email-templates";
@@ -47,7 +47,9 @@ export type OfferInvitationNotifyInput = {
   send?: typeof sendRenderedEmail;
 };
 
-const PRIVATE_URL_PREFIX = `${PRIVATE_OFFER_PUBLIC_ORIGIN}${PRIVATE_OFFER_PATH_PREFIX}/`;
+function privateUrlPrefix(): string {
+  return `${privateOfferPublicOrigin()}${PRIVATE_OFFER_PATH_PREFIX}/`;
+}
 
 function readDemoNotificationEmail(): string | null {
   return emailEnv("HOUZZATPRO_DEMO_NOTIFICATION_EMAIL") ?? null;
@@ -55,8 +57,9 @@ function readDemoNotificationEmail(): string | null {
 
 function isUsablePrivateUrl(value: string): boolean {
   const trimmed = value.trim();
-  if (!trimmed.startsWith(PRIVATE_URL_PREFIX)) return false;
-  const token = trimmed.slice(PRIVATE_URL_PREFIX.length);
+  const prefix = privateUrlPrefix();
+  if (!trimmed.startsWith(prefix)) return false;
+  const token = trimmed.slice(prefix.length);
   return token.length >= 16 && !token.includes("/");
 }
 

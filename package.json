@@ -156,6 +156,7 @@
     "stage-6.7d-resend-offer-invitation:selftest": "node --import tsx scripts/stage-6.7d-resend-offer-invitation-selftest.ts",
     "stage-6.8a-offer-acceptance-foundation:selftest": "node --import tsx scripts/stage-6.8a-offer-acceptance-foundation-selftest.ts",
     "stage-6.8b-stripe-checkout-foundation:selftest": "node --import tsx scripts/stage-6.8b-stripe-checkout-foundation-selftest.ts",
+    "houzzatpro-staging-billing-safety:selftest": "node --import tsx scripts/houzzatpro-staging-billing-safety-selftest.ts",
     "stage-6.9-paid-subscription-provisioning:selftest": "node --import tsx scripts/stage-6.9-paid-subscription-provisioning-selftest.ts",
     "stage-6.10a-owner-activation-onboarding:selftest": "node --import tsx scripts/stage-6.10a-owner-activation-onboarding-selftest.ts",
     "stage-6.11-v1-owner-auto-activation:selftest": "node --import tsx scripts/stage-6.11-v1-owner-auto-activation-selftest.ts",

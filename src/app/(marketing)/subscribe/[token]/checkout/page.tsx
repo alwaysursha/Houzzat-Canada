@@ -7,9 +7,13 @@ import {
   PRIVATE_OFFER_CHECKOUT_PAGE_TITLE,
   PRIVATE_OFFER_DOCUMENT_TITLE,
 } from "@/lib/platform/offers/private-offer-copy";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
+import {
+  readHouzzatProStagingOrigin,
+  StagingBillingSafetyError,
+} from "@/lib/platform/billing/staging-origin";
 import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
 import { resolvePrivateOfferByRawToken } from "@/lib/platform/offers/private-offer";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +28,7 @@ async function assertPlatformHost(): Promise<boolean> {
     headerStore.get("host")?.split(":")[0]?.trim() ??
     null;
   if (!host) return false;
-  return isHouzzatProPlatformRoot(host);
+  return isHouzzatProCommercialBillingHost(host);
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -60,7 +64,15 @@ export default async function PrivateOfferCheckoutPage({ params }: PageProps) {
     return <PrivateOfferUnavailable />;
   }
 
-  const result = await resolvePrivateOfferByRawToken({ rawToken });
+  let result: Awaited<ReturnType<typeof resolvePrivateOfferByRawToken>>;
+  try {
+    result = await resolvePrivateOfferByRawToken({ rawToken });
+  } catch (error) {
+    if (error instanceof StagingBillingSafetyError) {
+      return <PrivateOfferUnavailable />;
+    }
+    throw error;
+  }
   if (!result.ok) {
     return <PrivateOfferUnavailable />;
   }
@@ -82,6 +94,9 @@ export default async function PrivateOfferCheckoutPage({ params }: PageProps) {
   return (
     <PrivateOfferEmbeddedCheckout
       rawToken={rawToken}
+      requireTestPublishableKey={
+        readHouzzatProStagingOrigin().status === "configured"
+      }
       summary={{
         planCode: result.presentation.planCode,
         billingCadence: result.presentation.billingCadence,

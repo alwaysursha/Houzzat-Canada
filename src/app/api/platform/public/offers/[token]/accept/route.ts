@@ -6,8 +6,9 @@ import {
 import { allowOfferAcceptRequest } from "@/lib/platform/offers/accept-rate-limit";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { clientIpFromPublicRequest } from "@/lib/platform/public/book-demo-rate-limit";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
+import { StagingBillingSafetyError } from "@/lib/platform/billing/staging-origin";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 export const runtime = "nodejs";
 
@@ -51,7 +52,7 @@ function publicOk(data: {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const hostname = extractTrustedRequestHostname(request);
-    if (!hostname || !isHouzzatProPlatformRoot(hostname)) {
+    if (!hostname || !isHouzzatProCommercialBillingHost(hostname)) {
       return publicError(
         403,
         "PLATFORM_HOST_REQUIRED",
@@ -125,6 +126,13 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof OfferAcceptPublicError) {
       return publicError(error.status, error.code, error.message);
+    }
+    if (error instanceof StagingBillingSafetyError) {
+      return publicError(
+        503,
+        "BILLING_UNAVAILABLE",
+        "Unable to accept this offer right now. Please try again shortly.",
+      );
     }
     console.error("[platform-public-offer-accept] unhandled error", error);
     return publicError(

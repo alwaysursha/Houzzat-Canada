@@ -1,5 +1,7 @@
 /** Stage 6.7A — commercial offer constants (no Stripe). */
 
+import { privateOfferPublicOrigin } from "@/lib/platform/billing/staging-origin";
+
 export const COMMERCIAL_OFFER_AUDIT = {
   CREATED: "COMMERCIAL_OFFER_CREATED",
   UPDATED: "COMMERCIAL_OFFER_UPDATED",
@@ -33,6 +35,9 @@ export const OFFER_LINE_CODES = {
   SETUP_FEE_DISCOUNT: "SETUP_FEE_DISCOUNT",
 } as const;
 
-export function buildPrivateOfferUrl(rawToken: string): string {
-  return `${PRIVATE_OFFER_PUBLIC_ORIGIN}${PRIVATE_OFFER_PATH_PREFIX}/${rawToken}`;
+export function buildPrivateOfferUrl(
+  rawToken: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return `${privateOfferPublicOrigin(env)}${PRIVATE_OFFER_PATH_PREFIX}/${rawToken}`;
 }

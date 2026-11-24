@@ -37,6 +37,7 @@ import {
   OFFER_LINE_CODES,
 } from "@/lib/platform/offers/constants";
 import { PRIVATE_OFFER_PLAN_VALUE_LABELS } from "@/lib/platform/offers/private-offer-copy";
+import { assertStagingBillingIsolation } from "@/lib/platform/billing/staging-isolation";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
@@ -318,6 +319,7 @@ export async function resolvePrivateOfferByRawToken(input: {
   rawToken: string;
   prisma?: PrismaClient;
 }): Promise<ResolvePrivateOfferResult> {
+  assertStagingBillingIsolation();
   const db = input.prisma ?? defaultPrisma;
   const raw = input.rawToken?.trim();
   if (!raw || raw.length < 16 || raw.length > 256) {

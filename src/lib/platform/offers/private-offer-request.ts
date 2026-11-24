@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
 import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 /**
  * True when request is HouzzatPRO platform-root under /subscribe/*.
@@ -34,5 +34,5 @@ export async function isHouzzatProPlatformPrivateOfferRequest(): Promise<boolean
     null;
 
   if (!host) return false;
-  return isHouzzatProPlatformRoot(host);
+  return isHouzzatProCommercialBillingHost(host);
 }

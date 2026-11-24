@@ -28,6 +28,7 @@ import {
 } from "@/lib/platform/billing/canadian-tax";
 import { commercialTermsHashFromOfferRow } from "@/lib/platform/offers/commercial-terms-hash";
 import { computeOfferTotals } from "@/lib/platform/offers/line-items";
+import { assertStagingBillingIsolation } from "@/lib/platform/billing/staging-isolation";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { normalizeProspectEmail } from "@/lib/platform/prospects/normalize-email";
 import { prisma as defaultPrisma } from "@/lib/prisma";
@@ -206,6 +207,7 @@ async function reconcileAcceptedState(
 export async function acceptPrivateOfferByRawToken(
   input: AcceptPrivateOfferInput,
 ): Promise<AcceptPrivateOfferResult> {
+  assertStagingBillingIsolation();
   const db = input.prisma ?? defaultPrisma;
   const raw = input.rawToken?.trim();
   if (!raw || raw.length < 16 || raw.length > 256) {

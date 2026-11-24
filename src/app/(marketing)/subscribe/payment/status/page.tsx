@@ -7,7 +7,7 @@ import {
   PRIVATE_OFFER_PAYMENT_STATUS_TITLE,
 } from "@/lib/platform/offers/private-offer-copy";
 import { BROWSER_SUCCESS_CANNOT_ACTIVATE } from "@/lib/platform/billing/webhook";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ async function assertPlatformHost(): Promise<boolean> {
     headerStore.get("host")?.split(":")[0]?.trim() ??
     null;
   if (!host) return false;
-  return isHouzzatProPlatformRoot(host);
+  return isHouzzatProCommercialBillingHost(host);
 }
 
 export async function generateMetadata(): Promise<Metadata> {

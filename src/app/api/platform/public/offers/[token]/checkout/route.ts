@@ -6,8 +6,10 @@ import {
 } from "@/lib/platform/billing";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
 import { clientIpFromPublicRequest } from "@/lib/platform/public/book-demo-rate-limit";
+import { isHouzzatProCommercialBillingHost } from "@/lib/platform/billing/commercial-billing-host";
+import { StagingBillingSafetyError } from "@/lib/platform/billing/staging-origin";
+import { StripeConfigError } from "@/lib/platform/billing/stripe-env";
 import { extractTrustedRequestHostname } from "@/lib/tenancy/extract-request-hostname";
-import { isHouzzatProPlatformRoot } from "@/lib/tenancy/platform-hostname";
 
 export const runtime = "nodejs";
 
@@ -42,7 +44,7 @@ function resolveReturnOrigin(request: Request, hostname: string): string {
 export async function POST(request: Request, context: RouteContext) {
   try {
     const hostname = extractTrustedRequestHostname(request);
-    if (!hostname || !isHouzzatProPlatformRoot(hostname)) {
+    if (!hostname || !isHouzzatProCommercialBillingHost(hostname)) {
       return publicError(
         403,
         "PLATFORM_HOST_REQUIRED",
@@ -111,6 +113,16 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof OfferCheckoutPublicError) {
       return publicError(error.status, error.code, error.message);
+    }
+    if (
+      error instanceof StagingBillingSafetyError ||
+      error instanceof StripeConfigError
+    ) {
+      return publicError(
+        503,
+        "BILLING_UNAVAILABLE",
+        "Unable to start Checkout right now. Please try again shortly.",
+      );
     }
     console.error("[platform-public-offer-checkout] unhandled error", error);
     return publicError(

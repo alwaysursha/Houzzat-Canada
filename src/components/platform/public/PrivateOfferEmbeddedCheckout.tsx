@@ -19,17 +19,21 @@ import { PRIVATE_OFFER_PATH_PREFIX } from "@/lib/platform/offers/constants";
 import type { PrivateOfferAcceptedPresentation } from "@/lib/platform/offers/private-offer";
 import { resolveHouzzatProSupportCta } from "@/lib/platform/status/support";
 
-function readPublishableKey(): string | null {
+function readPublishableKey(requireTestKey: boolean): string | null {
   const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.trim() ?? "";
+  if (requireTestKey) {
+    if (key.startsWith("pk_live_") || !key.startsWith("pk_test_")) return null;
+    return key;
+  }
   if (!key.startsWith("pk_")) return null;
   return key;
 }
 
 let stripePromise: Promise<Stripe | null> | null = null;
 
-function getStripePromise(): Promise<Stripe | null> {
+function getStripePromise(requireTestKey: boolean): Promise<Stripe | null> {
   if (stripePromise) return stripePromise;
-  const key = readPublishableKey();
+  const key = readPublishableKey(requireTestKey);
   stripePromise = key ? loadStripe(key) : Promise.resolve(null);
   return stripePromise;
 }
@@ -50,8 +54,10 @@ function cadenceLabel(cadence: string): string {
 export function PrivateOfferEmbeddedCheckout({
   rawToken,
   summary,
+  requireTestPublishableKey = false,
 }: {
   rawToken: string;
+  requireTestPublishableKey?: boolean;
   summary: Pick<
     PrivateOfferAcceptedPresentation,
     | "planCode"
@@ -66,7 +72,9 @@ export function PrivateOfferEmbeddedCheckout({
   const support = resolveHouzzatProSupportCta();
   const offerHref = `${PRIVATE_OFFER_PATH_PREFIX}/${encodeURIComponent(rawToken)}`;
   const [error, setError] = useState<string | null>(null);
-  const publishableConfigured = Boolean(readPublishableKey());
+  const publishableConfigured = Boolean(
+    readPublishableKey(requireTestPublishableKey),
+  );
 
   const fetchClientSecret = useCallback(async () => {
     setError(null);
@@ -134,7 +142,7 @@ export function PrivateOfferEmbeddedCheckout({
             {publishableConfigured ? (
               <div className="stripe-embedded-checkout min-h-[520px] overflow-hidden rounded-[1.1rem] bg-[#f4f6f5]">
                 <EmbeddedCheckoutProvider
-                  stripe={getStripePromise()}
+                  stripe={getStripePromise(requireTestPublishableKey)}
                   options={options}
                 >
                   <EmbeddedCheckout className="bg-[#f4f6f5]" />

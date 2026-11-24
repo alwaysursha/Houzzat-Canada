@@ -21,6 +21,7 @@ import {
 } from "@/lib/platform/billing/constants";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
 import { readStripeWebhookSecret } from "@/lib/platform/billing/stripe-env";
+import { assertStagingBillingIsolation } from "@/lib/platform/billing/staging-isolation";
 import { refundTaxCents } from "@/lib/platform/billing/canadian-tax";
 import { checkoutCompletionIsDuplicate } from "@/lib/platform/onboarding/prepared-workspace";
 import { tryProvisionAfterBillingActivation } from "@/lib/platform/provisioning";
@@ -768,6 +769,7 @@ export async function processStripeWebhook(input: {
   stripe?: Stripe;
   webhookSecret?: string;
 }): Promise<StripeWebhookProcessResult> {
+  assertStagingBillingIsolation();
   const db = input.prisma ?? defaultPrisma;
   const stripe = input.stripe ?? getStripeClient();
   const secret = input.webhookSecret ?? readStripeWebhookSecret();

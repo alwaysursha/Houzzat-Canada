@@ -624,7 +624,7 @@ async function main() {
     assert.ok(page.includes("force-dynamic"));
     assert.ok(page.includes("index: false"));
     assert.ok(page.includes("follow: false"));
-    assert.ok(page.includes("isHouzzatProPlatformRoot"));
+    assert.ok(page.includes("isHouzzatProCommercialBillingHost"));
     assert.ok(page.includes("resolvePrivateOfferByRawToken"));
     assert.ok(page.includes("PrivateOfferUnavailable"));
     assert.ok(!/\bSubscribe now\b/i.test(page));

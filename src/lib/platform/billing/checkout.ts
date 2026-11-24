@@ -36,6 +36,7 @@ import {
   exclusiveStripeTaxRateId,
 } from "@/lib/platform/billing/checkout-tax";
 import { getStripeClient } from "@/lib/platform/billing/stripe-client";
+import { assertStagingBillingIsolation } from "@/lib/platform/billing/staging-isolation";
 import { resolvePlanEntitlementProfile } from "@/lib/platform/entitlements/profiles";
 import { commercialTermsHashFromOfferRow } from "@/lib/platform/offers/commercial-terms-hash";
 import { hashCommercialOfferToken } from "@/lib/platform/offers/token";
@@ -405,6 +406,7 @@ async function ensureCheckoutCreatedAudit(input: {
 export async function createCheckoutForAcceptedOffer(
   input: CreateCheckoutForAcceptedOfferInput,
 ): Promise<CreateCheckoutForAcceptedOfferResult> {
+  assertStagingBillingIsolation();
   const db = input.prisma ?? defaultPrisma;
   const stripe = input.stripe ?? getStripeClient();
   const returnOrigin = normalizeReturnOrigin(input.returnOrigin);
