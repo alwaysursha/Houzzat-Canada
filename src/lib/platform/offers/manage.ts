@@ -56,8 +56,9 @@ function parseOptionalDate(
   value: string | Date | null | undefined,
   label: string,
 ): Date | null {
-  if (value == null || value === "") return null;
-  const date = value instanceof Date ? value : new Date(value);
+  if (value == null) return null;
+  if (typeof value === "string" && value.trim() === "") return null;
+  const date = value instanceof Date ? value : new Date(value.trim());
   if (Number.isNaN(date.getTime())) {
     throw new CommercialOfferActionError(
       `${label} is not a valid date.`,
@@ -309,6 +310,13 @@ export async function updateDraftCommercialOffer(input: {
     input.terms.planCode,
     input.terms.billingCadence,
   );
+  const proposedStartDate =
+    input.terms.proposedStartDate === undefined
+      ? existing.proposedStartDate
+      : parseOptionalDate(
+          input.terms.proposedStartDate,
+          "Proposed start date",
+        );
   const terms = resolveOfferCommercialTerms({
     planCode,
     billingCadence,
@@ -317,10 +325,7 @@ export async function updateDraftCommercialOffer(input: {
     setupFeeCents: input.terms.setupFeeCents,
     additionalSeats: input.terms.additionalSeats,
     trialDays: input.terms.trialDays,
-    proposedStartDate: parseOptionalDate(
-      input.terms.proposedStartDate,
-      "Proposed start date",
-    ),
+    proposedStartDate,
     expiresAt: parseOptionalDate(input.terms.expiresAt, "Expiry date"),
     addOns: input.terms.addOns,
     adjustments: input.terms.adjustments,

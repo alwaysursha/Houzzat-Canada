@@ -4,6 +4,23 @@
 
 import type { OfferTermsInput } from "@/lib/platform/offers";
 
+/**
+ * Missing means "leave the stored date alone" on edit.
+ * Null or a blank string means the administrator cleared it.
+ */
+function optionalProposedStartDate(
+  body: Record<string, unknown>,
+): string | null | undefined {
+  if (!Object.prototype.hasOwnProperty.call(body, "proposedStartDate")) {
+    return undefined;
+  }
+  const value = body.proposedStartDate;
+  if (value == null) return null;
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 export function parseCommercialOfferTermsBody(
   body: Record<string, unknown>,
 ): OfferTermsInput {
@@ -34,10 +51,7 @@ export function parseCommercialOfferTermsBody(
         : body.trialDays == null || body.trialDays === ""
           ? null
           : Number(body.trialDays),
-    proposedStartDate:
-      typeof body.proposedStartDate === "string"
-        ? body.proposedStartDate
-        : null,
+    proposedStartDate: optionalProposedStartDate(body),
     expiresAt: typeof body.expiresAt === "string" ? body.expiresAt : null,
     addOns: Array.isArray(body.addOns)
       ? (body.addOns as OfferTermsInput["addOns"])

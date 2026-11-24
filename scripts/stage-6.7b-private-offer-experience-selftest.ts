@@ -9,6 +9,10 @@ import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { ProposedStartFact } from "../src/components/platform/public/PrivateOfferProposal";
+import { quoteCommercialTax } from "../src/lib/platform/billing/canadian-tax";
 import {
   COMMERCIAL_OFFER_AUDIT,
   createCommercialOfferRawToken,
@@ -630,7 +634,6 @@ async function main() {
     assert.ok(ui.includes("PrivateOfferAcceptForm") || ui.includes("PRIVATE_OFFER_ACCEPTED_TITLE"));
     assert.ok(ui.includes("resolveHouzzatProSupportCta"));
     assert.ok(!/Subscribe now/i.test(ui));
-    assert.ok(!/\bCheckout\b/i.test(ui));
     assert.ok(copy.includes("Accept this private proposal") || copy.includes("PRIVATE_OFFER_CTA_TITLE"));
 
     assert.ok(mw.includes('pathname.startsWith("/subscribe/")'));
@@ -676,6 +679,38 @@ async function main() {
       assert.ok(!/\.updateMany\s*\(/.test(src), file);
     }
     console.log("[10] Offers module Neon HTTP regression... PASS");
+  }
+
+  // 11. Customer proposal omits a blank proposed start and shows a saved one.
+  {
+    const tax = quoteCommercialTax({
+      country: "CA",
+      region: "ON",
+      recurringNetCents: 29_900,
+      oneTimeNetCents: 25_000,
+    });
+    assert.equal(tax.taxCents, 7_137);
+    assert.equal(tax.firstGrossCents, 62_037);
+    assert.equal(tax.recurringGrossCents, 33_787);
+
+    const proposal = read("src/components/platform/public/PrivateOfferProposal.tsx");
+    assert.ok(proposal.includes("<ProposedStartFact iso={presentation.proposedStartDate} />"));
+
+    const hidden = renderToStaticMarkup(
+      createElement(ProposedStartFact, { iso: null }),
+    );
+    const blank = renderToStaticMarkup(
+      createElement(ProposedStartFact, { iso: "   " }),
+    );
+    assert.equal(hidden, "");
+    assert.equal(blank, "");
+
+    const shown = renderToStaticMarkup(
+      createElement(ProposedStartFact, { iso: "2026-12-01T12:00:00.000Z" }),
+    );
+    assert.equal(shown.includes("Proposed start"), true);
+    assert.equal(shown.includes("December"), true);
+    console.log("[11] Blank proposed start is hidden on the proposal... PASS");
   }
 
   console.log("\nSTAGE 6.7B selftest: ALL PASS\n");

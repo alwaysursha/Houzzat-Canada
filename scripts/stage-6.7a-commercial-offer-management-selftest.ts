@@ -635,6 +635,8 @@ async function main() {
     const offerRow = state.offers.get(created.offerId)!;
     assert.equal(offerRow.negotiatedRecurringAmountCents, 550_000);
     assert.equal(offerRow.setupFeeCents, 0);
+    assert.equal(offerRow.proposedStartDate, null);
+    assert.equal(state.workspaces, 0);
 
     const sent = await sendCommercialOffer({
       offerId: created.offerId,
@@ -813,6 +815,101 @@ async function main() {
       assert.ok(!/\$transaction/.test(src), file);
     }
     console.log("[13] Routes/UI/auth/isolation... PASS");
+  }
+
+  // 14. Proposed start is optional and can be cleared without changing price.
+  {
+    const state: FakeState = {
+      prospects: new Map([["p1", { id: "p1", status: "DEMO_COMPLETED" }]]),
+      offers: new Map(),
+      lines: [],
+      tokens: [],
+      activities: [],
+      audits: [],
+      nextId: 1,
+      workspaces: 0,
+      subscriptions: 0,
+      leads: 0,
+    };
+    const db = createFakePrisma(state) as never;
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const start = new Date("2026-12-01T12:00:00.000Z");
+
+    const withoutDate = await createDraftCommercialOffer({
+      prospectId: "p1",
+      operatorId: "op1",
+      terms: {
+        planCode: "TEAM",
+        billingCadence: "MONTHLY",
+        negotiatedRecurringAmountCents: 29_900,
+        setupFeeCents: 25_000,
+        expiresAt,
+      },
+      prisma: db,
+    });
+    const blank = state.offers.get(withoutDate.offerId)!;
+    assert.equal(blank.proposedStartDate, null);
+    assert.equal(blank.negotiatedRecurringAmountCents, 29_900);
+    assert.equal(blank.setupFeeCents, 25_000);
+
+    const withDate = await createDraftCommercialOffer({
+      prospectId: "p1",
+      operatorId: "op1",
+      terms: {
+        planCode: "TEAM",
+        billingCadence: "MONTHLY",
+        negotiatedRecurringAmountCents: 29_900,
+        setupFeeCents: 25_000,
+        proposedStartDate: start,
+        expiresAt,
+      },
+      prisma: db,
+    });
+    const dated = state.offers.get(withDate.offerId)!;
+    assert.equal(dated.proposedStartDate?.toISOString(), start.toISOString());
+    const recurringBefore = dated.negotiatedRecurringAmountCents;
+    const setupBefore = dated.setupFeeCents;
+
+    const omitted = await updateDraftCommercialOffer({
+      offerId: withDate.offerId,
+      operatorId: "op1",
+      terms: {
+        planCode: "TEAM",
+        billingCadence: "MONTHLY",
+        negotiatedRecurringAmountCents: 29_900,
+        setupFeeCents: 25_000,
+        expiresAt,
+      },
+      prisma: db,
+    });
+    assert.equal(omitted.status, "DRAFT");
+    assert.equal(
+      state.offers.get(withDate.offerId)!.proposedStartDate?.toISOString(),
+      start.toISOString(),
+    );
+
+    const cleared = await updateDraftCommercialOffer({
+      offerId: withDate.offerId,
+      operatorId: "op1",
+      terms: {
+        planCode: "TEAM",
+        billingCadence: "MONTHLY",
+        negotiatedRecurringAmountCents: 29_900,
+        setupFeeCents: 25_000,
+        proposedStartDate: null,
+        expiresAt,
+      },
+      prisma: db,
+    });
+    const clearedRow = state.offers.get(withDate.offerId)!;
+    assert.equal(cleared.status, "DRAFT");
+    assert.equal(clearedRow.proposedStartDate, null);
+    assert.equal(clearedRow.negotiatedRecurringAmountCents, recurringBefore);
+    assert.equal(clearedRow.setupFeeCents, setupBefore);
+    assert.equal(clearedRow.expiresAt?.toISOString(), expiresAt.toISOString());
+    assert.equal(state.workspaces, 0);
+    assert.equal(state.subscriptions, 0);
+    console.log("[14] Optional proposed start can be saved and cleared... PASS");
   }
 
   console.log("\nSTAGE 6.7A — ALL TESTS PASSED\n");

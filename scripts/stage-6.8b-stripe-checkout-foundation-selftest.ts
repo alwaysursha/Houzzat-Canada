@@ -98,6 +98,7 @@ function seedAcceptedOffer(
     additionalSeats?: number;
     setupFeeCents?: number;
     negotiatedRecurringAmountCents?: number;
+    proposedStartDate?: Date | null;
     addOns?: Array<{ code: "CUSTOM_CONSUMER_APP"; amountCents?: number }>;
     status?: string;
     withAcceptance?: boolean;
@@ -112,6 +113,7 @@ function seedAcceptedOffer(
     negotiatedRecurringAmountCents: opts?.negotiatedRecurringAmountCents,
     setupFeeCents: opts?.setupFeeCents ?? 0,
     additionalSeats,
+    proposedStartDate: opts?.proposedStartDate ?? null,
     addOns: opts?.addOns ?? [],
     billingCountry: "CA",
     billingRegion: "ON",
@@ -249,6 +251,7 @@ function createFakeStripe(state: FakeState) {
             automatic_tax: params.automatic_tax,
             return_url: params.return_url,
             branding_settings: params.branding_settings,
+            subscription_data: params.subscription_data,
             url: null,
           };
           state.stripeSessions.push(session);
@@ -731,6 +734,7 @@ async function main() {
       cadence: "ANNUAL",
       setupFeeCents: 25_000,
       additionalSeats: 1,
+      proposedStartDate: new Date("2026-12-01T12:00:00.000Z"),
     });
     const stripe = createFakeStripe(state);
     const db = createFakePrisma(state) as never;
@@ -789,6 +793,17 @@ async function main() {
       ["txr_test_hst"],
     );
     assert.equal(recurringLine?.price_data?.recurring?.interval, "year");
+    const subscriptionData = (
+      session as {
+        subscription_data?: {
+          trial_period_days?: number;
+          billing_cycle_anchor?: number;
+        };
+      }
+    ).subscription_data;
+    assert.equal(subscriptionData?.trial_period_days, undefined);
+    assert.equal(subscriptionData?.billing_cycle_anchor, undefined);
+    assert.equal(state.workspaces, 0);
     assert.equal(
       oneTimeLine?.price_data?.unit_amount,
       seeded.totals.oneTimeTotalCents,

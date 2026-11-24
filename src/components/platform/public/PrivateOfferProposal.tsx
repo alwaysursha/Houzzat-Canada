@@ -84,7 +84,7 @@ function formatCad(cents: number): string {
 }
 
 function formatDate(iso: string | null): string | null {
-  if (!iso) return null;
+  if (!iso?.trim()) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString("en-CA", {
@@ -92,6 +92,19 @@ function formatDate(iso: string | null): string | null {
     month: "long",
     day: "numeric",
   });
+}
+
+export function ProposedStartFact({ iso }: { iso: string | null }) {
+  const start = formatDate(iso);
+  if (!start) return null;
+  return (
+    <div>
+      <dt className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
+        Proposed start
+      </dt>
+      <dd className="mt-1 text-base font-semibold text-slate-900">{start}</dd>
+    </div>
+  );
 }
 
 function cadenceLabel(cadence: string): string {
@@ -177,7 +190,6 @@ export function PrivateOfferProposal({
   rawToken: string;
 }) {
   const expiry = formatDate(presentation.expiresAt);
-  const start = formatDate(presentation.proposedStartDate);
   const preparedName = presentation.preparedFor.contactName;
   const preparedCompany = presentation.preparedFor.companyName;
 
@@ -258,16 +270,7 @@ export function PrivateOfferProposal({
                 </dd>
               </div>
             ) : null}
-            {start ? (
-              <div>
-                <dt className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">
-                  Proposed start
-                </dt>
-                <dd className="mt-1 text-base font-semibold text-slate-900">
-                  {start}
-                </dd>
-              </div>
-            ) : null}
+            <ProposedStartFact iso={presentation.proposedStartDate} />
             {expiry ? (
               <div>
                 <dt className="text-[11px] font-semibold tracking-[0.14em] text-slate-400 uppercase">

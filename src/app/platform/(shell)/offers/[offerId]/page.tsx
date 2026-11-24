@@ -149,10 +149,14 @@ export default async function PlatformOfferDetailPage({ params }: PageProps) {
                 value: `${str(offer.includedSeats)} included + ${str(offer.additionalSeats)} additional`,
               },
               { label: "Trial days", value: str(offer.trialDays) },
-              {
-                label: "Proposed start",
-                value: formatPlatformDate(str(offer.proposedStartDate)),
-              },
+              ...(offer.proposedStartDate
+                ? [
+                    {
+                      label: "Proposed start",
+                      value: formatPlatformDate(String(offer.proposedStartDate)),
+                    },
+                  ]
+                : []),
               { label: "Expires", value: formatPlatformDate(str(offer.expiresAt)) },
               { label: "Sent", value: formatPlatformDate(str(offer.sentAt)) },
               { label: "Viewed", value: formatPlatformDate(str(offer.viewedAt)) },

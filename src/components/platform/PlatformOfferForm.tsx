@@ -688,6 +688,18 @@ export function PlatformOfferForm({
               value={proposedStartDate}
               onChange={(e) => setProposedStartDate(e.target.value)}
             />
+            <span className="mt-1 flex items-center justify-between gap-3 text-[11px] text-slate-500">
+              <span>Optional. Leave blank to omit it from the proposal.</span>
+              {proposedStartDate ? (
+                <button
+                  type="button"
+                  className="font-semibold text-slate-300 hover:text-white"
+                  onClick={() => setProposedStartDate("")}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </span>
           </label>
           <label className={labelClass}>
             Expiry
