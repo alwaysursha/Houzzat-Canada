@@ -24,14 +24,15 @@ if ! grep -q 'HOZZAT_NODE_DIR' "$RUN_SH" 2>/dev/null; then
   :
 fi
 
-# Rewrite runner PATH line to include detected node dir (idempotent-ish).
-# Keep script simple: export PATH with NODE_DIR first.
+# The installed runner POSTs the deployed cron. It does not render from the
+# checkout unless DIGEST_CRON_URL=local. A stale tree omitted agent email
+# and designation on the November 24, 2026 production digests.
 cat >"$RUN_SH" <<EOF
 #!/usr/bin/env bash
 # Daily digests on an always-on Mac (launchd / cron).
 set -euo pipefail
 
-ROOT="$(cd "\$(dirname "\$0")/.." && pwd)"
+ROOT="\$(cd "\$(dirname "\$0")/.." && pwd)"
 cd "\$ROOT"
 
 LOG_DIR="\$ROOT/logs"
@@ -40,9 +41,48 @@ LOG_FILE="\$LOG_DIR/digests.log"
 
 export PATH="$NODE_DIR:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:\$PATH"
 
+read_env_value() {
+  local key="\$1"
+  local file="\$2"
+  local line=""
+  [[ -f "\$file" ]] || return 0
+  line="\$(grep -E "^\${key}=" "\$file" | tail -n 1 || true)"
+  line="\${line#*=}"
+  line="\${line%\"}"
+  line="\${line#\"}"
+  line="\${line%\'}"
+  line="\${line#\'}"
+  printf '%s' "\$line"
+}
+
 {
   echo "===== \$(date -u '+%Y-%m-%dT%H:%M:%SZ') digests start ====="
-  pnpm digests:run
+  URL="\${DIGEST_CRON_URL:-\$(read_env_value DIGEST_CRON_URL .env.local)}"
+  SECRET="\${DIGEST_CRON_SECRET:-\${CRON_SECRET:-}}"
+  if [[ -z "\$SECRET" ]]; then
+    SECRET="\$(read_env_value DIGEST_CRON_SECRET .env.local)"
+  fi
+  if [[ -z "\$SECRET" ]]; then
+    SECRET="\$(read_env_value CRON_SECRET .env.local)"
+  fi
+  if [[ -z "\$URL" ]]; then
+    URL="https://houzzat.com/api/cron/digests"
+  fi
+
+  if [[ "\$URL" == "local" ]]; then
+    echo "DIGEST_CRON_URL=local; rendering from this checkout"
+    pnpm digests:run
+  elif [[ -z "\$SECRET" ]]; then
+    echo "Missing DIGEST_CRON_SECRET; refusing to render digests from this checkout."
+    exit 1
+  else
+    echo "POST deployed digest cron"
+    curl -fsS -X POST "\$URL" \\
+      -H "Authorization: Bearer \${SECRET}" \\
+      -H "Content-Type: application/json" \\
+      -d '{}'
+    echo
+  fi
   echo "===== \$(date -u '+%Y-%m-%dT%H:%M:%SZ') digests done ====="
 } >>"\$LOG_FILE" 2>&1
 EOF

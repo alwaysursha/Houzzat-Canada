@@ -42,6 +42,92 @@ export type DigestRunStats = {
   failed: number;
 };
 
+export type BuyerDigestUser = {
+  id: string;
+  email: string;
+  name: string | null;
+  workspaceId: string | null;
+  lastBuyerDigestAt: Date | null;
+};
+
+export type BuyerDigestPrimary = {
+  id: string;
+  name: string;
+  query: unknown;
+  emailAlerts: boolean;
+  lastAlertedAt: Date | null;
+};
+
+export type BuyerDigestDeps = {
+  listUsers: (opts?: { userId?: string }) => Promise<BuyerDigestUser[]>;
+  findPrimary: (userId: string) => Promise<BuyerDigestPrimary | null>;
+  categoryEnabled: (userId: string) => Promise<boolean>;
+  findListings: typeof findNewListingsForSavedQuery;
+  preferenceChrome: typeof buildCustomerPreferenceEmailChrome;
+  leadChrome: typeof resolveLeadCustomerEmailChrome;
+  publishedOverride: typeof loadPublishedSavedSearchDigestOverride;
+  send: typeof sendAndLogClientEmail;
+  push: typeof sendPushToUserFirstEnabled;
+  persistCursor: (userId: string, searchId: string, now: Date) => Promise<void>;
+  sleep: (ms: number) => Promise<unknown>;
+};
+
+function defaultBuyerDigestDeps(): BuyerDigestDeps {
+  return {
+    listUsers: async (opts) =>
+      prisma.user.findMany({
+        where: {
+          ...(opts?.userId ? { id: opts.userId } : {}),
+          isBuyer: true,
+          emailAlertsEnabled: true,
+          disabledAt: null,
+          email: { not: "" },
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          workspaceId: true,
+          lastBuyerDigestAt: true,
+        },
+        take: opts?.userId ? 1 : 2000,
+        orderBy: { createdAt: "asc" },
+      }),
+    findPrimary: async (userId) =>
+      prisma.savedSearch.findFirst({
+        where: { userId, isPrimary: true },
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          query: true,
+          emailAlerts: true,
+          lastAlertedAt: true,
+        },
+      }),
+    categoryEnabled: (userId) => loadCategoryEmailEnabled(userId, "buyer_digest"),
+    findListings: findNewListingsForSavedQuery,
+    preferenceChrome: buildCustomerPreferenceEmailChrome,
+    leadChrome: resolveLeadCustomerEmailChrome,
+    publishedOverride: loadPublishedSavedSearchDigestOverride,
+    send: sendAndLogClientEmail,
+    push: sendPushToUserFirstEnabled,
+    persistCursor: async (userId, searchId, now) => {
+      await prisma.$transaction([
+        prisma.user.update({
+          where: { id: userId },
+          data: { lastBuyerDigestAt: now },
+        }),
+        prisma.savedSearch.update({
+          where: { id: searchId },
+          data: savedSearchDigestCursorUpdate(now),
+        }),
+      ]);
+    },
+    sleep,
+  };
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -103,7 +189,10 @@ export async function runBuyerSavedSearchDigests(opts?: {
   /** Force since window (testing). */
   since?: Date;
   dryRun?: boolean;
+  /** Isolated fixtures for the scheduled pipeline. Production omits this. */
+  deps?: Partial<BuyerDigestDeps>;
 }): Promise<DigestRunStats> {
+  const deps: BuyerDigestDeps = { ...defaultBuyerDigestDeps(), ...opts?.deps };
   const stats: DigestRunStats = {
     checked: 0,
     sent: 0,
@@ -111,32 +200,12 @@ export async function runBuyerSavedSearchDigests(opts?: {
     failed: 0,
   };
 
-  const users = await prisma.user.findMany({
-    where: {
-      ...(opts?.userId ? { id: opts.userId } : {}),
-      isBuyer: true,
-      emailAlertsEnabled: true,
-      disabledAt: null,
-      email: { not: "" },
-    },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      workspaceId: true,
-      lastBuyerDigestAt: true,
-    },
-    take: opts?.userId ? 1 : 2000,
-    orderBy: { createdAt: "asc" },
-  });
+  const users = await deps.listUsers(opts);
 
   for (const user of users) {
     stats.checked += 1;
     try {
-      const existingPrimary = await prisma.savedSearch.findFirst({
-        where: { userId: user.id, isPrimary: true },
-        orderBy: { updatedAt: "desc" },
-      });
+      const existingPrimary = await deps.findPrimary(user.id);
 
       let browseQuery: Record<string, unknown> | null = null;
       let browseName: string | null = null;
@@ -195,7 +264,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         continue;
       }
 
-      if (!(await loadCategoryEmailEnabled(user.id, "buyer_digest"))) {
+      if (!(await deps.categoryEnabled(user.id))) {
         stats.skipped += 1;
         continue;
       }
@@ -206,7 +275,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         user.lastBuyerDigestAt ??
         new Date(Date.now() - DAY_MS);
 
-      const listings = await findNewListingsForSavedQuery(plan.query, {
+      const listings = await deps.findListings(plan.query, {
         since,
         limit: BUYER_DIGEST_LIMIT,
       });
@@ -223,14 +292,14 @@ export async function runBuyerSavedSearchDigests(opts?: {
           ? plan.name
           : (primary?.name ?? "Saved search");
       const chrome = user.workspaceId
-        ? await buildCustomerPreferenceEmailChrome({
+        ? await deps.preferenceChrome({
             userId: user.id,
             workspaceId: user.workspaceId,
             email: user.email,
           })
         : null;
       const leadMail = user.workspaceId
-        ? await resolveLeadCustomerEmailChrome({
+        ? await deps.leadChrome({
             workspaceId: user.workspaceId,
             customerId: user.id,
           })
@@ -239,10 +308,9 @@ export async function runBuyerSavedSearchDigests(opts?: {
       // Seller digest templates never load here.
       let publishedSavedSearchDigest: EmailTemplateContentFields | null = null;
       if (user.workspaceId) {
-        publishedSavedSearchDigest =
-          await loadPublishedSavedSearchDigestOverride({
-            workspaceId: user.workspaceId,
-          });
+        publishedSavedSearchDigest = await deps.publishedOverride({
+          workspaceId: user.workspaceId,
+        });
       }
       const rendered = renderSavedSearchDigestEmail({
         name: user.name,
@@ -268,7 +336,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         continue;
       }
 
-      const result = await sendAndLogClientEmail({
+      const result = await deps.send({
         to: user.email,
         rendered,
         stream: "alerts",
@@ -282,7 +350,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         continue;
       }
 
-      void sendPushToUserFirstEnabled(
+      void deps.push(
         user.id,
         ["morning_digest", "saved_search_match"],
         {
@@ -301,16 +369,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         console.error("[digest:buyer] missing primary after send", user.email);
         continue;
       }
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: user.id },
-          data: { lastBuyerDigestAt: now },
-        }),
-        prisma.savedSearch.update({
-          where: { id: primary.id },
-          data: savedSearchDigestCursorUpdate(now),
-        }),
-      ]);
+      await deps.persistCursor(user.id, primary.id, now);
 
       stats.sent += 1;
       console.info(
@@ -319,7 +378,7 @@ export async function runBuyerSavedSearchDigests(opts?: {
         listings.length,
         result.status === "sent" ? result.providerId : result.status,
       );
-      await sleep(PACE_MS);
+      await deps.sleep(PACE_MS);
     } catch (err) {
       stats.failed += 1;
       console.error("[digest:buyer] error", user.email, err);

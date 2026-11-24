@@ -55,7 +55,7 @@ const SAFE_SIGNATURE_ACCENT = "#0F6B4C";
 export type TenantEmailAgentIdentity = {
   userId: string;
   name: string;
-  /** Used for Reply-To only — never rendered in the visible signature. */
+  /** Saved address. Rendered in the signature when valid, and used as Reply-To when branding is on. */
   email: string | null;
   phone: string | null;
   /** Canonical User.image; sanitized via Phase 3A PERSONAL resolver. */
@@ -282,14 +282,38 @@ function mapUserToAgentIdentity(
 /**
  * The public-site title and cell live on the workspace, not on every agent.
  * Use them only for the registered owner or primary agent, and only to fill
- * blanks. Never write those values back onto another member.
+ * blanks. Never copy them onto another member and never invent a title.
  */
+export function applyRegisteredAgentContact(
+  agent: TenantEmailAgentIdentity,
+  input: {
+    role: string;
+    primaryAgentId: string | null;
+    professional: {
+      agentDesignation: string | null;
+      agentCellPhone: string | null;
+    } | null;
+  },
+): TenantEmailAgentIdentity {
+  const registered =
+    input.role === "OWNER" || input.primaryAgentId === agent.userId;
+  if (!registered || !input.professional) return agent;
+  const title = input.professional.agentDesignation?.trim() || null;
+  const cell = input.professional.agentCellPhone?.trim() || null;
+  return {
+    ...agent,
+    designation: agent.designation?.trim() || title,
+    phone: agent.phone?.trim() || cell,
+  };
+}
+
 async function fillRegisteredAgentContact(
   workspaceId: string,
   userId: string,
   role: string,
   agent: TenantEmailAgentIdentity,
 ): Promise<TenantEmailAgentIdentity> {
+  if (userId !== agent.userId) return agent;
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     select: {
@@ -299,16 +323,11 @@ async function fillRegisteredAgentContact(
       },
     },
   });
-  const registered =
-    role === "OWNER" || workspace?.primaryAgentId === userId;
-  if (!registered || !workspace?.professionalIdentity) return agent;
-  const title = workspace.professionalIdentity.agentDesignation?.trim() || null;
-  const cell = workspace.professionalIdentity.agentCellPhone?.trim() || null;
-  return {
-    ...agent,
-    designation: agent.designation?.trim() || title,
-    phone: agent.phone?.trim() || cell,
-  };
+  return applyRegisteredAgentContact(agent, {
+    role,
+    primaryAgentId: workspace?.primaryAgentId ?? null,
+    professional: workspace?.professionalIdentity ?? null,
+  });
 }
 
 const agentUserSelect = {
